@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -38,8 +41,12 @@ jobs:
         if: env.CLASPRC_JSON != '' && env.DEPLOYMENT_ID != ''
         run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "${{ github.sha }}"
 
-      - name: First web app deployment
+      - name: Record web app deployment id
         if: env.CLASPRC_JSON != '' && env.DEPLOYMENT_ID == ''
         run: |
-          clasp deploy --description "first"
-          clasp deployments
+          clasp deployments | tee deployments.txt
+          ID=$(grep -Eo 'AKfy[A-Za-z0-9_-]+ @[0-9]+' deployments.txt | head -1 | cut -d' ' -f1)
+          if [ -z "$ID" ]; then clasp deploy --description "first"; clasp deployments | tee deployments.txt; ID=$(grep -Eo 'AKfy[A-Za-z0-9_-]+ @[0-9]+' deployments.txt | head -1 | cut -d' ' -f1); fi
+          echo "$ID" > .deployment-id
+          git config user.name "github-actions"; git config user.email "actions@github.com"
+          git add .deployment-id && git commit -m "Record web app deployment id" && git push || true
