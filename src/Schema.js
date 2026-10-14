@@ -7,7 +7,7 @@
 var SCHEMA_VERSION = 2;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
-var WEB_URL = '';
+var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
 
 var SCHEMA = [
   { name: 'Settings', cols: [['key', 'المفتاح'], ['value', 'القيمة'], ['note', 'الوصف']] },

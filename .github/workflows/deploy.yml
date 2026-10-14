@@ -14,7 +14,7 @@ jobs:
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
       # معرّف نشر تطبيق الويب (يُضاف بعد أول نشر يدوي فيبقى الرابط ثابتاً)
-      DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+      DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID || 'AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA' }}
     steps:
       - uses: actions/checkout@v4
 
