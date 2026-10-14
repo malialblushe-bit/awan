@@ -7,6 +7,8 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('أعوان')
     .addItem('1) إعداد أعوان', 'setupAwan')
+    .addItem('2) إنشاء حساب المشرف', 'createAdminPrompt')
+    .addSeparator()
     .addItem('مزامنة الهيكل', 'syncSchema')
     .addToUi();
 }

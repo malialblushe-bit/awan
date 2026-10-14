@@ -37,3 +37,9 @@ jobs:
       - name: Update web app deployment
         if: env.CLASPRC_JSON != '' && env.DEPLOYMENT_ID != ''
         run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "${{ github.sha }}"
+
+      - name: First web app deployment
+        if: env.CLASPRC_JSON != '' && env.DEPLOYMENT_ID == ''
+        run: |
+          clasp deploy --description "first"
+          clasp deployments

@@ -82,7 +82,7 @@ class Folder {
   constructor(name) { this.id = newId('fd'); this.name = name; this.children = []; folders[this.id] = this; }
   getId() { return this.id; }
   createFolder(n) { const f = new Folder(n); this.children.push(f); return f; }
-  createFile(blob) { const id = newId('file'); this.children.push({ name: blob.name, id }); return { getId: () => id }; }
+  createFile(blob) { const id = newId('file'); this.children.push({ name: blob.name, id }); return { getId: () => id, setSharing: () => {} }; }
   getFoldersByName(n) { const m = this.children.filter(f => f.name === n); let i = 0; return { hasNext: () => i < m.length, next: () => m[i++] }; }
 }
 
@@ -106,7 +106,8 @@ const ctx = {
   DriveApp: {
     getFileById: (id) => ({ setTrashed: () => {}, getParents: () => { let d = false; return { hasNext: () => !d, next: () => { d = true; return projectFolder; } }; }, moveTo: () => {} }),
     getFolderById: (id) => { if (!folders[id]) throw new Error('no folder ' + id); return folders[id]; },
-    getRootFolder: () => rootFolder
+    getRootFolder: () => rootFolder,
+    Access: { ANYONE_WITH_LINK: 'A' }, Permission: { VIEW: 'V' }
   },
   PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
   CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
@@ -116,12 +117,18 @@ const ctx = {
     base64Encode: (b) => Buffer.from(b.map(x => x & 255)).toString('base64'),
     getUuid: () => require('crypto').randomUUID(),
     base64Decode: (b) => Array.from(Buffer.from(b, 'base64')),
-    newBlob: (bytes, mime, name) => ({ bytes, mime, name })
+    newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
+    formatDate: (d, tz, fmt) => {
+      const x = new Date(new Date(d).getTime() + 3 * 3600e3).toISOString();
+      if (fmt === 'yyyy-MM-dd') return x.slice(0, 10);
+      if (fmt === 'yyyy-MM') return x.slice(0, 7);
+      return x;
+    }
   },
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-  ScriptApp: { getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) }
+  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) }
 };
 vm.createContext(ctx);
 
@@ -177,6 +184,178 @@ t('المزامنة تضيف عموداً ناقصاً دون مسح البيا�
   sh.grid[0] = sh.grid[0].slice(0, 3);
   run('Db.reset(); syncSchema()');
   eq(sh.grid[0][3], 'active');
+});
+
+
+// ───────── المرحلة الأولى: الدورة كاملة ─────────
+const J = (x) => JSON.parse(JSON.stringify(x));
+const throws = (code, part) => { try { run(code); } catch (e) { if (part && !e.message.includes(part)) throw new Error('رسالة غير متوقعة: ' + e.message); return; } throw new Error('كان يجب أن يفشل'); };
+let adminTok, engTok, acPin, elPin, acTok, elTok, engPw;
+const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+const nextYear = (Number(today.slice(0, 4)) + 1) + today.slice(4);
+const yesterday = new Date(Date.now() + 3 * 3600e3 - 864e5).toISOString().slice(0, 10);
+
+t('المشرف: إنشاء حساب ثم تغيير كلمة المرور المؤقتة', () => {
+  const r = run("Auth.createUser('م. محمد', 'admin', 'Admin', 'a@x.com', '')");
+  const login = run(`apiStaffLogin('admin', '${r.password}')`);
+  eq(login.must, true);
+  throws(`apiAdmBoot('${login.token}') && apiEngBoot('${login.token}')`, 'غيّر كلمة المرور');
+  throws(`apiChangePassword('${login.token}', 'abc')`, '8 أحرف');
+  run(`apiChangePassword('${login.token}', 'Awan2026x')`);
+  adminTok = run("apiStaffLogin('admin', 'Awan2026x')").token;
+  eq(run("Db.setting('schema_version')"), 2);
+});
+
+t('المشرف: الفندق والأدوار والغرف بوحدات التكييف والمصاعد', () => {
+  throws(`apiAdmSaveHotel('${adminTok}', { code: 'وارف', name: 'x' })`, 'بالإنجليزية');
+  let b = run(`apiAdmSaveHotel('${adminTok}', { code: 'warif2', name: 'فندق وارف', city: 'مكة' })`).boot;
+  const hid = b.hotels.find(h => h.code === 'WARIF2').id;
+  b = run(`apiAdmGenRooms('${adminTok}', '${hid}', 'الدور 7', 701, 714, 2)`).boot;
+  const f = b.hotels.find(h => h.id === hid).floors[0];
+  eq(f.rooms, 14); eq(f.ac, 28);
+  run(`apiAdmGenRooms('${adminTok}', '${hid}', 'الدور 7', 701, 716, 2)`);
+  eq(run(`Db.all('Rooms', r => r.hotel_id === '${hid}').length`), 16, 'لا تكرار للغرف');
+  eq(run(`Db.find('Rooms', r => r.number === '712').ac_units`), 'AC-712-A,AC-712-B');
+  run(`apiAdmAddArea('${adminTok}', '${hid}', 'المطعم', 'AC-R1-01, AC-R1-02')`);
+  ['مصعد النزلاء 1', 'مصعد الخدمة'].forEach(n => run(`apiAdmAddElevator('${adminTok}', '${hid}', '${n}')`));
+  throws(`apiAdmAddElevator('${adminTok}', '${hid}', 'مصعد الخدمة')`, 'موجود');
+  global.HID = hid;
+});
+
+t('المشرف: عقدان، والرقم السري يظهر مرة واحدة وفريد', () => {
+  acPin = run(`apiAdmSaveContract('${adminTok}', { name: 'مؤسسة التبريد', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`).pin;
+  elPin = run(`apiAdmSaveContract('${adminTok}', { name: 'شركة المصاعد', type: 'el', hotel_ids: ['${HID}'], elevator_ids: ['مصعد النزلاء 1'], start: '${yesterday}', end: '${nextYear}', resp_normal: 45, resp_urgent: 15, pm_per_month: 1 })`).pin;
+  if (!/^\d{6}$/.test(acPin) || acPin === elPin) throw new Error('رقم سري غير صالح');
+  const b = run(`apiAdmBoot('${adminTok}')`);
+  eq(b.contractors.length, 2);
+  eq(b.contractors[0].contracts[0].left > 300, true);
+  if (JSON.stringify(b).includes(acPin)) throw new Error('الرقم السري ظاهر في البيانات');
+});
+
+t('المشرف: مهندس للفندق بكلمة مرور مؤقتة', () => {
+  engPw = run(`apiAdmAddUser('${adminTok}', { name: 'م. أحمد', role: 'engineer', username: 'eng.ahmed', hotel_ids: ['${HID}'] })`).password;
+  const l = run(`apiStaffLogin('eng.ahmed', '${engPw}')`);
+  run(`apiChangePassword('${l.token}', 'Eng12345a')`);
+  engTok = run("apiStaffLogin('eng.ahmed', 'Eng12345a')").token;
+});
+
+t('فريق العمل: باركود الطلبات يفتح النموذج بلا دخول', () => {
+  const b = run("apiReqBoot('warif2')");
+  eq(b.hotel.name, 'فندق وارف'); eq(b.has.ac, true); eq(b.elevators.length, 2);
+  if (!b.syms.el.some(x => x.ar === 'توقف بين الأدوار')) throw new Error('قائمة الأعراض ناقصة');
+  throws("apiReqBoot('NOPE')", 'الباركود');
+});
+
+t('فريق العمل: طلب تكييف يُسند للمتعهد حسب العقد مع الصورة', () => {
+  const floor = run(`floorsOf_('${HID}')`)[0].id;
+  const r = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '712', symptom: 'لا يبرد', name: 'أحمد', photos: ['data:image/jpeg;base64,AAAA'] })`);
+  eq(r.con, 'مؤسسة التبريد'); eq(r.resp, 30);
+  global.AC1 = r.id;
+  eq(run(`Db.get('WorkOrders', '${r.id}').status`), 'assigned');
+  eq(run(`Db.get('WorkOrders', '${r.id}').photos`).length > 0, true);
+  throws(`apiReqSubmit('WARIF2', { type: 'ac', symptom: 'لا يبرد', name: '' })`, 'اسمك');
+});
+
+t('فريق العمل: احتجاز في المصعد = فوري ويبدأ عدّاد التوقف', () => {
+  const r = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'توقف بين الأدوار', trapped: 'yes', name: 'خالد' })`);
+  eq(r.resp, 0); global.EL1 = r.id;
+  const o = run(`Db.get('WorkOrders', '${r.id}')`);
+  eq(o.priority, 'urgent'); eq(!!o.down_from, true);
+});
+
+t('المتعهد: الرقم السري الخاطئ يُرفض، والصحيح يسجّل الوصول', () => {
+  throws("apiConLogin('WARIF2', '000000')", 'غير صحيح');
+  const r = run(`apiConLogin('WARIF2', '${acPin}')`);
+  acTok = r.token;
+  eq(r.boot.me.type, 'ac'); eq(r.boot.jobs.length, 1);
+  eq(r.boot.jobs[0].units.join(), 'AC-712-A,AC-712-B');
+  eq(!!run(`Db.get('WorkOrders', '${AC1}').arrived_at`), true);
+  eq(run("Db.all('Arrivals').length"), 1);
+  if (r.boot.lists.cause.length < 3) throw new Error('القوائم لم تصل');
+});
+
+t('المتعهد: تشخيص كمبروسر بلا صورة يُرفض، وبالصورة يصل للمهندس "قيد المراجعة"', () => {
+  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', equip: 'AC-712-A' })`, 'قراءة التيار');
+  const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', equip: 'AC-712-A', cause: ['تآكل طبيعي'], quote: '2400', photos: ['data:image/jpeg;base64,AAAA'] })`);
+  eq(r.result.status, 'decision');
+  eq(r.boot.jobs[0].status, 'review', 'المتعهد يرى قيد المراجعة');
+  eq(r.boot.jobs[0].quote, '', 'السعر لا يُعاد للمتعهد');
+});
+
+t('المهندس: قرار "المتعهد يوفّر" ← بانتظار السداد، ولا يظهر السداد للمتعهد', () => {
+  const b = run(`apiEngBoot('${engTok}')`);
+  const o = b.orders.find(x => x.id === AC1);
+  eq(o.status, 'decision'); eq(o.quote, '2400');
+  run(`apiEngAct('${engTok}', '${AC1}', 'decide', { decision: 'con' })`);
+  eq(run(`apiConBoot('${acTok}')`).jobs[0].status, 'review');
+  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix' })`, 'ليست بانتظار تقريرك');
+  run(`apiEngAct('${engTok}', '${AC1}', 'paid', { receipt: 'R-55' })`);
+  const j = run(`apiConBoot('${acTok}')`).jobs[0];
+  eq(j.status, 'in_progress'); if (!j.note.includes('وفّر القطعة')) throw new Error('رسالة الاعتماد ناقصة');
+  eq(j.paid, null, 'وقت السداد مخفي');
+});
+
+t('المتعهد: الإصلاح بعد الاعتماد، والمتابعة تفتح عملية جديدة، والبند الجديد ينتظر الاعتماد', () => {
+  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', photos: ['data:image/jpeg;base64,AA'] })`, 'معتمدة للتركيب');
+  const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix', equip: 'AC-712-A', sym: 'لا يبرد', part: 'الكمبروسر', cause: ['تآكل طبيعي'], parts: ['كمبروسر جديد'], follow: 'نعم', followNote: 'تنظيف خط التصريف', custom: [{ list: 'parts', ar: 'كمبروسر جديد' }] })`);
+  eq(r.result.status, 'matching');
+  if (!r.result.msg.includes('متابعة')) throw new Error('لم تُفتح المتابعة');
+  eq(r.boot.jobs.length, 2);
+  eq(run("Db.all('Lists', l => l.status === 'pending').length"), 1);
+  eq(run(`Db.get('WorkOrders', '${AC1}').visits`), 2);
+});
+
+t('المهندس: إعادة الفتح بسبب، ثم الإغلاق بعد المطابقة مع الرضا ← الأرشيف', () => {
+  throws(`apiEngAct('${engTok}', '${AC1}', 'reopen', {})`, 'سبب');
+  run(`apiEngAct('${engTok}', '${AC1}', 'reopen', { reason: 'صور غير واضحة' })`);
+  const j = run(`apiConBoot('${acTok}')`).jobs.find(x => x.id === AC1);
+  eq(j.reject_reason, 'صور غير واضحة');
+  run(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix', equip: 'AC-712-A', photos: ['data:image/jpeg;base64,AA'] })`);
+  throws(`apiEngAct('${engTok}', '${AC1}', 'close', {})`, 'رضاك');
+  run(`apiEngAct('${engTok}', '${AC1}', 'close', { sat: 'good' })`);
+  const b = run(`apiConBoot('${acTok}')`);
+  eq(b.archive.length, 1); eq(b.archive[0].id, AC1);
+  eq(run(`Db.get('WorkOrders', '${AC1}').reopens`), 1);
+});
+
+t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد التوقف، وقرار فريقنا يعلّق حتى وصول القطعة', () => {
+  elTok = run(`apiConLogin('WARIF2', '${elPin}')`).token;
+  run(`apiConAct('${elTok}', 'rescue', '${EL1}', {})`);
+  eq(!!run(`Db.get('WorkOrders', '${EL1}').rescued_at`), true);
+  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'fix' })`, 'يعمل الآن');
+  run(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', working: 'نعم', quote: '900' })`);
+  eq(!!run(`Db.get('WorkOrders', '${EL1}').down_to`), true);
+  run(`apiEngAct('${engTok}', '${EL1}', 'decide', { decision: 'own' })`);
+  eq(run(`Db.get('WorkOrders', '${EL1}').status`), 'parts');
+  run(`apiEngAct('${engTok}', '${EL1}', 'part', {})`);
+  const j = run(`apiConBoot('${elTok}')`).jobs.find(x => x.id === EL1);
+  if (!j.note.includes('وصلت القطعة')) throw new Error('رسالة القطعة ناقصة');
+});
+
+t('المهندس: فحص مغاير برسالة، ورفض بسبب من القائمة', () => {
+  run(`apiConAct('${elTok}', 'new', null, { outcome: 'diag', equip: 'مصعد الخدمة', sym: 'صوت أو اهتزاز', working: 'نعم' })`);
+  const o = run(`apiEngBoot('${engTok}')`).orders.find(x => x.status === 'decision');
+  throws(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck' })`, 'ملاحظتك');
+  run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck', note: 'افحص الحبال' })`);
+  run(`apiConAct('${elTok}', 'submit', '${o.id}', { outcome: 'diag', working: 'نعم' })`);
+  run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'reject', reason: 'سبب غير مقنع' })`);
+  eq(run(`Db.get('WorkOrders', '${o.id}').status`), 'rejected');
+});
+
+t('الصلاحيات: المتعهد لا يصل لدوال المهندس، والمهندس لا يصل لدوال المشرف', () => {
+  throws(`apiEngBoot('${acTok}')`, 'صلاحية');
+  throws(`apiAdmBoot('${engTok}')`, 'صلاحية');
+  throws("apiConBoot('bad')", 'الجلسة');
+});
+
+t('المهندس: طلب جديد يُسند حسب العقد', () => {
+  const r = run(`apiEngCreate('${engTok}', { hotel_id: '${HID}', type: 'el', equip: 'مصعد الخدمة', symptom: 'الباب لا يُغلق' })`);
+  eq(r.boot.orders.find(x => x.id === r.id).con, 'شركة المصاعد');
+});
+
+t('الرقم السري: 5 محاولات خاطئة تقفل مؤقتاً', () => {
+  for (let i = 0; i < 5; i++) { try { run("apiConLogin('WARIF2', '111111')"); } catch (e) {} }
+  throws(`apiConLogin('WARIF2', '${acPin}')`, 'انتظر');
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

@@ -4,6 +4,11 @@
  * كل عمود: [الاسم، الوصف].
  */
 
+var SCHEMA_VERSION = 2;
+
+/** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
+var WEB_URL = '';
+
 var SCHEMA = [
   { name: 'Settings', cols: [['key', 'المفتاح'], ['value', 'القيمة'], ['note', 'الوصف']] },
 
@@ -61,6 +66,7 @@ var SCHEMA = [
     ['quote', 'عرض السعر'], ['decision', 'القرار'], ['decision_note', 'ملاحظة القرار'],
     ['reject_reason', 'سبب الرفض أو إعادة الفتح'], ['receipt', 'رقم الإيصال'], ['sat', 'رضا المهندس'],
     ['follow_of', 'متابعة للعملية'], ['visits', 'عدد الزيارات'], ['work_minutes', 'دقائق العمل الفعلي'],
+    ['work_from', 'بداية العمل الجاري'], ['reopens', 'مرات إعادة الفتح'],
     ['created_at', 'وقت الرفع'], ['assigned_at', 'وقت الإسناد'], ['arrived_at', 'وقت الوصول'],
     ['rescued_at', 'وقت الإنقاذ'], ['submitted_at', 'وقت التسليم'], ['decided_at', 'وقت القرار'],
     ['paid_at', 'وقت السداد'], ['part_arrived_at', 'وقت وصول القطعة'], ['closed_at', 'وقت الإغلاق'],
