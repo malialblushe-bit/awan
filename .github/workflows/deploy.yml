@@ -1,0 +1,39 @@
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      # معرّف نشر تطبيق الويب (يُضاف بعد أول نشر يدوي فيبقى الرابط ثابتاً)
+      DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check code
+        run: node tests/run.js
+
+      - name: Install clasp
+        if: env.CLASPRC_JSON != ''
+        run: npm install -g @google/clasp
+
+      - name: Restore clasp credentials
+        if: env.CLASPRC_JSON != ''
+        run: echo "$CLASPRC_JSON" > ~/.clasprc.json
+
+      - name: Push code
+        if: env.CLASPRC_JSON != ''
+        run: clasp push --force
+
+      - name: Update web app deployment
+        if: env.CLASPRC_JSON != '' && env.DEPLOYMENT_ID != ''
+        run: clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "${{ github.sha }}"
