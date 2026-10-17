@@ -241,7 +241,7 @@ t('المشرف: أدوار بنطاقات مختلفة دفعة واحدة، و
 });
 
 t('الأبراج: نفس الدور في ثلاثة أبراج بنطاقات مختلفة', () => {
-  const nid = run(`apiAdmSaveHotel('${adminTok}', { code: 'NAWAZI', name: 'أبراج نوازي', towers: 'البرج الأول, البرج الثاني, البرج الثالث' })`).id;
+  const nid = run(`apiAdmSaveHotel('${adminTok}', { code: 'NAWAZI', name: 'أبراج نوازي' })`).id;
   const rows = [];
   for (let f = 3; f <= 5; f++) [['البرج الأول', 1, 13], ['البرج الثاني', 14, 33], ['البرج الثالث', 34, 44]].forEach(([tw, a, b]) => rows.push({ tower: tw, name: 'الدور ' + f, from: f * 100 + a, to: f * 100 + b, ac: 1 }));
   run(`apiAdmSaveFloors('${adminTok}', '${nid}', ${JSON.stringify(rows)})`);
@@ -250,7 +250,8 @@ t('الأبراج: نفس الدور في ثلاثة أبراج بنطاقات �
   const f = h.floors.find(x => x.tower === 'البرج الثاني' && x.name === 'الدور 4');
   eq(f.from, 414); eq(f.to, 433);
   throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ tower: 'البرج الأول', name: 'الدور 6', from: 520, to: 522, ac: 1 }])`, 'برج آخر');
-  throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 6', from: 601, to: 605, ac: 1 }])`, 'اختر البرج');
+  run(`apiAdmSaveHotel('${adminTok}', { id: '${nid}', code: 'NAWAZI', name: 'أبراج نوازي', city: 'مكة' })`);
+  eq(run(`apiAdmBoot('${adminTok}')`).hotels.find(x => x.id === nid).towers.length, 3);
   throws(`apiAdmSaveHotel('${adminTok}', { id: '${nid}', code: 'NAWAZI', name: 'أبراج نوازي', towers: 'البرج الأول, البرج الثاني' })`, 'عليه أدوار');
   const fl = run(`floorsOf_('${nid}')`).find(x => x.tower === 'البرج الثالث' && x.name === 'الدور 5');
   eq(fl.label, 'البرج الثالث · الدور 5');

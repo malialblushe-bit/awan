@@ -342,6 +342,7 @@ function apiAdmSaveHotel(token, d) {
     var dup = Db.find('Hotels', function (h) { return String(h.code).toUpperCase() === code && h.hotel_id !== d.id; });
     if (dup) throw new Error('رمز الفندق مستخدم.');
     var towers = String(d.towers || '').split(/[,،\n]+/).map(function (t) { return t.trim(); }).filter(String);
+    if (d.id && d.towers === undefined) towers = towersOf_(Db.get('Hotels', d.id));
     if (d.id) {
       var used = {};
       Db.all('Floors', function (f) { return f.hotel_id === d.id && f.tower; }).forEach(function (f) { used[f.tower] = true; });
@@ -373,16 +374,16 @@ function acUnits_(label, n) {
 function apiAdmSaveFloors(token, hotelId, rows) {
   return adm_(token, function () {
     if (!rows || !rows.length) throw new Error('أضف دوراً واحداً على الأقل.');
-    var towers = towersOf_(Db.get('Hotels', hotelId));
+    var hotel = Db.get('Hotels', hotelId), towers = towersOf_(hotel);
     var clean = rows.map(function (r, i) {
       var name = String(r.name || '').trim(), from = parseInt(r.from, 10), to = parseInt(r.to, 10);
       var ac = Math.max(0, Math.min(4, parseInt(r.ac, 10) || 0)), tower = String(r.tower || '').trim();
       if (!name) throw new Error('السطر ' + (i + 1) + ': اكتب اسم الدور.');
-      if (tower && towers.indexOf(tower) === -1) throw new Error('السطر ' + (i + 1) + ': البرج «' + tower + '» غير معرّف في بيانات الفندق.');
-      if (towers.length && !tower) throw new Error('السطر ' + (i + 1) + ' (' + name + '): اختر البرج.');
+      if (tower && towers.indexOf(tower) === -1) towers.push(tower);
       if (!(from > 0) || !(to >= from) || to - from > 199) throw new Error('السطر ' + (i + 1) + ' (' + name + '): نطاق الغرف غير صحيح.');
       return { name: name, tower: tower, from: from, to: to, ac: ac };
     });
+    if (towers.join(',') !== towersOf_(hotel).join(',')) Db.update('Hotels', hotelId, { towers: towers.join(',') });
     var seen = {};
     clean.forEach(function (r) { for (var n = r.from; n <= r.to; n++) { if (seen[n]) throw new Error('الغرفة ' + n + ' مكررة في أكثر من سطر.'); seen[n] = r.name; } });
     var floorsById = {};
