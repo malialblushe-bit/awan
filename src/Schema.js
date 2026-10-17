@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 2;
+var SCHEMA_VERSION = 3;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -18,14 +18,17 @@ var SCHEMA = [
 
   { name: 'Floors', cols: [
     ['floor_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'اسم الدور أو المنطقة'],
-    ['kind', 'rooms = أدوار غرف · public = منطقة عامة'], ['sort', 'الترتيب']] },
+    ['kind', 'rooms = دور غرف · service = دور خدمي'], ['sort', 'الترتيب']] },
 
   { name: 'Rooms', cols: [
-    ['room_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['floor_id', 'الدور'], ['number', 'رقم الغرفة'],
-    ['ac_units', 'وحدات التكييف (مفصولة بفاصلة)']] },
+    ['room_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['floor_id', 'الدور'], ['number', 'رقم الغرفة أو اسم المرفق'],
+    ['ac_units', 'وحدات التكييف (مفصولة بفاصلة)'], ['kind', 'room = غرفة · facility = مرفق']] },
 
   { name: 'Elevators', cols: [
-    ['elev_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'الاسم'], ['active', 'نشط']] },
+    ['elev_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'الاسم'], ['active', 'نشط'],
+    ['kind', 'نزلاء · خدمة · طوارئ · بضائع'], ['brand', 'الشركة المصنّعة'], ['capacity_kg', 'الحمولة (كجم)'],
+    ['persons', 'عدد الأشخاص'], ['stops', 'عدد الوقفات'], ['floors_served', 'الأدوار المخدومة'],
+    ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات']] },
 
   { name: 'Users', cols: [
     ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management'],

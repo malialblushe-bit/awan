@@ -107,6 +107,15 @@ var Db = (function () {
     return rec;
   }
 
+  /** يحذف سجلاً بمعرّفه (للتصحيح في الإعداد فقط) */
+  function remove(table, id) {
+    var t = load_(table), k = keyOf_(table);
+    for (var i = 0; i < t.rows.length; i++) {
+      if (t.rows[i][k] === id) { sheet_(table).deleteRow(i + 2); t.rows.splice(i, 1); return true; }
+    }
+    return false;
+  }
+
   function withLock(fn) {
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw new Error('النظام مشغول لحظياً، حاول مرة أخرى.');
@@ -120,5 +129,5 @@ var Db = (function () {
 
   function reset() { memo = {}; ssCache = null; }
 
-  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, withLock: withLock, setting: setting, reset: reset };
+  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, remove: remove, withLock: withLock, setting: setting, reset: reset };
 })();

@@ -63,6 +63,7 @@ class Sheet {
     return new Range(this, r, c, nr, nc);
   }
   setFrozenRows() {} setRightToLeft() {} setTabColor() {}
+  deleteRow(r) { this.grid.splice(r - 1, 1); }
   getProtections() { return this.prot ? [this.prot] : []; }
   protect() { const p = { setDescription: () => p, setWarningOnly: () => p }; this.prot = p; return p; }
 }
@@ -203,23 +204,40 @@ t('المشرف: إنشاء حساب ثم تغيير كلمة المرور ال�
   throws(`apiChangePassword('${login.token}', 'abc')`, '8 أحرف');
   run(`apiChangePassword('${login.token}', 'Awan2026x')`);
   adminTok = run("apiStaffLogin('admin', 'Awan2026x')").token;
-  eq(run("Db.setting('schema_version')"), 2);
+  eq(run("Db.setting('schema_version')"), run('SCHEMA_VERSION'));
 });
 
-t('المشرف: الفندق والأدوار والغرف بوحدات التكييف والمصاعد', () => {
+t('المشرف: أدوار بنطاقات مختلفة دفعة واحدة، وأدوار خدمية بمرافقها، وبطاقات المصاعد', () => {
   throws(`apiAdmSaveHotel('${adminTok}', { code: 'وارف', name: 'x' })`, 'بالإنجليزية');
-  let b = run(`apiAdmSaveHotel('${adminTok}', { code: 'warif2', name: 'فندق وارف', city: 'مكة' })`).boot;
-  const hid = b.hotels.find(h => h.code === 'WARIF2').id;
-  b = run(`apiAdmGenRooms('${adminTok}', '${hid}', 'الدور 7', 701, 714, 2)`).boot;
-  const f = b.hotels.find(h => h.id === hid).floors[0];
-  eq(f.rooms, 14); eq(f.ac, 28);
-  run(`apiAdmGenRooms('${adminTok}', '${hid}', 'الدور 7', 701, 716, 2)`);
-  eq(run(`Db.all('Rooms', r => r.hotel_id === '${hid}').length`), 16, 'لا تكرار للغرف');
-  eq(run(`Db.find('Rooms', r => r.number === '712').ac_units`), 'AC-712-A,AC-712-B');
-  run(`apiAdmAddArea('${adminTok}', '${hid}', 'المطعم', 'AC-R1-01, AC-R1-02')`);
-  ['مصعد النزلاء 1', 'مصعد الخدمة'].forEach(n => run(`apiAdmAddElevator('${adminTok}', '${hid}', '${n}')`));
-  throws(`apiAdmAddElevator('${adminTok}', '${hid}', 'مصعد الخدمة')`, 'موجود');
+  const hid = run(`apiAdmSaveHotel('${adminTok}', { code: 'warif2', name: 'فندق وارف', city: 'مكة' })`).id;
   global.HID = hid;
+  run(`apiAdmAddServiceFloor('${adminTok}', '${hid}', 'الاستقبال', [{ name: 'اللوبي', ac: 3 }, { name: 'المكاتب', ac: 1 }])`);
+  let b = run(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 7', from: 701, to: 714, ac: 2 }, { name: 'الدور 8', from: 801, to: 820, ac: 1 }])`).boot;
+  throws(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 9', from: 901, to: 905, ac: 1 }, { name: 'الدور 10', from: 905, to: 910, ac: 1 }])`, 'مكررة');
+  throws(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 9', from: 801, to: 803, ac: 1 }])`, 'دور آخر');
+  run(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 7', from: 701, to: 716, ac: 2 }])`);
+  const f7 = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid).floors.find(f => f.name === 'الدور 7');
+  eq(f7.rooms, 16); eq(f7.from, 701); eq(f7.to, 716); eq(f7.acPer, 2);
+  run(`apiAdmAddFacility('${adminTok}', '${hid}', '${f7.id}', 'الممر', 2)`);
+  throws(`apiAdmAddFacility('${adminTok}', '${hid}', '${f7.id}', 'الممر', 1)`, 'موجود');
+  b = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid);
+  const lobby = b.floors.find(f => f.name === 'الاستقبال');
+  eq(lobby.kind, 'service'); eq(lobby.facilities.length, 2); eq(lobby.facilities[0].units.join(), 'اللوبي 1,اللوبي 2,اللوبي 3');
+  eq(b.floors.find(f => f.name === 'الدور 8').rooms, 20);
+  eq(b.totals.rooms, 36);
+  run(`apiAdmMoveFloor('${adminTok}', '${b.floors[2].id}', -1)`);
+  eq(run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid).floors[1].name, 'الدور 8');
+  run(`apiAdmSaveElevator('${adminTok}', '${hid}', { name: 'مصعد النزلاء 1', kind: 'نزلاء', brand: 'Schindler', capacity_kg: 1000, persons: 13, stops: 18 })`);
+  run(`apiAdmSaveElevator('${adminTok}', '${hid}', { name: 'مصعد الخدمة', kind: 'خدمة' })`);
+  throws(`apiAdmSaveElevator('${adminTok}', '${hid}', { name: 'مصعد الخدمة' })`, 'يوجد');
+  const e = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid).elevatorCards[0];
+  eq(e.brand, 'Schindler'); eq(e.persons, '13');
+  run(`apiAdmSaveElevator('${adminTok}', '${hid}', { id: '${e.id}', name: 'مصعد النزلاء 1', brand: 'KONE', stops: 18 })`);
+  eq(run(`Db.get('Elevators', '${e.id}').brand`), 'KONE');
+  const tmp = run(`apiAdmAddServiceFloor('${adminTok}', '${hid}', 'دور مؤقت', [{ name: 'مخزن', ac: 0 }])`).id;
+  run(`apiAdmRemoveFloor('${adminTok}', '${tmp}')`);
+  eq(run(`Db.all('Floors', f => f.floor_id === '${tmp}').length`), 0);
+  eq(run(`Db.all('Rooms', r => r.floor_id === '${tmp}').length`), 0);
 });
 
 t('المشرف: عقدان، والرقم السري يظهر مرة واحدة وفريد', () => {
@@ -247,7 +265,7 @@ t('فريق العمل: باركود الطلبات يفتح النموذج بل
 });
 
 t('فريق العمل: طلب تكييف يُسند للمتعهد حسب العقد مع الصورة', () => {
-  const floor = run(`floorsOf_('${HID}')`)[0].id;
+  const floor = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
   const r = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '712', symptom: 'لا يبرد', name: 'أحمد', photos: ['data:image/jpeg;base64,AAAA'] })`);
   eq(r.con, 'مؤسسة التبريد'); eq(r.resp, 30);
   global.AC1 = r.id;
@@ -269,6 +287,7 @@ t('المتعهد: الرقم السري الخاطئ يُرفض، والصحي�
   acTok = r.token;
   eq(r.boot.me.type, 'ac'); eq(r.boot.jobs.length, 1);
   eq(r.boot.jobs[0].units.join(), 'AC-712-A,AC-712-B');
+  eq(r.boot.jobs[0].loc, 'الدور 7 · غرفة 712');
   eq(!!run(`Db.get('WorkOrders', '${AC1}').arrived_at`), true);
   eq(run("Db.all('Arrivals').length"), 1);
   if (r.boot.lists.cause.length < 3) throw new Error('القوائم لم تصل');
@@ -346,6 +365,16 @@ t('الصلاحيات: المتعهد لا يصل لدوال المهندس، و
   throws(`apiEngBoot('${acTok}')`, 'صلاحية');
   throws(`apiAdmBoot('${engTok}')`, 'صلاحية');
   throws("apiConBoot('bad')", 'الجلسة');
+});
+
+t('طلب على مرفق: يظهر بلا "غرفة" ووحداته من مرفق ذلك الدور', () => {
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الاستقبال');
+  eq(fl.facilities.join(), 'اللوبي,المكاتب');
+  const r = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl.id}', room: 'اللوبي', symptom: 'لا يبرد', name: 'سارة' })`);
+  const tok = run(`apiConLogin('WARIF2', '${acPin}')`).token;
+  const j = run(`apiConBoot('${tok}')`).jobs.find(x => x.id === r.id);
+  eq(j.loc, 'الاستقبال · اللوبي'); eq(j.units.join(), 'اللوبي 1,اللوبي 2,اللوبي 3');
+  throws(`apiAdmRemoveFacility('${adminTok}', '${run(`Db.find('Rooms', x => x.number === 'اللوبي').room_id`)}')`, 'طلبات');
 });
 
 t('المهندس: طلب جديد يُسند حسب العقد', () => {

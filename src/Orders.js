@@ -249,7 +249,10 @@ var Orders = (function () {
     Db.all('Floors').forEach(function (f) { floors[f.floor_id] = f; });
     Db.all('Hotels').forEach(function (h) { hotels[h.hotel_id] = h; });
     Db.all('Contractors').forEach(function (c) { cons[c.con_id] = c; });
-    Db.all('Rooms').forEach(function (r) { rooms[r.hotel_id + '|' + String(r.number)] = r; });
+    Db.all('Rooms').forEach(function (r) {
+      rooms[r.hotel_id + '|' + r.floor_id + '|' + String(r.number)] = r;
+      if (r.kind !== 'facility' && !rooms[r.hotel_id + '|' + String(r.number)]) rooms[r.hotel_id + '|' + String(r.number)] = r;
+    });
     return { floors: floors, hotels: hotels, cons: cons, rooms: rooms, contracts: Db.all('Contracts') };
   }
 
@@ -265,7 +268,9 @@ var Orders = (function () {
     var f = R.floors[o.floor_id];
     var parts = [];
     if (f) parts.push(f.name);
-    if (o.room) parts.push((f && f.kind === 'public') ? o.room : 'غرفة ' + o.room);
+    var rec = R.rooms[o.hotel_id + '|' + o.floor_id + '|' + String(o.room)];
+    var facility = (rec && rec.kind === 'facility') || (f && f.kind !== 'rooms') || isNaN(parseInt(o.room, 10));
+    if (o.room) parts.push(facility ? o.room : 'غرفة ' + o.room);
     if (o.type === 'el' && o.equip) parts.unshift(o.equip);
     return parts.join(' · ') || o.equip || '—';
   }
@@ -273,7 +278,7 @@ var Orders = (function () {
   function view(R, o, forCon) {
     var h = R.hotels[o.hotel_id] || {};
     var c = R.cons[o.con_id] || {};
-    var room = R.rooms[o.hotel_id + '|' + String(o.room)];
+    var room = R.rooms[o.hotel_id + '|' + o.floor_id + '|' + String(o.room)] || R.rooms[o.hotel_id + '|' + String(o.room)];
     var st = o.status;
     if (forCon && (st === 'decision' || st === 'pay')) st = 'review';
     var note = '';
