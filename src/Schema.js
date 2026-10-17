@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 3;
+var SCHEMA_VERSION = 4;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -14,11 +14,12 @@ var SCHEMA = [
 
   { name: 'Hotels', cols: [
     ['hotel_id', 'المعرّف'], ['code', 'رمز الفندق (يظهر في الباركود)'], ['name', 'الاسم'], ['city', 'المدينة'],
+    ['towers', 'الأبراج (مفصولة بفاصلة، فارغ إن لم توجد)'],
     ['engineer_ids', 'المهندسون (معرّفات مفصولة بفاصلة)'], ['active', 'نشط'], ['created_at', 'تاريخ الإنشاء']] },
 
   { name: 'Floors', cols: [
     ['floor_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'اسم الدور أو المنطقة'],
-    ['kind', 'rooms = دور غرف · service = دور خدمي'], ['sort', 'الترتيب']] },
+    ['kind', 'rooms = دور غرف · service = دور خدمي'], ['sort', 'الترتيب'], ['tower', 'البرج (فارغ = مشترك)']] },
 
   { name: 'Rooms', cols: [
     ['room_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['floor_id', 'الدور'], ['number', 'رقم الغرفة أو اسم المرفق'],
@@ -28,7 +29,7 @@ var SCHEMA = [
     ['elev_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'الاسم'], ['active', 'نشط'],
     ['kind', 'نزلاء · خدمة · طوارئ · بضائع'], ['brand', 'الشركة المصنّعة'], ['capacity_kg', 'الحمولة (كجم)'],
     ['persons', 'عدد الأشخاص'], ['stops', 'عدد الوقفات'], ['floors_served', 'الأدوار المخدومة'],
-    ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات']] },
+    ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات'], ['tower', 'البرج']] },
 
   { name: 'Users', cols: [
     ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management'],

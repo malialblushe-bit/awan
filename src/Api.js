@@ -35,12 +35,15 @@ function isFacility_(r, floor) { return r.kind === 'facility' || (!r.kind && !!f
 
 function sortFloors_(a, b) { return Number(a.sort) - Number(b.sort); }
 
+function towersOf_(h) { return Orders.csv(h && h.towers).map(function (t) { return t.replace(/\s+/g, ' '); }); }
+function floorLabel_(f) { return (f.tower ? f.tower + ' · ' : '') + f.name; }
+
 /** الأدوار مع مرافقها (للنماذج): {id, name, kind, facilities:[أسماء]} */
 function floorsOf_(hotelId) {
   var rooms = Db.all('Rooms', function (r) { return r.hotel_id === hotelId; });
   return Db.all('Floors', function (f) { return f.hotel_id === hotelId; }).sort(sortFloors_).map(function (f) {
     return {
-      id: f.floor_id, name: f.name, kind: f.kind === 'rooms' ? 'rooms' : 'service',
+      id: f.floor_id, name: f.name, tower: String(f.tower || ''), label: floorLabel_(f), kind: f.kind === 'rooms' ? 'rooms' : 'service',
       facilities: rooms.filter(function (r) { return r.floor_id === f.floor_id && isFacility_(r, f); }).map(function (r) { return String(r.number); })
     };
   });
@@ -54,7 +57,7 @@ function hotelLayout_(hotelId) {
     var rr = rs.filter(function (r) { return !isFacility_(r, f); });
     var nums = rr.map(function (r) { return parseInt(r.number, 10); }).filter(function (n) { return !isNaN(n); }).sort(function (a, b) { return a - b; });
     return {
-      id: f.floor_id, name: f.name, kind: f.kind === 'rooms' ? 'rooms' : 'service',
+      id: f.floor_id, name: f.name, tower: String(f.tower || ''), kind: f.kind === 'rooms' ? 'rooms' : 'service',
       rooms: rr.length, from: nums.length ? nums[0] : null, to: nums.length ? nums[nums.length - 1] : null,
       acPer: rr.length ? Orders.csv(rr[0].ac_units).length : 0,
       ac: rr.reduce(function (a, r) { return a + Orders.csv(r.ac_units).length; }, 0),
@@ -63,7 +66,7 @@ function hotelLayout_(hotelId) {
   });
 }
 
-var ELEV_FIELDS = ['kind', 'brand', 'capacity_kg', 'persons', 'stops', 'floors_served', 'install_year', 'serial', 'notes'];
+var ELEV_FIELDS = ['tower', 'kind', 'brand', 'capacity_kg', 'persons', 'stops', 'floors_served', 'install_year', 'serial', 'notes'];
 
 function elevatorCards_(hotelId) {
   return Db.all('Elevators', function (e) { return e.hotel_id === hotelId && String(e.active).toUpperCase() !== 'FALSE'; }).map(function (e) {
@@ -105,7 +108,7 @@ function ensureSchemaVersion_() {
 function apiReqBoot(code) {
   var h = Orders.hotelByCode(code);
   return {
-    hotel: { code: h.code, name: h.name },
+    hotel: { code: h.code, name: h.name, towers: towersOf_(h) },
     floors: floorsOf_(h.hotel_id),
     elevators: elevatorsOf_(h.hotel_id),
     has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el') },
@@ -284,7 +287,7 @@ function admBoot_() {
       var layout = hotelLayout_(h.hotel_id);
       var elevs = elevatorCards_(h.hotel_id);
       return {
-        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '',
+        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h),
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
         totals: {
           floors: layout.length,
@@ -336,8 +339,15 @@ function apiAdmSaveHotel(token, d) {
     if (!String(d.name || '').trim()) throw new Error('اكتب اسم الفندق.');
     var dup = Db.find('Hotels', function (h) { return String(h.code).toUpperCase() === code && h.hotel_id !== d.id; });
     if (dup) throw new Error('رمز الفندق مستخدم.');
-    if (d.id) { Db.update('Hotels', d.id, { code: code, name: d.name.trim(), city: d.city || '' }); return { id: d.id }; }
-    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', active: true, created_at: new Date() });
+    var towers = String(d.towers || '').split(/[,،\n]+/).map(function (t) { return t.trim(); }).filter(String);
+    if (d.id) {
+      var used = {};
+      Db.all('Floors', function (f) { return f.hotel_id === d.id && f.tower; }).forEach(function (f) { used[f.tower] = true; });
+      Object.keys(used).forEach(function (t) { if (towers.indexOf(t) === -1) throw new Error('البرج «' + t + '» عليه أدوار، لا يمكن حذفه أو تغيير اسمه.'); });
+      Db.update('Hotels', d.id, { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(',') });
+      return { id: d.id };
+    }
+    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(','), active: true, created_at: new Date() });
     return { id: h.hotel_id };
   });
 }
@@ -361,26 +371,29 @@ function acUnits_(label, n) {
 function apiAdmSaveFloors(token, hotelId, rows) {
   return adm_(token, function () {
     if (!rows || !rows.length) throw new Error('أضف دوراً واحداً على الأقل.');
+    var towers = towersOf_(Db.get('Hotels', hotelId));
     var clean = rows.map(function (r, i) {
       var name = String(r.name || '').trim(), from = parseInt(r.from, 10), to = parseInt(r.to, 10);
-      var ac = Math.max(0, Math.min(4, parseInt(r.ac, 10) || 0));
+      var ac = Math.max(0, Math.min(4, parseInt(r.ac, 10) || 0)), tower = String(r.tower || '').trim();
       if (!name) throw new Error('السطر ' + (i + 1) + ': اكتب اسم الدور.');
+      if (tower && towers.indexOf(tower) === -1) throw new Error('السطر ' + (i + 1) + ': البرج «' + tower + '» غير معرّف في بيانات الفندق.');
+      if (towers.length && !tower) throw new Error('السطر ' + (i + 1) + ' (' + name + '): اختر البرج.');
       if (!(from > 0) || !(to >= from) || to - from > 199) throw new Error('السطر ' + (i + 1) + ' (' + name + '): نطاق الغرف غير صحيح.');
-      return { name: name, from: from, to: to, ac: ac };
+      return { name: name, tower: tower, from: from, to: to, ac: ac };
     });
     var seen = {};
-    clean.forEach(function (r) { for (var n = r.from; n <= r.to; n++) { if (seen[n]) throw new Error('الغرفة ' + n + ' مكررة في أكثر من دور.'); seen[n] = r.name; } });
+    clean.forEach(function (r) { for (var n = r.from; n <= r.to; n++) { if (seen[n]) throw new Error('الغرفة ' + n + ' مكررة في أكثر من سطر.'); seen[n] = r.name; } });
     var floorsById = {};
     Db.all('Floors', function (f) { return f.hotel_id === hotelId; }).forEach(function (f) { floorsById[f.floor_id] = f; });
     var existing = {};
     Db.all('Rooms', function (r) { return r.hotel_id === hotelId && !isFacility_(r, floorsById[r.floor_id]); }).forEach(function (r) { existing[String(r.number)] = r.floor_id; });
     var sort = nextSort_(hotelId), recs = [], newFloors = 0;
     clean.forEach(function (r) {
-      var floor = Db.find('Floors', function (f) { return f.hotel_id === hotelId && f.name === r.name; });
-      if (!floor) { floor = Db.insert('Floors', { hotel_id: hotelId, name: r.name, kind: 'rooms', sort: sort++ }); newFloors++; }
+      var floor = Db.find('Floors', function (f) { return f.hotel_id === hotelId && f.name === r.name && String(f.tower || '') === r.tower; });
+      if (!floor) { floor = Db.insert('Floors', { hotel_id: hotelId, name: r.name, tower: r.tower, kind: 'rooms', sort: sort++ }); newFloors++; }
       for (var n = r.from; n <= r.to; n++) {
         if (existing[String(n)]) {
-          if (existing[String(n)] !== floor.floor_id) throw new Error('الغرفة ' + n + ' موجودة في دور آخر.');
+          if (existing[String(n)] !== floor.floor_id) throw new Error('الغرفة ' + n + ' موجودة في دور آخر أو برج آخر.');
           continue;
         }
         recs.push({ hotel_id: hotelId, floor_id: floor.floor_id, number: String(n), ac_units: acUnits_('AC-' + n, r.ac).join(','), kind: 'room' });
@@ -392,12 +405,12 @@ function apiAdmSaveFloors(token, hotelId, rows) {
 }
 
 /** دور خدمي (الاستقبال، الميزانين، المطعم، المواقف…) ومرافقه */
-function apiAdmAddServiceFloor(token, hotelId, name, facilities) {
+function apiAdmAddServiceFloor(token, hotelId, name, facilities, tower) {
   return adm_(token, function () {
-    name = String(name || '').trim();
+    name = String(name || '').trim(); tower = String(tower || '').trim();
     if (!name) throw new Error('اكتب اسم الدور.');
-    if (Db.find('Floors', function (f) { return f.hotel_id === hotelId && f.name === name; })) throw new Error('يوجد دور بهذا الاسم.');
-    var f = Db.insert('Floors', { hotel_id: hotelId, name: name, kind: 'service', sort: nextSort_(hotelId) });
+    if (Db.find('Floors', function (f) { return f.hotel_id === hotelId && f.name === name && String(f.tower || '') === tower; })) throw new Error('يوجد دور بهذا الاسم' + (tower ? ' في ' + tower : '') + '.');
+    var f = Db.insert('Floors', { hotel_id: hotelId, name: name, tower: tower, kind: 'service', sort: nextSort_(hotelId) });
     addFacilities_(hotelId, f.floor_id, facilities || []);
     return { id: f.floor_id };
   });
@@ -471,7 +484,7 @@ function apiAdmRenameFloor(token, floorId, name) {
     name = String(name || '').trim();
     var f = Db.get('Floors', floorId);
     if (!name) throw new Error('اكتب اسم الدور.');
-    if (Db.find('Floors', function (x) { return x.hotel_id === f.hotel_id && x.name === name && x.floor_id !== floorId; })) throw new Error('يوجد دور بهذا الاسم.');
+    if (Db.find('Floors', function (x) { return x.hotel_id === f.hotel_id && x.name === name && String(x.tower || '') === String(f.tower || '') && x.floor_id !== floorId; })) throw new Error('يوجد دور بهذا الاسم.');
     Db.update('Floors', floorId, { name: name });
     return {};
   });

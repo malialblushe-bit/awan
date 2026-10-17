@@ -240,6 +240,23 @@ t('المشرف: أدوار بنطاقات مختلفة دفعة واحدة، و
   eq(run(`Db.all('Rooms', r => r.floor_id === '${tmp}').length`), 0);
 });
 
+t('الأبراج: نفس الدور في ثلاثة أبراج بنطاقات مختلفة', () => {
+  const nid = run(`apiAdmSaveHotel('${adminTok}', { code: 'NAWAZI', name: 'أبراج نوازي', towers: 'البرج الأول, البرج الثاني, البرج الثالث' })`).id;
+  const rows = [];
+  for (let f = 3; f <= 5; f++) [['البرج الأول', 1, 13], ['البرج الثاني', 14, 33], ['البرج الثالث', 34, 44]].forEach(([tw, a, b]) => rows.push({ tower: tw, name: 'الدور ' + f, from: f * 100 + a, to: f * 100 + b, ac: 1 }));
+  run(`apiAdmSaveFloors('${adminTok}', '${nid}', ${JSON.stringify(rows)})`);
+  const h = run(`apiAdmBoot('${adminTok}')`).hotels.find(x => x.id === nid);
+  eq(h.towers.length, 3); eq(h.floors.length, 9); eq(h.totals.rooms, 132);
+  const f = h.floors.find(x => x.tower === 'البرج الثاني' && x.name === 'الدور 4');
+  eq(f.from, 414); eq(f.to, 433);
+  throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ tower: 'البرج الأول', name: 'الدور 6', from: 520, to: 522, ac: 1 }])`, 'برج آخر');
+  throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 6', from: 601, to: 605, ac: 1 }])`, 'اختر البرج');
+  throws(`apiAdmSaveHotel('${adminTok}', { id: '${nid}', code: 'NAWAZI', name: 'أبراج نوازي', towers: 'البرج الأول, البرج الثاني' })`, 'عليه أدوار');
+  const fl = run(`floorsOf_('${nid}')`).find(x => x.tower === 'البرج الثالث' && x.name === 'الدور 5');
+  eq(fl.label, 'البرج الثالث · الدور 5');
+  global.NID = nid; global.NFL = fl.id;
+});
+
 t('المشرف: عقدان، والرقم السري يظهر مرة واحدة وفريد', () => {
   acPin = run(`apiAdmSaveContract('${adminTok}', { name: 'مؤسسة التبريد', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`).pin;
   elPin = run(`apiAdmSaveContract('${adminTok}', { name: 'شركة المصاعد', type: 'el', hotel_ids: ['${HID}'], elevator_ids: ['مصعد النزلاء 1'], start: '${yesterday}', end: '${nextYear}', resp_normal: 45, resp_urgent: 15, pm_per_month: 1 })`).pin;

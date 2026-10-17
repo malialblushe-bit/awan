@@ -267,7 +267,7 @@ var Orders = (function () {
   function loc(R, o) {
     var f = R.floors[o.floor_id];
     var parts = [];
-    if (f) parts.push(f.name);
+    if (f) parts.push(f.tower ? f.tower + ' · ' + f.name : f.name);
     var rec = R.rooms[o.hotel_id + '|' + o.floor_id + '|' + String(o.room)];
     var facility = (rec && rec.kind === 'facility') || (f && f.kind !== 'rooms') || isNaN(parseInt(o.room, 10));
     if (o.room) parts.push(facility ? o.room : 'غرفة ' + o.room);
