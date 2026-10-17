@@ -36,7 +36,8 @@ function isFacility_(r, floor) { return r.kind === 'facility' || (!r.kind && !!f
 function sortFloors_(a, b) { return Number(a.sort) - Number(b.sort); }
 
 function towersOf_(h) { return Orders.csv(h && h.towers).map(function (t) { return t.replace(/\s+/g, ' '); }); }
-function floorLabel_(f) { return (f.tower ? f.tower + ' · ' : '') + f.name; }
+function towerName_(t) { t = String(t || ''); return /^\d+$/.test(t) ? 'برج ' + t : t; }
+function floorLabel_(f) { return (f.tower ? towerName_(f.tower) + ' · ' : '') + f.name; }
 
 /** الأدوار مع مرافقها (للنماذج): {id, name, kind, facilities:[أسماء]} */
 function floorsOf_(hotelId) {
@@ -324,6 +325,7 @@ function apiAdmBoot(token) { Auth.need(token, ['admin']); return admBoot_(); }
 
 function adm_(token, fn) {
   Auth.need(token, ['admin']);
+  ensureSchemaVersion_();
   return Db.withLock(function () {
     var out = fn() || {};
     Db.reset();
