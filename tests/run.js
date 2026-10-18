@@ -217,7 +217,7 @@ t('المشرف: أدوار بنطاقات مختلفة دفعة واحدة، و
   throws(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 9', from: 801, to: 803, ac: 1 }])`, 'دور آخر');
   run(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'الدور 7', from: 701, to: 716, ac: 2 }])`);
   const f7 = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid).floors.find(f => f.name === 'الدور 7');
-  eq(f7.rooms, 16); eq(f7.from, 701); eq(f7.to, 716); eq(f7.acPer, 2);
+  eq(f7.rooms, 16); eq(f7.from, '701'); eq(f7.to, '716'); eq(f7.acPer, 2);
   run(`apiAdmAddFacility('${adminTok}', '${hid}', '${f7.id}', 'الممر', 2)`);
   throws(`apiAdmAddFacility('${adminTok}', '${hid}', '${f7.id}', 'الممر', 1)`, 'موجود');
   b = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === hid);
@@ -248,7 +248,7 @@ t('الأبراج: نفس الدور في ثلاثة أبراج بنطاقات �
   const h = run(`apiAdmBoot('${adminTok}')`).hotels.find(x => x.id === nid);
   eq(h.towers.length, 3); eq(h.floors.length, 9); eq(h.totals.rooms, 132);
   const f = h.floors.find(x => x.tower === 'البرج الثاني' && x.name === 'الدور 4');
-  eq(f.from, 414); eq(f.to, 433);
+  eq(f.from, '414'); eq(f.to, '433');
   throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ tower: 'البرج الأول', name: 'الدور 6', from: 520, to: 522, ac: 1 }])`, 'برج آخر');
   run(`apiAdmSaveHotel('${adminTok}', { id: '${nid}', code: 'NAWAZI', name: 'أبراج نوازي', city: 'مكة' })`);
   eq(run(`apiAdmBoot('${adminTok}')`).hotels.find(x => x.id === nid).towers.length, 3);
@@ -273,6 +273,19 @@ t('المشرف: مهندس للفندق بكلمة مرور مؤقتة', () => 
   const l = run(`apiStaffLogin('eng.ahmed', '${engPw}')`);
   run(`apiChangePassword('${l.token}', 'Eng12345a')`);
   engTok = run("apiStaffLogin('eng.ahmed', 'Eng12345a')").token;
+});
+
+t('الغرف بحرف: A301–A305 و B-01–B-03، ورقم بحرف صغير يُطابَق', () => {
+  const nid = run(`apiAdmSaveHotel('${adminTok}', { code: 'LETTERS', name: 'فندق الحروف' })`).id;
+  run(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ tower: 'A', name: 'الدور 3', from: 'A301', to: 'a305', ac: 1 }, { name: 'الدور 0', from: 'B-01', to: 'B-03', ac: 2 }])`);
+  const h = run(`apiAdmBoot('${adminTok}')`).hotels.find(x => x.id === nid);
+  eq(h.totals.rooms, 8);
+  const f3 = h.floors.find(x => x.name === 'الدور 3');
+  eq(f3.from, 'A301'); eq(f3.to, 'A305');
+  eq(run(`Db.all('Rooms', r => r.hotel_id === '${nid}').map(r => r.number).sort().join(',')`), 'A301,A302,A303,A304,A305,B-01,B-02,B-03');
+  throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 4', from: 'A401', to: 'B405', ac: 1 }])`, 'نطاق الغرف');
+  throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 9', from: 'A303', to: 'A303', ac: 1 }])`, 'دور آخر');
+  eq(run(`Orders.normRoom(' a 302 ')`), 'A302'); eq(run(`Orders.normRoom('اللوبي')`), 'اللوبي');
 });
 
 t('فريق العمل: باركود الطلبات يفتح النموذج بلا دخول', () => {

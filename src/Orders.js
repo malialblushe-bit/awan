@@ -48,6 +48,13 @@ var Orders = (function () {
 
   // ───────── الإنشاء ─────────
   /** o: hotel_id, type, kind, source, floor_id, room, equip, symptom, trapped, requester, description, photos, priority, con_id? */
+  /** a101 أو « A 101 » → A101؛ أسماء المرافق تبقى كما هي */
+  function normRoom(v) {
+    var s = String(v == null ? '' : v).trim();
+    var c = s.replace(/\s+/g, '');
+    return /^[A-Za-z]{1,3}-?\d+$/.test(c) ? c.toUpperCase() : s;
+  }
+
   function create(o, actor) {
     var t = now_();
     var contract = o.con_id ? activeContract(o.hotel_id, o.type, o.con_id) : activeContract(o.hotel_id, o.type);
@@ -56,7 +63,7 @@ var Orders = (function () {
       hotel_id: o.hotel_id, type: o.type, kind: o.kind || 'corrective', source: o.source,
       con_id: o.con_id || (contract ? contract.con_id : ''),
       status: 'assigned', priority: urgent ? 'urgent' : (o.priority || 'normal'),
-      floor_id: o.floor_id || '', room: o.room || '', equip: o.equip || '',
+      floor_id: o.floor_id || '', room: normRoom(o.room), equip: o.equip || '',
       symptom: o.symptom || '', trapped: truthy(o.trapped), requester: o.requester || '',
       description: o.description || '', photos: (o.photos || []).join(','),
       follow_of: o.follow_of || '', visits: 0, work_minutes: 0, reopens: 0,
@@ -269,7 +276,7 @@ var Orders = (function () {
     var parts = [];
     if (f) parts.push(f.tower ? (/^\d+$/.test(String(f.tower)) ? 'برج ' + f.tower : f.tower) + ' · ' + f.name : f.name);
     var rec = R.rooms[o.hotel_id + '|' + o.floor_id + '|' + String(o.room)];
-    var facility = (rec && rec.kind === 'facility') || (f && f.kind !== 'rooms') || isNaN(parseInt(o.room, 10));
+    var facility = rec ? rec.kind === 'facility' : ((f && f.kind !== 'rooms') || !/^[A-Za-z]{0,3}-?\d+$/.test(String(o.room)));
     if (o.room) parts.push(facility ? o.room : 'غرفة ' + o.room);
     if (o.type === 'el' && o.equip) parts.unshift(o.equip);
     return parts.join(' · ') || o.equip || '—';
@@ -310,6 +317,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, conSubmit: conSubmit, conNew: conNew, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, refs: refs, view: view
+    engAct: engAct, engCreate: engCreate, refs: refs, view: view, normRoom: normRoom
   };
 })();
