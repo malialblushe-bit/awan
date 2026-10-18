@@ -159,6 +159,12 @@ function apiConLogin(code, pin) {
   });
 }
 
+function apiConWebLogin(pin) {
+  return Db.withLock(function () {
+    var r = Auth.conWebLogin(pin);
+    return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
+  });
+}
 function conBoot_(s) {
   var con = Db.get('Contractors', s.id);
   var R = Orders.refs();
@@ -188,7 +194,8 @@ function conBoot_(s) {
   var here = R.hotels[s.hotel_id] || {};
   return {
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
-    hotel: { id: s.hotel_id, name: here.name || '' },
+    hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
+    web: !!s.web,
     hotels: Object.keys(hotels).map(function (k) { return hotels[k]; }),
     jobs: jobs, archive: archive.slice(0, 50),
     stats: {
@@ -210,6 +217,11 @@ function apiConAct(token, action, woId, d) {
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () {
     d = d || {};
+    if (s.web) {
+      if (action !== 'submit') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
+      var w = Db.get('WorkOrders', woId);
+      if (w && w.con_id === s.id && !w.arrived_at) throw new Error('سجّل وصولك أولاً بمسح باركود أعوان في الفندق، ثم أرسل التقرير.');
+    }
     d.photos = savePhotos_(d.photos, woId || 'NEW');
     var res = { msg: '' };
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);

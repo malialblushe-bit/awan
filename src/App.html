@@ -75,6 +75,21 @@ textarea.inp{resize:vertical}
 .bnav button.on{color:var(--navy);border-top-color:var(--gold)}
 .foot{position:fixed;bottom:0;inset-inline:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px 16px;display:flex;gap:10px;z-index:6}
 .foot-in{max-width:1240px;margin:0 auto;display:flex;gap:10px;width:100%}
+.lg{min-height:100vh;display:flex;flex-wrap:wrap;background:var(--bg)}
+.lg-side{flex:1 1 480px;min-height:100vh;background:var(--navy);color:#fff;box-sizing:border-box;padding:56px 64px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden;gap:28px}
+.lg-deco{position:absolute;width:520px;height:520px;left:-140px;bottom:-150px;opacity:.08;pointer-events:none}
+.lg-brand{display:flex;align-items:center;gap:12px}.lg-brand div{display:flex;flex-direction:column}.lg-brand b{font-size:28px;line-height:1.1}.lg-brand span{font-size:14px;font-weight:600;color:var(--goldL)}
+.lg-quote{display:flex;flex-direction:column;gap:18px;max-width:520px;position:relative}.lg-q{margin:0;font-size:44px;font-weight:700;line-height:1.4}.lg-quote i{display:block;width:64px;height:4px;border-radius:4px;background:var(--gold)}.lg-s{margin:0;font-size:18px;line-height:1.8;color:#C9D3E0}
+.lg-foot{margin:0;font-size:13px;color:#A9B6C8}
+.lg-main{flex:1 1 480px;box-sizing:border-box;padding:48px 24px;display:flex;align-items:center;justify-content:center}
+.lg-form{width:100%;max-width:400px;display:flex;flex-direction:column;gap:18px}.lg-form h1{margin:0 0 6px;font-size:30px}.lg-sub{margin:0;font-size:15px;color:var(--muted);line-height:1.75}
+.lg-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--mist);border-radius:12px;padding:4px}
+.lg-tabs button{height:44px;border:0;border-radius:9px;background:transparent;color:var(--ink2);font-size:15px;font-weight:600}.lg-tabs button.on{background:#fff;color:var(--navy);font-weight:700;box-shadow:0 1px 3px rgba(31,58,95,.15)}
+.lg-pw{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:12px;background:#fff;min-height:52px}.lg-pw:focus-within{outline:3px solid var(--gold);outline-offset:2px}
+.lg-pw input{flex:1 1 auto;min-width:0;height:48px;border:0;padding:0 14px;font-size:16px;background:transparent;border-radius:12px;outline:none}.lg-pw button{width:48px;height:48px;border:0;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.lg-pin{font-size:24px;letter-spacing:10px;text-align:center}.lg-go{min-height:54px;font-size:17px}.lg-note{margin:0;font-size:14px;color:var(--muted);line-height:1.75}
+.lg-hint{display:flex;gap:12px;align-items:flex-start;background:var(--sand);border:1px solid var(--tan);border-radius:14px;padding:14px 16px}.lg-hint p{margin:0;font-size:14px;line-height:1.75;color:var(--ink2)}.lg-hint b{color:var(--navy)}
+@media(max-width:900px){.lg-side{min-height:auto;padding:32px 24px;border-radius:0 0 28px 28px;flex-basis:100%}.lg-q{font-size:26px}.lg-s{font-size:14px}.lg-foot{display:none}.lg-deco{width:240px;height:240px;left:-70px;bottom:-90px}.lg-main{padding:24px;align-items:flex-start}.lg-form h1{font-size:22px}}
 .pin{min-height:100vh;background:var(--navy);color:#fff;display:flex;flex-direction:column;padding:28px 24px 24px;gap:18px;max-width:480px;margin:0 auto}
 .dots{display:flex;justify-content:center;gap:14px;direction:ltr}
 .dot{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.5)}.dot.on{background:var(--goldL);border-color:var(--goldL)}
@@ -122,6 +137,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th{font-size:12.5px;col
 <script>
 // ═════════ أدوات عامة ═════════
 var S = { mode: BOOT.mode, code: BOOT.hotel };
+try{if(!S.mode&&sessionStorage.getItem('awan_tok_conweb'))S.mode='con'}catch(e){}
 var LOGO = '<svg width="30" height="30" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="12" width="30" height="30" rx="9" fill="#B07A35"></rect><rect x="22" y="12" width="30" height="30" rx="9" fill="none" stroke="#FFFFFF" stroke-width="4"></rect></svg>';
 function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
@@ -130,7 +146,7 @@ function busy(on){$('#busy').innerHTML=on?'<div class="busy"><div class="spin"><
 var toastT;function toast(m,kind){clearTimeout(toastT);$('#toast').innerHTML='<div class="toast" role="status" style="background:'+(kind==='err'?'#FBEFEC;color:#8E3A2E':'#E3EFEA;color:#245244')+'">'+esc(m)+'</div>';toastT=setTimeout(function(){$('#toast').innerHTML=''},kind==='err'?6000:4000)}
 function store(k,v){try{if(v==null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){}}
 function load(k){try{return sessionStorage.getItem(k)}catch(e){return null}}
-function tokKey(){return 'awan_tok_'+(S.mode||'staff')+'_'+(S.code||'')}
+function tokKey(){if(S.mode==='con'&&!S.code)return 'awan_tok_conweb';return 'awan_tok_'+(S.mode||'staff')+'_'+(S.code||'')}
 function clearTok(){S.tok=null;store(tokKey(),null);setTimeout(render,50)}
 function hm(t){return t?new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Riyadh'}):''}
 function dmy(t){return t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Asia/Riyadh'}):''}
@@ -217,17 +233,18 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  job:function(){return C.b.jobs.filter(function(j){return j.id===C.jobId})[0]||C.b.archive.filter(function(j){return j.id===C.jobId})[0]},
  render:function(){
   if(!S.tok&&load(tokKey())&&!C.tried){C.tried=true;C.init();return}
-  if(!S.tok||!C.b)return C.pinView();
+  if(!S.tok||!C.b){if(!S.code){S.mode='';C.b=null;return W.render()}return C.pinView()}
   var b=C.b,h='';
   var heads={home:[ (TYPE[b.me.type]?'متعهد '+TYPE[b.me.type]:'') ,b.me.name],job:[C.jobId||'عملية جديدة',''],new:['عملية جديدة','اختر النوع'],arch:['الأرشيف','الطلبات المغلقة'],sent:['تم',b.me.name]};
   var hd=heads[C.scr]||['',''];
   var back=(C.scr==='job')?'<button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="C.go(C.preset?\'new\':\'home\')">رجوع</button>':'';
-  $('#app').innerHTML=hdr(hd[0],back+'<span class="pillh">'+esc(b.hotel.name)+'</span>')+'<div class="wrap" style="max-width:760px">'+C[C.scr+'View']()+'</div>'+C.footer();
+  $('#app').innerHTML=hdr(hd[0],back+'<span class="pillh">'+esc(b.hotel.name)+'</span>'+(b.web&&C.scr!=='job'?'<button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="C.logout()">خروج</button>':''))+'<div class="wrap" style="max-width:760px">'+C[C.scr+'View']()+'</div>'+C.footer();
  },
+ logout:function(){call('apiLogout',S.tok);store(tokKey(),null);S.tok=null;C.b=null;S.mode='';C.scr='home';render()},
  pinView:function(){var d='';for(var i=0;i<6;i++)d+='<span class="dot'+(i<C.pin.length?' on':'')+'"></span>';
   var k=['1','2','3','4','5','6','7','8','9','','0','del'].map(function(x){return x===''?'<span></span>':'<button class="key" aria-label="'+(x==='del'?'حذف':x)+'" onclick="C.press(\''+x+'\')">'+(x==='del'?'⌫':x)+'</button>'}).join('');
   $('#app').innerHTML='<div class="pin"><div class="brand">'+LOGO+'<span>أعوان</span><small>شركاء في الإنجاز</small></div><div style="margin-top:24px;text-align:center"><p style="margin:0;color:#E6C999;font-weight:600">مسحت باركود أعوان</p><h1 style="margin-top:8px;font-size:24px">اكتب رقمك السري</h1></div><div class="dots">'+d+'</div><p style="text-align:center;font-size:12.5px;color:#C9D3E0;margin:0">يُسجَّل وقت وصولك تلقائياً</p><div class="keys">'+k+'</div></div>'},
- homeView:function(){var b=C.b,st=b.stats,h='<div class="stack"><p class="small muted" style="margin:0">سُجّل وصولك تلقائياً من الباركود</p><div class="grid g2">';
+ homeView:function(){var b=C.b,st=b.stats,h='<div class="stack"><p class="small muted" style="margin:0">'+(b.web?'أعمالك في كل الفنادق. وقت الوصول يُسجَّل من باركود الفندق فقط.':'سُجّل وصولك تلقائياً من الباركود')+'</p><div class="grid g2">';
   h+='<div class="tile"><p class="k">مفتوحة لك</p><p class="v">'+st.open+'</p></div><div class="tile"><p class="k">قيد المراجعة والمطابقة</p><p class="v" style="color:#8A5E26">'+st.waiting+'</p></div>';
   h+='<div class="tile"><p class="k">متوسط الاستجابة هذا الشهر</p><p class="v">'+(st.resp==null?'—':dur(st.resp))+'</p><p class="s">'+(st.target?'المستهدف '+st.target+' د · ':'')+'من '+st.respN+' عملية</p></div><div class="tile"><p class="k">أنجزت اليوم</p><p class="v" style="color:#245244">'+st.today+'</p></div></div>';
   if(C.msg){h+='<div class="alert a-mint" role="status">'+esc(C.msg)+'</div>';C.msg=''}
@@ -283,11 +300,12 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  jobView:function(){var j=C.preset?null:C.job(),h='<div class="stack">';
   if(j){
    h+='<div class="tile" style="display:flex;flex-direction:column;gap:6px"><div class="row"><span class="small muted" style="direction:ltr">'+esc(j.id)+'</span><span class="pill st-'+j.status+'">'+STLBL[j.status]+'</span></div><p style="font-size:17px;font-weight:700">'+esc(j.title)+'</p><p class="small" style="color:#4A5A70">'+esc(j.hotel)+' · '+esc(j.loc)+'</p><p class="small muted">من: '+esc(j.requester||(j.source==='engineer'?'المهندس':'—'))+' · '+ago(j.created)+'</p>'+(j.description?'<p class="small">'+esc(j.description)+'</p>':'')+(j.visits?'<p class="small" style="font-weight:600">'+j.visits+' زيارة سابقة</p>':'')+(j.photos.length?'<div class="photos">'+j.photos.map(thumb).join('')+'</div>':'')+'</div>';
-   if(j.trapped&&j.status!=='closed'){h+='<div class="alert a-red" role="alert" style="display:flex;flex-direction:column;gap:10px"><b>احتجاز أشخاص · البلاغ '+hm(j.created)+'</b>'+(j.rescued?'<span>تم الإنقاذ '+hm(j.rescued)+' · زمن الإنقاذ '+dur(mins(j.created,j.rescued))+'</span>':'<button class="btn w" style="background:#A4483A;color:#fff" onclick="C.rescue(\''+j.id+'\')">تم الإنقاذ الآن</button>')+'</div>'}
+   if(j.trapped&&j.status!=='closed'){h+='<div class="alert a-red" role="alert" style="display:flex;flex-direction:column;gap:10px"><b>احتجاز أشخاص · البلاغ '+hm(j.created)+'</b>'+(j.rescued?'<span>تم الإنقاذ '+hm(j.rescued)+' · زمن الإنقاذ '+dur(mins(j.created,j.rescued))+'</span>':(C.b.web?'<span>يُسجَّل الإنقاذ من الفندق بعد مسح باركود أعوان.</span>':'<button class="btn w" style="background:#A4483A;color:#fff" onclick="C.rescue(\''+j.id+'\')">تم الإنقاذ الآن</button>'))+'</div>'}
    if(j.reject_reason&&j.status==='in_progress')h+='<div class="alert a-red" role="alert"><b>أعاد المهندس فتحها:</b> '+esc(j.reject_reason)+'</div>';
    if(j.note)h+='<div class="alert a-mint">'+esc(j.note)+'</div>';
    var locked={review:['قيد المراجعة.','سيصلك القرار هنا حين يصبح جاهزاً للتنفيذ. وعدّاد عملك متوقف.'],matching:['بانتظار مطابقة المهندس.','سيطابق تقريرك كاملاً ثم يغلق العملية أو يعيدها مع السبب.'],parts:['بانتظار القطعة من فريقنا.','سيُشعرك المهندس حين تصل. وعدّاد عملك متوقف.'],closed:['مغلقة بعد المطابقة.',''],rejected:['مرفوضة.',j.reject_reason]}[j.status];
    if(locked)return h+'<div class="alert a-tan"><b>'+locked[0]+'</b> '+esc(locked[1]||'')+'</div>'+C.reportsView(j)+'</div>';
+   if(C.b.web&&!j.arrived){C.outcome=null;return h+'<div class="alert a-tan"><b>لم يُسجَّل الوصول بعد.</b> التقرير يُرسل بعد مسح باركود أعوان في '+esc(j.hotel)+'.</div>'+C.reportsView(j)+'</div>'}
   } else {
    h+='<div class="tile"><p style="font-size:17px;font-weight:700">'+(C.preset==='diag'?'ملاحظة عطل':'تقرير فني')+'</p><p class="small muted">بمبادرتك · الآن</p></div>';
    if(C.b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+C.b.hotels.map(function(x){var on=(C.newHotel||C.b.hotel.id)===x.id;return '<button class="chip'+(on?' on':'')+'" onclick="C.newHotel=\''+x.id+'\';C.sel={};render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
@@ -304,7 +322,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
    var m=C.missing(),lbl={ok:'إرسال للمطابقة',fix:'إرسال للمطابقة',comp:'إرسال للمهندس',diag:'إرسال للمهندس',visit:'حفظ الزيارة',report:'إرسال التقرير'}[oc];
    return '<div class="foot"><div class="foot-in" style="max-width:760px"><button id="sb" class="btn w '+((oc==='comp'||oc==='diag')?'btn-g':'btn-p')+'" onclick="C.submit()"'+(m.length?' disabled':'')+'>'+(m.length?'أكمل: '+m.join('، '):lbl)+'</button></div></div>'}
   if(['home','new','arch'].indexOf(C.scr)===-1)return '';
-  return '<nav class="bnav" aria-label="التنقل">'+[['home','أعمالي'],['new','عملية جديدة'],['arch','الأرشيف']].map(function(n){return '<button class="'+(C.scr===n[0]?'on':'')+'" onclick="C.go(\''+n[0]+'\')">'+n[1]+'</button>'}).join('')+'</nav>'},
+  return '<nav class="bnav" aria-label="التنقل">'+[['home','أعمالي'],['new','عملية جديدة'],['arch','الأرشيف']].filter(function(n){return !(C.b.web&&n[0]==='new')}).map(function(n){return '<button class="'+(C.scr===n[0]?'on':'')+'" onclick="C.go(\''+n[0]+'\')">'+n[1]+'</button>'}).join('')+'</nav>'},
  chk:function(){var b=$('#sb');if(!b)return;var m=C.missing();b.disabled=m.length>0;var oc=C.preset||C.outcome;b.textContent=m.length?'أكمل: '+m.join('، '):({ok:'إرسال للمطابقة',fix:'إرسال للمطابقة',comp:'إرسال للمهندس',diag:'إرسال للمهندس',visit:'حفظ الزيارة',report:'إرسال التقرير'}[oc])},
  newView:function(){var t=C.b.me.type;return '<div class="stack"><h2 style="font-size:18px">ماذا تريد أن تسجّل؟</h2>'+[['diag','ملاحظة عطل','لاحظت عطلاً وتريد قرار المهندس'],['report','تقرير فني','تقرير عن حالة '+(t==='el'?'مصعد':'وحدة')+' أو توصية']].map(function(o){return '<button class="opt" onclick="C.go(\'job\');C.preset=\''+o[0]+'\';C.jobId=null;render()"><b>'+o[1]+'</b><span>'+o[2]+'</span></button>'}).join('')+'<p class="small muted">الصيانة الدورية تُضاف قريباً.</p></div>'},
  archView:function(){var a=C.b.archive;if(!a.length)return '<div class="card muted" style="text-align:center">لا توجد طلبات مغلقة بعد.</div>';
@@ -339,7 +357,15 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   $('#app').innerHTML=hdr('',right,nav)+'<div class="wrap">'+(W.tab==='adm'&&isAdmin?A.view():W.opsView())+'</div>'+(W.modal?W.modal():'')+(W.tab==='adm'&&isAdmin&&A.dr?A.drawer():'');
  },
  loading:function(){$('#app').innerHTML=hdr('')+'<div class="wrap"></div>'},
- loginView:function(){$('#app').innerHTML='<div class="pin" style="min-height:100vh"><div class="brand">'+LOGO+'<span>أعوان</span><small>شركاء في الإنجاز</small></div><div style="margin-top:30px" class="stack"><h1 style="font-size:24px">تسجيل الدخول</h1><div><label class="lbl" style="color:#E6C999" for="u">اسم الدخول</label><input id="u" class="inp" autocomplete="username" dir="ltr"></div><div><label class="lbl" style="color:#E6C999" for="p">كلمة المرور</label><input id="p" class="inp" type="password" autocomplete="current-password" dir="ltr" onkeydown="if(event.key===\'Enter\')W.login()"></div><button class="btn btn-g w" onclick="W.login()">دخول</button><p class="small" style="color:#C9D3E0">للمتعهدين وفريق العمل: امسح الباركود الموجود في الفندق.</p></div></div>'},
+ loginView:function(){var con=W.lt==='con';
+  var h='<div class="lg"><section class="lg-side"><svg class="lg-deco" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="12" width="30" height="30" rx="9" fill="#E6C999"></rect><rect x="22" y="12" width="30" height="30" rx="9" fill="none" stroke="#FFFFFF" stroke-width="2"></rect></svg><div class="lg-brand"><svg width="44" height="44" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="12" width="30" height="30" rx="9" fill="#B07A35"></rect><rect x="22" y="12" width="30" height="30" rx="9" fill="none" stroke="#FFFFFF" stroke-width="4"></rect></svg><div><b>أعوان</b><span>شركاء في الإنجاز</span></div></div><div class="lg-quote"><p class="lg-q">تجربة النزيل<br>نصنعها معاً.</p><i></i><p class="lg-s">المهندس والمتعهد وفريق العمل… كلٌّ من موقعه.</p></div><p class="lg-foot">منصة المتعهدين للفنادق</p></section>';
+  h+='<section class="lg-main"><div class="lg-form"><div><h1>أهلاً بعودتك</h1><p class="lg-sub">كل معلومة دقيقة تسجّلها تختصر الطريق إلى الحل.</p></div>';
+  h+='<div class="lg-tabs" role="group" aria-label="نوع الدخول"><button type="button" aria-pressed="'+!con+'" class="'+(con?'':'on')+'" onclick="W.lt=\'staff\';render()">فريق التشغيل</button><button type="button" aria-pressed="'+con+'" class="'+(con?'on':'')+'" onclick="W.lt=\'con\';render()">المتعهد</button></div>';
+  if(!con)h+='<div><label class="lbl" for="u">اسم الدخول</label><input id="u" class="inp" autocomplete="username" dir="ltr"></div><div><label class="lbl" for="p">كلمة المرور</label><div class="lg-pw"><input id="p" type="password" autocomplete="current-password" dir="ltr" onkeydown="if(event.key===\'Enter\')W.login()"><button type="button" aria-label="إظهار كلمة المرور" onclick="var i=$(\'#p\');i.type=i.type===\'password\'?\'text\':\'password\'"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div></div><button class="btn btn-p w lg-go" onclick="W.login()">دخول</button><p class="lg-note">نسيت كلمة المرور؟ اطلب من مشرف النظام إعادة تعيينها.</p>';
+  else h+='<div><label class="lbl" for="pin">الرقم السري (6 أرقام)</label><input id="pin" class="inp lg-pin" type="password" inputmode="numeric" maxlength="6" dir="ltr" autocomplete="one-time-code" placeholder="••••••" onkeydown="if(event.key===\'Enter\')W.conLogin()"></div><button class="btn btn-p w lg-go" onclick="W.conLogin()">دخول</button><p class="lg-note">تتابع إدارة الشركة من هنا أعمالها في كل الفنادق. نسيت الرقم؟ اطلب من مهندس الفندق رقماً جديداً.</p>';
+  h+='<div class="lg-hint"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8A5E26" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;margin-top:2px"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"></path></svg><p><b>في الفندق؟</b><br>فريق العمل يرفع الطلب من باركود الطلبات بلا حساب، والمتعهد يمسح باركود أعوان ليُسجَّل وصوله.</p></div></div></section></div>';
+  $('#app').innerHTML=h;var f=$(con?'#pin':'#u');if(f&&window.innerWidth>900)f.focus()},
+ conLogin:function(){var p=$('#pin').value.trim();if(!/^\d{6}$/.test(p))return toast('اكتب الرقم السري: 6 أرقام.','err');call('apiConWebLogin',p).then(function(r){S.mode='con';S.code='';S.tok=r.token;store(tokKey(),r.token);C.b=r.boot;C.scr='home';render()})},
  mustView:function(){$('#app').innerHTML='<div class="pin" style="min-height:100vh"><div class="brand">'+LOGO+'<span>أعوان</span></div><div style="margin-top:30px" class="stack"><h1 style="font-size:22px">اختر كلمة مرور جديدة</h1><p class="small" style="color:#C9D3E0;margin:0">8 أحرف على الأقل، تجمع حروفاً وأرقاماً.</p><input id="np" class="inp" type="password" placeholder="كلمة المرور الجديدة" dir="ltr"><input id="np2" class="inp" type="password" placeholder="أعد كتابتها" dir="ltr"><button class="btn btn-g w" onclick="W.changePw()">حفظ</button></div></div>'},
  late:function(o){return (o.status==='assigned')&&o.resp!=null&&o.assigned&&!o.arrived&&(Date.now()-o.assigned)/60000>o.resp},
  queues:function(){var O=W.b.orders,open=O.filter(function(o){return ['closed','rejected'].indexOf(o.status)===-1});

@@ -413,6 +413,19 @@ t('المهندس: طلب جديد يُسند حسب العقد', () => {
   eq(r.boot.orders.find(x => x.id === r.id).con, 'شركة المصاعد');
 });
 
+t('دخول المتعهد من الويب: كل الفنادق، بلا تسجيل وصول، ولا إجراءات ميدانية', () => {
+  const before = run(`Db.all('Arrivals').length`);
+  throws(`apiConWebLogin('000000')`, 'غير صحيح');
+  const r = run(`apiConWebLogin('${acPin}')`);
+  eq(r.boot.web, true); eq(r.boot.hotel.name, 'كل الفنادق'); eq(r.boot.me.name, 'مؤسسة التبريد');
+  eq(run(`Db.all('Arrivals').length`), before);
+  throws(`apiConAct('${r.token}', 'new', null, { outcome: 'report', title: 'x' })`, 'من الفندق فقط');
+  const floor = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const w = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '705', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  throws(`apiConAct('${r.token}', 'submit', '${w}', { outcome: 'ok' })`, 'سجّل وصولك أولاً');
+  eq(run(`apiConBoot('${r.token}')`).jobs.some(j => j.id === w), true);
+});
+
 t('الرقم السري: 5 محاولات خاطئة تقفل مؤقتاً', () => {
   for (let i = 0; i < 5; i++) { try { run("apiConLogin('WARIF2', '111111')"); } catch (e) {} }
   throws(`apiConLogin('WARIF2', '${acPin}')`, 'انتظر');

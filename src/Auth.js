@@ -83,6 +83,21 @@ var Auth = (function () {
   function logout(token) { if (token) cache_().remove('S_' + token); }
 
   // ───────── المتعهد ─────────
+  /** دخول إدارة المتعهد من صفحة الويب: بلا فندق ولا تسجيل وصول */
+  function conWebLogin(pin) {
+    pin = String(pin || '').trim();
+    guard_('con_web');
+    var con = null;
+    if (/^\d{6}$/.test(pin)) {
+      con = Db.find('Contractors', function (c) {
+        return c.active !== false && String(c.active).toUpperCase() !== 'FALSE' && c.pin_hash && hash(pin, c.salt) === c.pin_hash;
+      });
+    }
+    if (!con) { fail_('con_web'); throw new Error('الرقم السري غير صحيح.'); }
+    clear_('con_web');
+    return { token: newSession_({ role: 'contractor', id: con.con_id, hotel_id: '', web: true }), con: con };
+  }
+
   function conLogin(hotel, pin) {
     pin = String(pin || '').trim();
     guard_('con_' + hotel.hotel_id);
@@ -161,7 +176,7 @@ var Auth = (function () {
 
   return {
     hash: hash, validPassword: validPassword, session: session, need: need, logout: logout,
-    conLogin: conLogin, setPin: setPin, staffLogin: staffLogin, changePassword: changePassword,
+    conLogin: conLogin, conWebLogin: conWebLogin, setPin: setPin, staffLogin: staffLogin, changePassword: changePassword,
     createUser: createUser, resetUser: resetUser
   };
 })();
