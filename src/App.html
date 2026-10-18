@@ -173,10 +173,18 @@ function pickPhotos(cb){var i=document.createElement('input');i.type='file';i.ac
 function thumb(id){return '<a href="https://drive.google.com/file/d/'+esc(id)+'/view" target="_blank" rel="noopener"><img alt="صورة" src="https://drive.google.com/thumbnail?id='+esc(id)+'&sz=w320"></a>'}
 var STLBL={assigned:'مُسند',in_progress:'قيد التنفيذ',review:'قيد المراجعة',decision:'بانتظار قرارك',pay:'بانتظار السداد',parts:'بانتظار قطعة',matching:'بانتظار المطابقة',closed:'مغلق',rejected:'مرفوض'};
 var TYPE={ac:'تكييف',el:'مصاعد',sf:'سلامة'};
+/** قائمة منسدلة يُكتب فيها: القيم عربية في البيانات، وتُعرض بلغة المستخدم */
+function combo(id,val,opts,handler,ph,extra){return '<input id="'+id+'" class="inp" list="'+id+'_l" autocomplete="off" value="'+esc(val||'')+'" placeholder="'+esc(ph||'اكتب أو اختر')+'" oninput="'+handler+'"'+(extra||'')+'><datalist id="'+id+'_l">'+opts.map(function(o){return '<option value="'+esc(T(o))+'"></option>'}).join('')+'</datalist>'}
+function pickOf(opts,v){v=String(v||'').trim();if(!v)return '';for(var i=0;i<opts.length;i++){if(opts[i]===v||T(opts[i])===v)return opts[i]}return ''}
 // ═════════ اللغة: العربية أصل الواجهة، والإنجليزية تُترجم عند العرض ═════════
 var LANG=(function(){try{return localStorage.getItem('awan_lang')||'ar'}catch(e){return 'ar'}})();
 var DICT={
-'أعوان':'Awan','الدرجة':'Score','شركاء في الإنجاز':'Partners in achievement','رفع طلب':'New request',
+'أعوان':'Awan','الدرجة':'Score','الملاحظة':'Observation','العطل':'Fault','الإجراء المتخذ':'Action taken','العطل: الجزء':'Fault: part','العطل: السبب':'Fault: cause','ما الذي لاحظته؟':'What did you notice?','ما الذي عملته؟ (واحد أو أكثر)':'What did you do? (one or more)','ما الذي عملته؟':'What did you do?',
+'اكتب أو اختر':'Type or choose','ماذا لاحظت؟ اكتب أو اختر':'What did you notice? Type or choose','ماذا لوحظ؟ اكتب أو اختر':'What was noticed? Type or choose','الدور أو المكان':'Floor or place','الغرفة أو المرفق (اختياري)':'Room or facility (optional)','أين بالتحديد؟ (اختياري)':'Where exactly? (optional)',
+'اختر الدور أولاً':'Choose the floor first','غرفة أو مرفق':'Room or facility','سيُسند إلى':'Will be assigned to','الاستجابة المتفق عليها':'Agreed response','لا يوجد عقد ساري':'No active contract','لهذا النوع في هذا الفندق. يُنشأ الطلب بلا متعهد وتسنده يدوياً.':'for this type at this hotel. The request is created without a contractor and you assign it manually.',
+'يوجد طلب مفتوح على نفس الموقع:':'There is an open request at the same location:','افتحه بدل إنشاء طلب مكرر، أو أكمل إن كان عطلاً آخر.':'Open it instead of creating a duplicate, or continue if it is a different fault.','عطل متكرر:':'Repeat fault:',
+'{0} طلبات أُغلقت على هذا الموقع خلال {1} يوماً':'{0} requests closed at this location in {1} days','اكتب ملاحظة للمتعهد في التفاصيل.':'Add a note for the contractor in the details.','اختر النوع واكتب الملاحظة.':'Choose the type and write the observation.','اختر المصعد.':'Choose the elevator.','اختر الدور أو المكان.':'Choose the floor or place.',
+'تنظيف':'Cleaning','الإجراء المتخذ ':'Action taken','شركاء في الإنجاز':'Partners in achievement','رفع طلب':'New request',
 'مُسند':'Assigned','قيد التنفيذ':'In progress','قيد المراجعة':'Under review','بانتظار قرارك':'Awaiting your decision','بانتظار قرار المهندس':'Awaiting engineer decision','بانتظار السداد':'Awaiting payment','بانتظار قطعة':'Awaiting part','بانتظار المطابقة':'Awaiting matching','مغلق':'Closed','مرفوض':'Rejected','مغلقة':'closed',
 'تكييف':'AC','مصاعد':'Elevators','سلامة':'Safety','عام':'General',
 'الباركود غير صحيح أو الفندق غير مفعّل. أبلغ مهندس الصيانة.':'Invalid barcode or inactive hotel. Tell the maintenance engineer.',
@@ -355,7 +363,7 @@ function render(){
 }
 
 // ═════════ فريق العمل: رفع طلب ═════════
-var R={st:{step:1,type:'',floor:'',room:'',equip:'',sym:'',trapped:'',desc:'',name:'',photos:[]},
+var R={st:{step:1,type:'',floor:'',floorTxt:'',room:'',equip:'',equipTxt:'',sym:'',note:'',trapped:'',name:'',photos:[]},
  init:function(){call('apiReqBoot',S.code).then(function(b){addPairs(b.i18n);R.b=b;render()}).catch(function(){R.err=true;render()})},
  set:function(k,v){R.st[k]=v;render()},
  render:function(){
@@ -371,28 +379,25 @@ var R={st:{step:1,type:'',floor:'',room:'',equip:'',sym:'',trapped:'',desc:'',na
     h+='<h2 style="font-size:24px">ما نوع المشكلة؟</h2><div class="grid g2">';
     [['ac','تكييف','غرفة، ممر، مطعم أو أي مرفق'],['el','مصاعد','مصاعد النزلاء أو الخدمة']].forEach(function(c){
       if(!b.has[c[0]])return;
-      h+='<button class="cat'+(s.type===c[0]?' on':'')+'" onclick="R.st.sym=\'\';R.st.trapped=\'\';R.set(\'type\',\''+c[0]+'\')"><b style="font-size:20px">'+c[1]+'</b><span class="small" style="color:#4A5A70">'+c[2]+'</span></button>'});
+      h+='<button class="cat'+(s.type===c[0]?' on':'')+'" onclick="R.st.sym=\'\';R.st.note=\'\';R.st.trapped=\'\';R.set(\'type\',\''+c[0]+'\')"><b style="font-size:20px">'+c[1]+'</b><span class="small" style="color:#4A5A70">'+c[2]+'</span></button>'});
     h+='</div>';
     if(!b.has.ac&&!b.has.el)h+='<div class="alert a-tan">لا توجد عقود سارية لهذا الفندق بعد.</div>';
     h+='<div class="alert a-sand">لا تعرف التصنيف بدقة؟ اختر الأقرب، والمهندس يعيد توجيه الطلب عند الحاجة.</div>';
   }
   if(s.step===2){
-    if(isEl){h+='<div><span class="lbl">أي مصعد؟</span><div class="chips">'+b.elevators.map(function(e){return '<button class="chip'+(s.equip===e?' on':'')+'" data-v="'+esc(e)+'" onclick="R.set(\'equip\',this.dataset.v)">'+esc(e)+'</button>'}).join('')+'</div></div>'}
-    else{var tws=(b.hotel.towers||[]);if(tws.length)h+='<div><span class="lbl">البرج</span><div class="chips">'+tws.map(function(t){return '<button class="chip'+(s.tower===t?' on':'')+'" data-v="'+esc(t)+'" onclick="R.st.floor=\'\';R.st.room=\'\';R.set(\'tower\',this.dataset.v)">'+esc(A.tn(t))+'</button>'}).join('')+'</div></div>';
-     if(!tws.length||s.tower)h+='<div><span class="lbl">الدور</span><div class="chips" style="max-height:220px;overflow-y:auto">'+b.floors.filter(function(f){return !tws.length||!f.tower||f.tower===s.tower}).map(function(f){return '<button class="chip'+(s.floor===f.id?' on':'')+'" onclick="R.st.room=\'\';R.set(\'floor\',\''+f.id+'\')">'+esc(f.name)+'</button>'}).join('')+'</div></div>';
-      var fl=b.floors.filter(function(f){return f.id===s.floor})[0];
-      if(fl&&fl.facilities.length)h+='<div><span class="lbl">'+(fl.kind==='rooms'?'مرفق في هذا الدور (أو اكتب رقم الغرفة)':'أين بالتحديد؟')+'</span><div class="chips">'+fl.facilities.map(function(x){return '<button class="chip'+(s.room===x?' on':'')+'" data-v="'+esc(x)+'" onclick="R.set(\'room\',R.st.room===this.dataset.v?\'\':this.dataset.v)">'+esc(x)+'</button>'}).join('')+'</div></div>';
-      if(fl&&(fl.kind==='rooms'||!fl.facilities.length))h+='<div><label class="lbl" for="room">'+(fl.kind==='rooms'?'رقم الغرفة':'المكان')+' (اختياري)</label><input id="room" class="inp"'+(fl.kind==='rooms'?' inputmode="numeric" placeholder="مثال: 712"':'')+' value="'+esc(fl.facilities.indexOf(s.room)===-1?s.room:'')+'" oninput="R.st.room=this.value"></div>'}
-    h+='<div><span class="lbl">ما الذي يحدث؟</span><div class="chips">'+b.syms[s.type].map(function(x){return '<button class="chip'+(s.sym===x.ar?' on':'')+'" data-v="'+esc(x.ar)+'" onclick="R.st.trapped=\'\';R.set(\'sym\',R.st.sym===this.dataset.v?\'\':this.dataset.v)">'+esc(x.ar)+'</button>'}).join('')+'</div></div>';
+    if(isEl)h+='<div><label class="lbl" for="rq_el">أي مصعد؟</label>'+combo('rq_el',s.equipTxt,b.elevators,'R.inp(\'equip\',this.value)')+'</div>';
+    else{var fl=b.floors.filter(function(f){return f.id===s.floor})[0];
+     h+='<div><label class="lbl" for="rq_fl">الدور أو المكان</label>'+combo('rq_fl',s.floorTxt,b.floors.map(function(f){return f.label||f.name}),'R.inp(\'floor\',this.value)')+'</div>';
+     if(fl)h+='<div><label class="lbl" for="rq_rm">'+(fl.kind==='rooms'?'الغرفة أو المرفق':'أين بالتحديد؟')+' (اختياري)</label>'+combo('rq_rm',s.room,fl.facilities.concat(fl.rooms||[]),'R.st.room=this.value',fl.kind==='rooms'?'مثال: 712':'')+'</div>'}
+    h+='<div><label class="lbl" for="rq_nt">الملاحظة</label>'+combo('rq_nt',s.note,b.syms[s.type].map(function(x){return x.ar}),'R.inp(\'note\',this.value)','ماذا لاحظت؟ اكتب أو اختر')+'</div>';
     if(s.sym==='توقف بين الأدوار'){h+='<div class="alert a-red" role="alert"><b>طلب طارئ:</b> يصل للمتعهد والمهندس فوراً. إن كان بداخله أحد فاتصل بالأمن الآن.</div><div><span class="lbl">هل بداخله أحد؟ <span class="req">*</span></span><div class="grid g2"><button class="chip'+(s.trapped==='yes'?' on':'')+'" onclick="R.set(\'trapped\',\'yes\')">نعم، يوجد محتجزون</button><button class="chip'+(s.trapped==='no'?' on':'')+'" onclick="R.set(\'trapped\',\'no\')">لا</button></div></div>'}
-    h+='<div><label class="lbl" for="desc">تفاصيل إضافية (اختياري)</label><textarea id="desc" class="inp" rows="3" oninput="R.st.desc=this.value">'+esc(s.desc)+'</textarea></div>';
     h+='<button class="photo-btn'+(s.photos.length?' has':'')+'" onclick="'+(s.photos.length?'R.set(\'photos\',[])':'pickPhotos(function(a){R.set(\'photos\',a)})')+'">'+(s.photos.length?'صورة مرفقة ✓ (اضغط للإزالة)':'إرفاق صورة (اختياري)')+'</button>';
   }
   var where=isEl?s.equip:((function(f){return f?(f.label||f.name):''})(b.floors.filter(function(f){return f.id===s.floor})[0])+(s.room?' · '+s.room:''));
-  var what=(s.sym||'')+(s.desc?' — '+s.desc:'')+(s.trapped==='yes'?' · يوجد محتجزون':'');
+  var what=(s.sym||s.note||'')+(s.trapped==='yes'?' · يوجد محتجزون':'');
   if(s.step===3){
     h+='<div><label class="lbl" for="nm">اسمك</label><input id="nm" class="inp" placeholder="ليعرف المهندس من رفع الطلب" value="'+esc(s.name)+'" oninput="R.st.name=this.value;R.chk()"></div>';
-    h+='<div class="card" style="padding:4px 16px">'+[['النوع',TYPE[s.type]],['الموقع',where||'—'],['المشكلة',what||'—'],['صورة',s.photos.length?'مرفقة':'بدون']].map(function(r){return '<div class="row" style="padding:11px 0;border-bottom:1px solid #EEF2F7;font-size:14px"><span class="muted">'+r[0]+'</span><b>'+esc(r[1])+'</b></div>'}).join('')+'</div>';
+    h+='<div class="card" style="padding:4px 16px">'+[['النوع',TYPE[s.type]],['الموقع',where||'—'],['الملاحظة',what||'—'],['صورة',s.photos.length?'مرفقة':'بدون']].map(function(r){return '<div class="row" style="padding:11px 0;border-bottom:1px solid #EEF2F7;font-size:14px"><span class="muted">'+r[0]+'</span><b>'+esc(r[1])+'</b></div>'}).join('')+'</div>';
   }
   if(s.step===4){
     var d=R.done;
@@ -401,14 +406,19 @@ var R={st:{step:1,type:'',floor:'',room:'',equip:'',sym:'',trapped:'',desc:'',na
   h+='</div></div><div class="foot"><div class="foot-in" style="max-width:560px">';
   if(s.step>1&&s.step<4)h+='<button class="btn btn-o" style="width:110px" onclick="R.set(\'step\','+(s.step-1)+')">رجوع</button>';
   if(s.step<4)h+='<button id="nx" class="btn btn-p w" onclick="R.next()">'+(s.step===3?'إرسال الطلب':'التالي')+'</button>';
-  else h+='<button class="btn btn-p w" onclick="R.st={step:1,type:\'\',floor:\'\',room:\'\',equip:\'\',sym:\'\',trapped:\'\',desc:\'\',name:\'\',photos:[]};render()">رفع طلب جديد</button>';
+  else h+='<button class="btn btn-p w" onclick="R.st={step:1,type:\'\',floor:\'\',floorTxt:\'\',room:\'\',equip:\'\',equipTxt:\'\',sym:\'\',note:\'\',trapped:\'\',name:\'\',photos:[]};render()">رفع طلب جديد</button>';
   h+='</div></div>';
   $('#app').innerHTML=h;R.chk();
  },
- ok:function(){var s=R.st;if(s.step===1)return !!s.type;if(s.step===2){var loc=s.type==='el'?!!s.equip:!!s.floor;return loc&&(!!s.sym||s.desc.trim().length>2)&&(s.sym!=='توقف بين الأدوار'||!!s.trapped)}if(s.step===3)return s.name.trim().length>1;return true},
+ ok:function(){var s=R.st;if(s.step===1)return !!s.type;if(s.step===2){var loc=s.type==='el'?!!s.equip:!!s.floor;return loc&&(!!s.sym||s.note.trim().length>2)&&(s.sym!=='توقف بين الأدوار'||!!s.trapped)}if(s.step===3)return s.name.trim().length>1;return true},
+ inp:function(k,v){var s=R.st,b=R.b,re=false;
+  if(k==='floor'){s.floorTxt=v;var m=pickOf(b.floors.map(function(f){return f.label||f.name}),v),f=b.floors.filter(function(f){return (f.label||f.name)===m})[0],id=f?f.id:'';if(id!==s.floor){s.floor=id;s.room='';re=true}}
+  if(k==='equip'){s.equipTxt=v;var e=pickOf(b.elevators,v);if(e!==s.equip){s.equip=e;re=true}}
+  if(k==='note'){s.note=v;var y=pickOf(b.syms[s.type].map(function(x){return x.ar}),v);if(y!==s.sym){var was=s.sym==='توقف بين الأدوار';s.sym=y;s.trapped='';if(was||y==='توقف بين الأدوار')re=true}}
+  if(re)render();R.chk()},
  chk:function(){var b=$('#nx');if(b)b.disabled=!R.ok()},
  next:function(){var s=R.st;if(!R.ok())return;if(s.step<3)return R.set('step',s.step+1);
-  call('apiReqSubmit',S.code,{type:s.type,floor_id:s.type==='el'?'':s.floor,room:s.type==='el'?'':s.room,equip:s.type==='el'?s.equip:'',symptom:s.sym,trapped:s.trapped,description:s.desc,name:s.name,photos:s.photos}).then(function(r){R.done=r;R.set('step',4)})}
+  call('apiReqSubmit',S.code,{type:s.type,floor_id:s.type==='el'?'':s.floor,room:s.type==='el'?'':s.room,equip:s.type==='el'?s.equip:'',symptom:s.sym,trapped:s.trapped,description:s.sym?'':s.note.trim(),name:s.name,photos:s.photos}).then(function(r){R.done=r;R.set('step',4)})}
 };
 
 // ═════════ المتعهد ═════════
@@ -453,22 +463,24 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   var units=isNew?[]:(j.units||[]);
   var arr=function(a){return (a||[]).map(function(x){return x.ar})};
   var equip={k:'one',key:'equip',l:el?'المصعد':'المعدة',opts:el?(isNew?(hotel.elevators||[]):[]):units,req:true,add:!el,hint:el?'':(isNew?'':'وحدات هذا الموقع فقط. غير موجودة؟ أضفها.')};
-  var sym={k:'one',key:'sym',l:'العَرَض',opts:arr(L.sym),req:true,add:1,list:'sym'},part={k:'one',key:'part',l:'الجزء المعطّل',opts:arr(L.part),req:true,add:1,list:'part'};
+  var sym={k:'one',key:'sym',l:'ما الذي لاحظته؟',opts:arr(L.sym),req:true,add:1,list:'sym'},part={k:'one',key:'part',l:'الجزء المعطّل',opts:arr(L.part),req:true,add:1,list:'part'};
+  var act={k:'many',key:'action',l:'ما الذي عملته؟ (واحد أو أكثر)',opts:arr(L.action),req:true,add:1,list:'action'};
+  var H=function(t,sub){return {k:'head',l:t,sub:sub}};
   var cause={k:'many',key:'cause',l:'السبب (واحد أو أكثر)',opts:arr(L.cause),req:true,add:1,list:'cause'},parts={k:'many',key:'parts',l:'قطع الغيار المستبدلة',opts:arr(L.parts),add:1,list:'parts'};
   var working={k:'one',key:'working',l:'هل المصعد يعمل الآن؟',opts:['نعم','لا'],req:true},follow={k:'one',key:'follow',l:'هل بقي شيء يحتاج متابعة؟',opts:['لا','نعم'],req:true};
   var note={k:'area',key:'note',l:'ملاحظة (اختياري)'},quote={k:'text',key:'quote',l:'سعر القطعة بالريال (عرض السعر)',num:1,ph:'يحتاجه المهندس إن قرر أن توفّرها أنت'};
   var photo=function(l,req){return {k:'photo',l:l||'صورة بعد العمل',req:!!req}};
   var E=(el&&!isNew)?[]:[equip],W=el?[working]:[],f=[];
   if(oc==='ok')f=E.concat([note]);
-  if(oc==='fix')f=E.concat([sym,part,cause,parts],W,[follow,photo(),note]);
-  if(oc==='comp')f=E.concat([photo('صورة قراءة التيار',1),cause,quote,note]);
+  if(oc==='fix')f=E.concat([H('الملاحظة'),sym,H('العطل'),part,cause,H('الإجراء المتخذ'),act,parts],W,[follow,photo(),note]);
+  if(oc==='comp')f=E.concat([photo('صورة قراءة التيار',1),H('العطل'),cause,quote,note]);
   if(oc==='visit')f=[{k:'one',key:'leave',l:'سبب المغادرة',opts:arr(L.leave),req:true},working,{k:'text',key:'ret',l:'موعد العودة المتوقع'},note];
-  if(oc==='diag')f=E.concat([sym,part,cause,quote],W,[photo(),note]);
+  if(oc==='diag')f=E.concat([H('الملاحظة'),sym,H('العطل'),part,cause,quote],W,[photo(),note]);
   if(oc==='report')f=E.concat([{k:'text',key:'title',l:'العنوان',req:true},photo('صورة'),{k:'area',key:'body',l:'التقرير'}]);
   if(isNew&&!el)f=[{k:'floor',key:'floor_id',l:'الدور',req:true},{k:'text',key:'room',l:'الغرفة أو المرفق',dl:1}].concat(f);
   return f},
- filled:function(f){if(f.k==='photo')return C.photos.length>0;var v=C.sel[f.key];return f.k==='many'?(v||[]).length>0:!!(v&&String(v).trim())},
- field:function(f,i){var v=C.sel[f.key],h='<div>';
+ filled:function(f){if(f.k==='head')return true;if(f.k==='photo')return C.photos.length>0;var v=C.sel[f.key];return f.k==='many'?(v||[]).length>0:!!(v&&String(v).trim())},
+ field:function(f,i){if(f.k==='head')return '<div style="border-top:1px solid #E4E8EE;padding-top:12px;margin-top:2px"><h3 style="font-size:16px;color:#8A5E26">'+f.l+'</h3>'+(f.sub?'<p class="small muted" style="margin:2px 0 0">'+f.sub+'</p>':'')+'</div>';var v=C.sel[f.key],h='<div>';
   if(f.k==='text'||f.k==='area'){h+='<label class="lbl" for="f'+i+'">'+f.l+(f.req?' <span class="req">*</span>':'')+'</label>';
    var dlh='';if(f.dl){var hh=C.b.hotels.filter(function(x){return x.id===(C.newHotel||C.b.hotel.id)})[0]||{floors:[]};var ff=hh.floors.filter(function(x){return x.id===C.sel.floor_id})[0];if(ff)dlh='<datalist id="dl'+i+'">'+ff.facilities.map(function(x){return '<option value="'+esc(x)+'">'}).join('')+'</datalist>'}
    h+=f.k==='text'?'<input id="f'+i+'" class="inp"'+(f.dl?' list="dl'+i+'"':'')+(f.num?' inputmode="decimal"':'')+' placeholder="'+esc(f.ph||'')+'" value="'+esc(v||'')+'" oninput="C.sel[\''+f.key+'\']=this.value;C.chk()">'+dlh:'<textarea id="f'+i+'" class="inp" rows="2" oninput="C.sel[\''+f.key+'\']=this.value">'+esc(v||'')+'</textarea>';}
@@ -570,7 +582,7 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   h+='</div><div class="main card" id="det">'+(W.sel?W.detail(b.orders.filter(function(o){return o.id===W.sel})[0],canAct):'<p class="muted">اختر عملية.</p>')+'</div></div></div>';
   return h},
  cycle:function(o){var c=[];if(o.trapped&&o.rescued)c.push(['الإنقاذ',dur(mins(o.created,o.rescued))]);if(o.arrived)c.push(['الاستجابة',dur(mins(o.assigned||o.created,o.arrived))]);if(o.work_minutes)c.push(['الإصلاح',dur(o.work_minutes)]);if(o.decided)c.push(['القرار',dur(mins(o.submitted,o.decided))]);if(o.paid)c.push(['السداد',dur(mins(o.decided,o.paid))]);if(o.part_arrived)c.push(['القطعة',dur(mins(o.decided,o.part_arrived))]);if(o.type==='el'&&o.down_from)c.push(['توقف المصعد',dur(mins(o.down_from,o.down_to||Date.now()))+(o.down_to?'':' (مستمر)')]);c.push([o.closed?'دورة الطلب':'منذ الرفع',dur(mins(o.created,o.closed||Date.now()))]);return c},
- reportHtml:function(r){var L={equip:'المعدة',sym:'العَرَض',part:'الجزء',cause:'السبب',parts:'القطع',working:'المصعد يعمل',follow:'متابعة',followNote:'المتابعة',leave:'سبب المغادرة',ret:'موعد العودة',title:'العنوان',body:'التقرير',note:'ملاحظة'};
+ reportHtml:function(r){var L={equip:'المعدة',sym:'الملاحظة',part:'العطل: الجزء',cause:'العطل: السبب',action:'الإجراء المتخذ',parts:'القطع',working:'المصعد يعمل',follow:'متابعة',followNote:'المتابعة',leave:'سبب المغادرة',ret:'موعد العودة',title:'العنوان',body:'التقرير',note:'ملاحظة'};
   var O={ok:'سليم',fix:'إصلاح',comp:'استبدال كمبروسر',visit:'زيارة',diag:'تشخيص',report:'تقرير فني'};
   var rows=Object.keys(L).filter(function(k){var v=r[k];return v&&(!Array.isArray(v)||v.length)}).map(function(k){var v=r[k];return '<div style="display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #EEF2F7;font-size:14px"><span class="muted" style="width:110px;flex:none">'+L[k]+'</span><b style="font-weight:600">'+esc(Array.isArray(v)?v.join('، '):v)+'</b></div>'}).join('');
   return '<div style="margin-top:10px"><p class="small" style="margin:0 0 4px;font-weight:700;color:#8A5E26">'+(O[r.outcome]||'')+' · '+dmy(r.at)+' '+hm(r.at)+'</p>'+rows+'</div>'},
@@ -597,16 +609,42 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   if(!o.con_id&&['closed','rejected'].indexOf(o.status)===-1){var cs=W.b.cons.filter(function(c){return c.type===o.type});h+='<div class="alert a-tan"><b>بلا متعهد:</b> لا يوجد عقد ساري لهذا النوع. أسنده يدوياً:<div class="chips" style="margin-top:8px">'+cs.map(function(c){return '<button class="chip" onclick="W.act(\''+o.id+'\',\'assign\',{con_id:\''+c.id+'\'})">'+esc(c.name)+'</button>'}).join('')+'</div></div>'}
   return h+'</div>'},
  act:function(id,action,d){call('apiEngAct',S.tok,id,action,d).then(function(r){W.b=r.boot;W.f={};toast({decide:'سُجّل القرار.',paid:'سُجّل السداد وأُشعر المتعهد.',part:'سُجّل وصول القطعة وأُشعر المتعهد.',close:'أُغلقت وانتقلت لأرشيف المتعهد.',reopen:'أُعيدت للمتعهد مع السبب.',assign:'أُسندت.'}[action]);render()})},
- createModal:function(){var b=W.b,f=W.f;if(!f.hotel)f.hotel=b.hotels[0]&&b.hotels[0].id;var hotel=b.hotels.filter(function(x){return x.id===f.hotel})[0]||{floors:[],elevators:[]};
+ createModal:function(){var b=W.b,f=W.f;
+  if(!f.hotel){var last=null;try{last=localStorage.getItem('awan_last_hotel')}catch(x){}f.hotel=(b.hotels.some(function(x){return x.id===last})?last:(b.hotels[0]&&b.hotels[0].id))}
+  var hotel=b.hotels.filter(function(x){return x.id===f.hotel})[0]||{floors:[],elevators:[],cons:{}};
   var h='<div class="modal"><div role="dialog" aria-modal="true"><div class="row"><h2 style="font-size:20px">طلب جديد</h2><button class="btn btn-o sm" onclick="W.modal=null;render()">إغلاق</button></div>';
-  if(b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+b.hotels.map(function(x){return '<button class="chip'+(f.hotel===x.id?' on':'')+'" onclick="W.f.hotel=\''+x.id+'\';render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
-  h+='<div><span class="lbl">التصنيف</span><div class="chips">'+[['ac','تكييف'],['el','مصاعد']].map(function(x){return '<button class="chip'+(f.type===x[0]?' on':'')+'" onclick="W.f.type=\''+x[0]+'\';render()">'+x[1]+'</button>'}).join('')+'</div></div>';
-  if(f.type==='el')h+='<div><span class="lbl">المصعد</span><div class="chips">'+hotel.elevators.map(function(e){return '<button class="chip'+(f.equip===e?' on':'')+'" onclick="W.f.equip=this.dataset.v;render()" data-v="'+esc(e)+'">'+esc(e)+'</button>'}).join('')+'</div></div>';
-  if(f.type==='ac')h+='<div class="grid g2"><div><label class="lbl" for="cf">الدور أو المنطقة</label><select id="cf" class="inp" onchange="W.f.floor=this.value;render()"><option value="">اختر</option>'+hotel.floors.map(function(x){return '<option value="'+x.id+'"'+(f.floor===x.id?' selected':'')+'>'+esc(x.label||x.name)+'</option>'}).join('')+'</select></div><div><label class="lbl" for="cr">الغرفة أو المرفق</label><input id="cr" class="inp" list="crl" value="'+esc(f.room||'')+'" oninput="W.f.room=this.value"><datalist id="crl">'+((hotel.floors.filter(function(x){return x.id===f.floor})[0]||{facilities:[]}).facilities.map(function(x){return '<option value="'+esc(x)+'">'}).join(''))+'</datalist></div></div>';
-  h+='<div><span class="lbl">الأولوية</span><div class="chips">'+[['normal','عادي'],['urgent','طارئ']].map(function(x){return '<button class="chip'+((f.priority||'normal')===x[0]?' on':'')+'" onclick="W.f.priority=\''+x[0]+'\';render()">'+x[1]+'</button>'}).join('')+'</div></div>';
-  h+='<div><label class="lbl" for="cs">المطلوب</label><input id="cs" class="inp" placeholder="مثال: الباب لا يُغلق" value="'+esc(f.symptom||'')+'" oninput="W.f.symptom=this.value"></div><div><label class="lbl" for="cd">تفاصيل (اختياري)</label><textarea id="cd" class="inp" rows="2" oninput="W.f.description=this.value">'+esc(f.description||'')+'</textarea></div>';
-  h+='<p class="small muted" style="margin:0">يُسند تلقائياً للمتعهد حسب العقد الساري.</p><button class="btn btn-p" onclick="W.create()">إنشاء وإسناد</button></div></div>';return h},
- create:function(){var f=W.f;call('apiEngCreate',S.tok,{hotel_id:f.hotel,type:f.type,floor_id:f.floor,room:f.room,equip:f.equip,symptom:f.symptom,description:f.description,priority:f.priority}).then(function(r){W.b=r.boot;W.modal=null;W.q='open';W.sel=r.id;toast('أُنشئ '+r.id+' وأُسند.');render()})}
+  if(b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+b.hotels.map(function(x){return '<button class="chip'+(f.hotel===x.id?' on':'')+'" onclick="W.f={hotel:\''+x.id+'\',type:W.f.type};try{localStorage.setItem(\'awan_last_hotel\',\''+x.id+'\')}catch(e){};render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
+  h+='<div class="grid g2">'+[['ac','تكييف','غرفة أو مرفق'],['el','مصاعد','مصاعد النزلاء أو الخدمة']].map(function(x){return '<button class="cat'+(f.type===x[0]?' on':'')+'" style="min-height:84px;padding:14px" onclick="W.f={hotel:W.f.hotel,type:\''+x[0]+'\'};render()"><b style="font-size:18px">'+x[1]+'</b><span class="small" style="color:#4A5A70">'+x[2]+'</span></button>'}).join('')+'</div>';
+  if(f.type){
+   var fl=hotel.floors.filter(function(x){return x.id===f.floor})[0];
+   if(f.type==='el')h+='<div><label class="lbl" for="w_el">المصعد</label>'+combo('w_el',f.equipTxt,hotel.elevators,'W.inp(\'equip\',this.value)')+'</div>';
+   else{h+='<div class="grid g2"><div><label class="lbl" for="w_fl">الدور أو المكان</label>'+combo('w_fl',f.floorTxt,hotel.floors.map(function(x){return x.label||x.name}),'W.inp(\'floor\',this.value)')+'</div>';
+    h+='<div><label class="lbl" for="w_rm">'+(fl&&fl.kind!=='rooms'?'أين بالتحديد؟':'الغرفة أو المرفق')+'</label>'+(fl?combo('w_rm',f.room,fl.facilities.concat(fl.rooms||[]),'W.f.room=this.value;W.chkDup()'):'<input class="inp" disabled placeholder="اختر الدور أولاً">')+'</div></div>'}
+   h+='<div><label class="lbl" for="w_nt">الملاحظة</label>'+combo('w_nt',f.note,(b.syms||{})[f.type]||[],'W.inp(\'note\',this.value)','ماذا لوحظ؟ اكتب أو اختر')+'</div>';
+   if(f.note&&pickOf((b.syms||{})[f.type]||[],f.note)==='توقف بين الأدوار')h+='<div><span class="lbl">هل بداخله أحد؟ <span class="req">*</span></span><div class="grid g2"><button class="chip'+(f.trapped==='yes'?' on':'')+'" onclick="W.f.trapped=\'yes\';render()">نعم، يوجد محتجزون</button><button class="chip'+(f.trapped==='no'?' on':'')+'" onclick="W.f.trapped=\'no\';render()">لا</button></div></div>';
+   h+='<div><span class="lbl">الأولوية</span><div class="chips">'+[['normal','عادي'],['urgent','طارئ']].map(function(x){return '<button class="chip'+((f.priority||'normal')===x[0]?' on':'')+'" onclick="W.f.priority=\''+x[0]+'\';render()">'+x[1]+'</button>'}).join('')+'</div></div>';
+   h+='<div><label class="lbl" for="cd">تفاصيل (اختياري)</label><textarea id="cd" class="inp" rows="2" oninput="W.f.description=this.value">'+esc(f.description||'')+'</textarea></div>';
+   h+='<button class="photo-btn'+((f.photos||[]).length?' has':'')+'" onclick="'+((f.photos||[]).length?'W.f.photos=[];render()':'pickPhotos(function(a){W.f.photos=a;render()})')+'">'+((f.photos||[]).length?'صورة مرفقة ✓ (اضغط للإزالة)':'إرفاق صورة (اختياري)')+'</button>';
+   h+='<div id="wdup">'+W.dupHtml()+'</div>';
+   var con=(hotel.cons||{})[f.type];
+   h+=con?'<div class="alert a-sand" style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span><span class="muted">سيُسند إلى</span> <b>'+esc(con.name)+'</b></span><span><span class="muted">الاستجابة المتفق عليها</span> <b>'+(f.trapped==='yes'?'فوري (احتجاز)':((f.priority==='urgent'?con.urgent:con.resp)||'—')+' دقيقة')+'</b></span></div>':'<div class="alert a-red"><b>لا يوجد عقد ساري</b> لهذا النوع في هذا الفندق. يُنشأ الطلب بلا متعهد وتسنده يدوياً.</div>';
+  }
+  h+='<button id="wcreate" class="btn btn-p" onclick="W.create()"'+(W.canCreate()?'':' disabled')+'>إنشاء وإسناد</button></div></div>';return h},
+ inp:function(k,v){var f=W.f,b=W.b,hotel=b.hotels.filter(function(x){return x.id===f.hotel})[0]||{floors:[],elevators:[]},re=false;
+  if(k==='floor'){f.floorTxt=v;var m=pickOf(hotel.floors.map(function(x){return x.label||x.name}),v),fl=hotel.floors.filter(function(x){return (x.label||x.name)===m})[0],id=fl?fl.id:'';if(id!==(f.floor||'')){f.floor=id;f.room='';re=true}}
+  if(k==='equip'){f.equipTxt=v;var e=pickOf(hotel.elevators,v);if(e!==(f.equip||'')){f.equip=e;W.chkDup()}}
+  if(k==='note'){var old=pickOf((b.syms||{})[f.type]||[],f.note)==='توقف بين الأدوار';f.note=v;var stop=pickOf((b.syms||{})[f.type]||[],v)==='توقف بين الأدوار';if(stop!==old){f.trapped='';f.priority=stop?'urgent':'normal';re=true}}
+  if(re)render();else{var c=$('#wcreate');if(c)c.disabled=!W.canCreate()}},
+ canCreate:function(){var f=W.f;if(!f.type||!String(f.note||'').trim())return false;if(f.type==='el'&&!f.equip)return false;if(f.type==='ac'&&!f.floor)return false;if(pickOf((W.b.syms||{})[f.type]||[],f.note)==='توقف بين الأدوار'&&!f.trapped)return false;return true},
+ /** من الطلبات المحمّلة أصلاً: مفتوح على نفس الموقع، وأعطال آخر 30 يوماً */
+ dupHtml:function(){var f=W.f;if(!f.type)return '';var same=function(o){return o.hotel_id===f.hotel&&o.type===f.type&&(f.type==='el'?(f.equip&&o.equip===f.equip):(f.floor&&o.floor_id===f.floor&&String(o.room||'')===String(f.room||'').trim()))};
+  var open=W.b.orders.filter(function(o){return same(o)&&['closed','rejected'].indexOf(o.status)===-1}),past=W.b.orders.filter(function(o){return same(o)&&o.status==='closed'&&o.closed>Date.now()-30*864e5});
+  var h='';if(open.length)h+='<div class="alert a-tan"><b>يوجد طلب مفتوح على نفس الموقع:</b> '+open.map(function(o){return '<button class="chip" style="min-height:32px;margin:4px 0 0 4px" onclick="W.modal=null;W.q=\'open\';W.sel=\''+o.id+'\';render()"><span dir="ltr">'+esc(o.id)+'</span> · '+esc(o.title)+' · '+STLBL[o.status]+'</button>'}).join('')+'<br><span class="small">افتحه بدل إنشاء طلب مكرر، أو أكمل إن كان عطلاً آخر.</span></div>';
+  if(past.length)h+='<div class="alert a-sand"><b>عطل متكرر:</b> '+past.length+' طلبات أُغلقت على هذا الموقع خلال 30 يوماً ('+past.map(function(o){return esc(o.title)}).join('، ')+'). اكتب ملاحظة للمتعهد في التفاصيل.</div>';
+  return h},
+ chkDup:function(){var e=$('#wdup');if(e)e.innerHTML=W.dupHtml();var c=$('#wcreate');if(c)c.disabled=!W.canCreate()},
+ create:function(){var f=W.f;if(!W.canCreate())return;try{localStorage.setItem('awan_last_hotel',f.hotel)}catch(e){}
+  call('apiEngCreate',S.tok,{hotel_id:f.hotel,type:f.type,floor_id:f.type==='ac'?f.floor:'',room:f.type==='ac'?String(f.room||'').trim():'',equip:f.type==='el'?f.equip:'',symptom:pickOf((W.b.syms||{})[f.type]||[],f.note)||String(f.note).trim(),description:f.description,priority:f.priority,trapped:f.trapped,photos:f.photos||[]}).then(function(r){W.b=r.boot;W.modal=null;W.q='open';W.sel=r.id;toast('أُنشئ '+r.id+' وأُسند.');render()})}
 };
 
 // ═════════ مشرف النظام ═════════
@@ -732,7 +770,7 @@ var A={tab:'hotels',hid:null,f:{},
   h+='<div class="card"><table><thead><tr><th>الاسم</th><th>الدور</th><th>اسم الدخول</th><th>الفنادق</th><th></th></tr></thead><tbody>'+a.users.map(function(u){return '<tr><td><b>'+esc(u.name)+'</b></td><td>'+({admin:'مشرف',engineer:'مهندس',management:'إدارة'}[u.role])+'</td><td dir="ltr" style="text-align:right">'+esc(u.username)+'</td><td>'+u.hotels.map(function(id){return esc((a.hotels.filter(function(x){return x.id===id})[0]||{}).name||id)}).join('، ')+'</td><td><button class="btn btn-o sm" data-n="'+esc(u.name)+'" onclick="var n=this.dataset.n;A.run(\'apiAdmResetUser\',\''+u.id+'\').then(function(r){A.f={pw:r.password,pwFor:n};render()})">كلمة مرور جديدة</button></td></tr>'}).join('')+'</tbody></table></div>';
   return h+'</div>'},
 
- LST:{sym:'العَرَض',part:'الجزء المعطّل',cause:'السبب',parts:'قطع الغيار',leave:'سبب المغادرة',reject:'أسباب الرفض وإعادة الفتح'},
+ LST:{sym:'الملاحظة',part:'الجزء المعطّل',cause:'السبب',action:'الإجراء المتخذ',parts:'قطع الغيار',leave:'سبب المغادرة',reject:'أسباب الرفض وإعادة الفتح'},
  LTYPE:{ac:'تكييف',el:'مصاعد',all:'عام'},
  lists:function(){var a=W.a,f=A.f,h='<div class="stack">';
   var pend=a.lists.filter(function(l){return l.status==='pending'});

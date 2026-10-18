@@ -503,5 +503,26 @@ t('اللغة: كل مستخدم يختار لغة واجهته، والترجم
   eq(run("apiReqBoot('warif2')").i18n.length > 10, true);
 });
 
+t('الملاحظة والعطل والإجراء: قائمة الإجراء تُضاف للملف القائم، والتقرير يحفظ الإجراء، والمهندس يرفع طلباً بملاحظة حرة وصورة', () => {
+  run(`Db.all('Lists').filter(l => l.list === 'action').forEach(l => Db.remove('Lists', l.item_id))`);
+  eq(run(`listsFor_('ac').action.length`), 0);
+  eq(run('seedMissingLists_()') > 0, true);
+  eq(run('seedMissingLists_()'), 0);
+  eq(run(`listsFor_('ac').action.some(x => x.ar === 'تعبئة غاز' && x.en === 'Gas refill')`), true);
+  const b = run(`apiEngBoot('${engTok}')`);
+  eq(b.syms.ac.includes('لا يبرد'), true);
+  const h = b.hotels.find(x => x.id === HID);
+  eq(h.cons.ac.name, 'مؤسسة التبريد'); eq(h.cons.ac.resp, 30);
+  eq(h.floors.find(f => f.name === 'الدور 7').rooms.includes('712'), true);
+  const fl = h.floors.find(f => f.name === 'الدور 7').id;
+  const r = run(`apiEngCreate('${engTok}', { hotel_id: '${HID}', type: 'ac', floor_id: '${fl}', room: '703', symptom: 'صوت طقطقة من الوحدة', photos: ['data:image/jpeg;base64,AAAA'] })`);
+  const o = run(`Db.get('WorkOrders', '${r.id}')`);
+  eq(o.symptom, 'صوت طقطقة من الوحدة'); eq(!!o.photos, true);
+  throws(`apiEngCreate('${engTok}', { hotel_id: '${HID}', type: 'ac', symptom: 'x' })`, 'الدور');
+  run(`apiConAct('${acTok}', 'submit', '${r.id}', { outcome: 'fix', equip: 'AC-703-A', sym: 'صوت مرتفع', part: 'المروحة', cause: ['اتساخ'], action: ['تنظيف'], follow: 'لا' })`);
+  const rep = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === r.id).reports.slice(-1)[0];
+  eq(rep.action.join(), 'تنظيف');
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);

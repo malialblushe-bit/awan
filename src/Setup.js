@@ -69,6 +69,16 @@ function removeDefaultSheet_(ss) {
   });
 }
 
+/** يضيف بنود البذور الجديدة (مثل قائمة جديدة) لملف قائم دون تكرار */
+function seedMissingLists_() {
+  var have = {}, max = 0;
+  Db.all('Lists').forEach(function (l) { have[l.type + '|' + l.list + '|' + l.ar] = true; max = Math.max(max, Number(l.sort) || 0); });
+  var recs = SEED_LISTS.filter(function (r) { return !have[r[0] + '|' + r[1] + '|' + r[2]]; })
+    .map(function (r, i) { return { type: r[0], list: r[1], ar: r[2], en: r[3], status: 'active', created_by: 'system', sort: max + i + 1 }; });
+  Db.insertMany('Lists', recs);
+  return recs.length;
+}
+
 function seedIfEmpty_(table, recs) {
   if (Db.all(table).length) return;
   Db.insertMany(table, recs);

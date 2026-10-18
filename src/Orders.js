@@ -129,7 +129,7 @@ var Orders = (function () {
     var t = now_();
     var con = Db.get('Contractors', s.id);
     var report = {
-      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], parts: d.parts || [],
+      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [],
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime()
     };
@@ -244,13 +244,15 @@ var Orders = (function () {
   function engCreate(s, d) {
     var me = Db.get('Users', s.id);
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
-    if (!d.type || !d.symptom) throw new Error('اختر النوع واكتب الوصف.');
+    if (!d.type || !String(d.symptom || '').trim()) throw new Error('اختر النوع واكتب الملاحظة.');
+    if (d.type === 'el' && !d.equip) throw new Error('اختر المصعد.');
+    if (d.type === 'ac' && !d.floor_id) throw new Error('اختر الدور أو المكان.');
     var r = create({
       hotel_id: d.hotel_id, type: d.type, kind: 'corrective', source: 'engineer', floor_id: d.floor_id, room: d.room,
-      equip: d.equip, symptom: d.symptom, description: d.description, priority: d.priority, requester: me ? me.name : ''
+      equip: d.equip, symptom: String(d.symptom).trim(), description: d.description, priority: d.priority, trapped: d.trapped === 'yes',
+      photos: d.photos || [], requester: me ? me.name : ''
     }, me ? me.name : s.id);
-    if (!r.order.con_id) throw new Error('أُنشئ الطلب ' + r.order.wo_id + ' لكن لا يوجد عقد ساري لهذا النوع في الفندق.');
-    return r.order.wo_id;
+    return r.order.wo_id;   // بلا عقد ساري: يبقى بلا متعهد ويسنده المهندس يدوياً
   }
 
   // ───────── العرض للواجهة ─────────

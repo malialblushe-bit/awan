@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 5;
+var SCHEMA_VERSION = 6;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -52,7 +52,7 @@ var SCHEMA = [
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
-    ['list', 'sym = العرض · part = الجزء · cause = السبب · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض'],
+    ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الإجراء المتخذ · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض'],
     ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · merged · rejected'],
     ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة']] },
 
@@ -137,6 +137,9 @@ var SEED_LISTS = [
   ['ac', 'parts', 'جلدة', 'Gasket'], ['ac', 'parts', 'كباستر', 'Capacitor'], ['ac', 'parts', 'مروحة', 'Fan'],
   ['ac', 'parts', 'فلتر', 'Filter'], ['ac', 'parts', 'ريموت', 'Remote'],
 
+  ['ac', 'action', 'تنظيف', 'Cleaning'], ['ac', 'action', 'تسليك التصريف', 'Drain unclogged'], ['ac', 'action', 'تعبئة غاز', 'Gas refill'],
+  ['ac', 'action', 'استبدال قطعة', 'Part replaced'], ['ac', 'action', 'ضبط الثرموستات', 'Thermostat adjusted'], ['ac', 'action', 'إصلاح توصيلات كهربائية', 'Wiring repaired'], ['ac', 'action', 'إعادة تشغيل', 'Restarted'],
+
   ['el', 'sym', 'متوقف', 'Stopped'], ['el', 'sym', 'توقف بين الأدوار', 'Stuck between floors'], ['el', 'sym', 'الباب لا يُغلق', 'Door not closing'],
   ['el', 'sym', 'صوت أو اهتزاز', 'Noise or vibration'], ['el', 'sym', 'الأزرار لا تستجيب', 'Buttons not responding'],
   ['el', 'part', 'قفل باب الدور', 'Landing door lock'], ['el', 'part', 'حساس الباب', 'Door sensor'], ['el', 'part', 'لوحة التحكم', 'Controller'],
@@ -144,6 +147,8 @@ var SEED_LISTS = [
   ['el', 'cause', 'تآكل طبيعي', 'Normal wear'], ['el', 'cause', 'ارتفاع الحرارة', 'Overheating'], ['el', 'cause', 'سوء استخدام', 'Misuse'],
   ['el', 'cause', 'مشكلة كهرباء', 'Electrical issue'], ['el', 'cause', 'ضبط غير صحيح', 'Incorrect adjustment'], ['el', 'cause', 'عوامل خارجية', 'External factors'],
   ['el', 'parts', 'حساس باب', 'Door sensor'], ['el', 'parts', 'زر استدعاء', 'Call button'], ['el', 'parts', 'لمبة كابينة', 'Car light'], ['el', 'parts', 'بكرة باب', 'Door roller'],
+  ['el', 'action', 'ضبط', 'Adjusted'], ['el', 'action', 'تنظيف', 'Cleaning'], ['el', 'action', 'تشحيم', 'Lubricated'],
+  ['el', 'action', 'استبدال قطعة', 'Part replaced'], ['el', 'action', 'إصلاح توصيلات كهربائية', 'Wiring repaired'], ['el', 'action', 'إعادة تشغيل', 'Restarted'],
   ['el', 'leave', 'بانتظار قطعة', 'Waiting for a part'], ['el', 'leave', 'يحتاج فريقاً إضافياً', 'Needs extra crew'], ['el', 'leave', 'انتهى وقت العمل', 'End of shift'],
 
   ['all', 'reject', 'صور غير واضحة', 'Unclear photos'], ['all', 'reject', 'تقرير ناقص', 'Incomplete report'],

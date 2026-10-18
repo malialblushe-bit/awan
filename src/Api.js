@@ -24,7 +24,7 @@ function webUrl_() {
 }
 
 function listsFor_(type) {
-  var out = { sym: [], part: [], cause: [], parts: [], leave: [], reject: [] };
+  var out = { sym: [], part: [], cause: [], action: [], parts: [], leave: [], reject: [] };
   Db.all('Lists', function (l) { return l.status === 'active' && (l.type === type || l.type === 'all'); })
     .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
     .forEach(function (l) { if (out[l.list]) out[l.list].push({ ar: l.ar, en: l.en }); });
@@ -54,7 +54,8 @@ function floorsOf_(hotelId) {
   return Db.all('Floors', function (f) { return f.hotel_id === hotelId; }).sort(sortFloors_).map(function (f) {
     return {
       id: f.floor_id, name: f.name, tower: String(f.tower || ''), label: floorLabel_(f), kind: f.kind === 'rooms' ? 'rooms' : 'service',
-      facilities: rooms.filter(function (r) { return r.floor_id === f.floor_id && isFacility_(r, f); }).map(function (r) { return String(r.number); })
+      facilities: rooms.filter(function (r) { return r.floor_id === f.floor_id && isFacility_(r, f); }).map(function (r) { return String(r.number); }),
+      rooms: rooms.filter(function (r) { return r.floor_id === f.floor_id && !isFacility_(r, f); }).map(function (r) { return String(r.number); })
     };
   });
 }
@@ -116,6 +117,7 @@ function ensureSchemaVersion_() {
   if (String(Db.setting('schema_version')) === String(SCHEMA_VERSION)) return;
   ensureTables_(Db.ss());
   Db.reset();
+  seedMissingLists_();
   var row = Db.find('Settings', function (r) { return r.key === 'schema_version'; });
   if (row) Db.update('Settings', 'schema_version', { value: SCHEMA_VERSION });
   else Db.insert('Settings', { key: 'schema_version', value: SCHEMA_VERSION, note: 'إصدار هيكل الجداول' });
@@ -277,11 +279,17 @@ function engBoot_(s) {
     me: { name: me.name, role: s.role, lang: me.lang || 'ar' },
     hotels: myHotels.map(function (id) {
       var h = R.hotels[id] || {};
-      return { id: id, name: h.name, floors: floorsOf_(id), elevators: elevatorsOf_(id) };
+      var cons = {};
+      ['ac', 'el'].forEach(function (t) {
+        var c = Orders.activeContract(id, t);
+        if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null };
+      });
+      return { id: id, name: h.name, floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
     }),
     orders: orders,
     cons: Object.keys(R.cons).map(function (k) { var c = R.cons[k]; return { id: c.con_id, name: c.name, type: c.type }; }),
     reasons: listsFor_('ac').reject.map(function (x) { return x.ar; }),
+    syms: { ac: listsFor_('ac').sym.map(function (x) { return x.ar; }), el: listsFor_('el').sym.map(function (x) { return x.ar; }) },
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
@@ -305,6 +313,7 @@ function apiEngAct(token, woId, action, d) {
 function apiEngCreate(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
+    d.photos = savePhotos_(d.photos, 'ENG');
     var id = Orders.engCreate(s, d);
     Kpi.touch([id]);
     Db.reset();
@@ -630,7 +639,7 @@ function apiAdmResetUser(token, userId) {
 }
 
 // ───────── اعتماد البنود ─────────
-var LIST_KEYS = ['sym', 'part', 'cause', 'parts', 'leave', 'reject'];
+var LIST_KEYS = ['sym', 'part', 'cause', 'action', 'parts', 'leave', 'reject'];
 
 /** action: approve {ar, en} · merge {into} · reject */
 function apiAdmListAct(token, id, action, d) {
