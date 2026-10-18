@@ -107,6 +107,18 @@ var Db = (function () {
     return rec;
   }
 
+  /** يعدّل كل السجلات المطابقة (لجداول بلا معرّف فريد مثل العتبات) */
+  function updateWhere(table, pred, patch) {
+    var t = load_(table), sh = sheet_(table), n = 0;
+    t.rows.forEach(function (rec, i) {
+      if (!pred(rec)) return;
+      Object.keys(patch).forEach(function (f) { rec[f] = patch[f]; });
+      sh.getRange(i + 2, 1, 1, t.head.length).setValues([toRow_(t.head, rec)]);
+      n++;
+    });
+    return n;
+  }
+
   /** يحذف سجلاً بمعرّفه (للتصحيح في الإعداد فقط) */
   function remove(table, id) {
     var t = load_(table), k = keyOf_(table);
@@ -129,5 +141,5 @@ var Db = (function () {
 
   function reset() { memo = {}; ssCache = null; }
 
-  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, remove: remove, withLock: withLock, setting: setting, reset: reset };
+  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, withLock: withLock, setting: setting, reset: reset };
 })();

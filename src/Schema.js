@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 4;
+var SCHEMA_VERSION = 5;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -53,8 +53,8 @@ var SCHEMA = [
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
     ['list', 'sym = العرض · part = الجزء · cause = السبب · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض'],
-    ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · rejected'],
-    ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب']] },
+    ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · merged · rejected'],
+    ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة']] },
 
   { name: 'Thresholds', cols: [
     ['type', 'نوع المتعهد'], ['kpi', 'resp · ready · info · sat'],

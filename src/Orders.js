@@ -79,14 +79,16 @@ var Orders = (function () {
   function arrive(conId, hotelId) {
     var t = now_();
     Db.insert('Arrivals', { hotel_id: hotelId, con_id: conId, at: t });
+    var ids = [];
     Db.all('WorkOrders', function (o) {
       return o.con_id === conId && o.hotel_id === hotelId && (o.status === 'assigned' || o.status === 'in_progress');
     }).forEach(function (o) {
       var patch = {};
       if (!o.arrived_at) patch.arrived_at = t;
       if (!o.work_from) patch.work_from = t;
-      if (Object.keys(patch).length) Db.update('WorkOrders', o.wo_id, patch);
+      if (Object.keys(patch).length) { Db.update('WorkOrders', o.wo_id, patch); ids.push(o.wo_id); }
     });
+    return ids;
   }
 
   function lastArrival_(conId, hotelId) {
@@ -181,7 +183,9 @@ var Orders = (function () {
       floor_id: d.floor_id || '', room: d.room || '', equip: d.equip || '', symptom: d.sym || d.title || ''
     }, con.name).order;
     Db.update('WorkOrders', o.wo_id, { arrived_at: now_(), work_from: now_() });
-    return conSubmit(s, o.wo_id, d);
+    var res = conSubmit(s, o.wo_id, d);
+    res.id = o.wo_id;
+    return res;
   }
 
   function rescue(s, woId) {

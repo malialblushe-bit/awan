@@ -31,6 +31,15 @@ function listsFor_(type) {
   return out;
 }
 
+/** أزواج [عربي، إنجليزي] للبنود المعتمدة: تترجم بها الواجهة الاختيارات */
+function i18nPairs_() {
+  var seen = {}, out = [];
+  Db.all('Lists', function (l) { return l.status === 'active' && l.en; }).forEach(function (l) {
+    if (!seen[l.ar]) { seen[l.ar] = true; out.push([String(l.ar), String(l.en)]); }
+  });
+  return out;
+}
+
 function isFacility_(r, floor) { return r.kind === 'facility' || (!r.kind && !!floor && floor.kind !== 'rooms'); }
 
 function sortFloors_(a, b) { return Number(a.sort) - Number(b.sort); }
@@ -120,7 +129,8 @@ function apiReqBoot(code) {
     floors: floorsOf_(h.hotel_id),
     elevators: elevatorsOf_(h.hotel_id),
     has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el') },
-    syms: { ac: listsFor_('ac').sym, el: listsFor_('el').sym }
+    syms: { ac: listsFor_('ac').sym, el: listsFor_('el').sym },
+    i18n: i18nPairs_()
   };
 }
 
@@ -137,6 +147,7 @@ function apiReqSubmit(code, d) {
       requester: String(d.name).trim(), description: d.description, photos: photos
     }, String(d.name).trim());
     var con = r.order.con_id ? Db.get('Contractors', r.order.con_id) : null;
+    Kpi.touch([r.order.wo_id]);
     return {
       id: r.order.wo_id,
       con: con ? con.name : '',
@@ -154,7 +165,7 @@ function apiConLogin(code, pin) {
       Auth.logout(r.token);
       throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
     }
-    Orders.arrive(r.con.con_id, h.hotel_id);
+    Kpi.touch(Orders.arrive(r.con.con_id, h.hotel_id));
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
 }
@@ -206,7 +217,8 @@ function conBoot_(s) {
       respN: resp.length,
       target: (hotels[s.hotel_id] || {}).resp || null
     },
-    lists: listsFor_(con.type)
+    lists: listsFor_(con.type),
+    i18n: i18nPairs_()
   };
 }
 
@@ -228,6 +240,7 @@ function apiConAct(token, action, woId, d) {
     else if (action === 'new') res = Orders.conNew(s, d);
     else if (action === 'rescue') Orders.rescue(s, woId);
     else throw new Error('إجراء غير معروف.');
+    Kpi.touch([woId || res.id]);
     Db.reset();
     return { result: res, boot: conBoot_(s) };
   });
@@ -261,7 +274,7 @@ function engBoot_(s) {
   var today = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd');
   var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
   return {
-    me: { name: me.name, role: s.role },
+    me: { name: me.name, role: s.role, lang: me.lang || 'ar' },
     hotels: myHotels.map(function (id) {
       var h = R.hotels[id] || {};
       return { id: id, name: h.name, floors: floorsOf_(id), elevators: elevatorsOf_(id) };
@@ -272,16 +285,18 @@ function engBoot_(s) {
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
-    }
+    },
+    i18n: i18nPairs_()
   };
 }
 
-function apiEngBoot(token) { return engBoot_(Auth.need(token, ['admin', 'engineer', 'management'])); }
+function apiEngBoot(token) { var s = Auth.need(token, ['admin', 'engineer', 'management']); ensureSchemaVersion_(); return engBoot_(s); }
 
 function apiEngAct(token, woId, action, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
     var to = Orders.engAct(s, woId, action, d);
+    Kpi.touch([woId]);
     Db.reset();
     return { to: to, boot: engBoot_(s) };
   });
@@ -291,8 +306,45 @@ function apiEngCreate(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
     var id = Orders.engCreate(s, d);
+    Kpi.touch([id]);
     Db.reset();
     return { id: id, boot: engBoot_(s) };
+  });
+}
+
+// ───────── لوحات الأداء (تقرأ من KpiSummary فقط) ─────────
+/** للمهندس والإدارة والمشرف: فنادقهم · وللمتعهد: أرقامه فقط */
+function apiKpiBoot(token) {
+  var s = Auth.need(token, ['admin', 'engineer', 'management', 'contractor']);
+  var R = Orders.refs(), rows, hotels;
+  if (s.role === 'contractor') {
+    rows = Kpi.rows(function (r) { return r.con_id === s.id; }, 6);
+  } else {
+    var me = Db.get('Users', s.id);
+    hotels = s.role === 'engineer' ? Orders.csv(me.hotel_ids) : Object.keys(R.hotels);
+    rows = Kpi.rows(function (r) { return hotels.indexOf(r.hotel_id) !== -1; }, 6);
+  }
+  var cons = {}, hs = {};
+  rows.forEach(function (r) {
+    var c = R.cons[r.con]; if (c) cons[r.con] = { id: c.con_id, name: c.name, type: c.type };
+    var h = R.hotels[r.hotel]; if (h) hs[r.hotel] = { id: h.hotel_id, name: h.name };
+  });
+  return {
+    rows: rows, thresholds: Kpi.thresholds(),
+    cons: Object.keys(cons).map(function (k) { return cons[k]; }),
+    hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
+    month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30
+  };
+}
+
+/** لغة الواجهة لكل مستخدم: ar · en */
+function apiSetLang(token, lang) {
+  var s = Auth.need(token, ['admin', 'engineer', 'management', 'contractor']);
+  lang = lang === 'en' ? 'en' : 'ar';
+  return Db.withLock(function () {
+    if (s.role === 'contractor') Db.update('Contractors', s.id, { lang: lang });
+    else Db.update('Users', s.id, { lang: lang });
+    return lang;
   });
 }
 
@@ -336,7 +388,11 @@ function admBoot_() {
     users: Db.all('Users').map(function (u) {
       return { id: u.user_id, name: u.name, role: u.role, username: u.username, hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE' };
     }),
-    pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length
+    pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
+    lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
+      .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
+      .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), status: l.status, by: l.created_by || '' }; }),
+    thresholds: Kpi.thresholds()
   };
 }
 
@@ -571,6 +627,82 @@ function apiAdmAddUser(token, d) {
 
 function apiAdmResetUser(token, userId) {
   return adm_(token, function () { return { password: Auth.resetUser(userId) }; });
+}
+
+// ───────── اعتماد البنود ─────────
+var LIST_KEYS = ['sym', 'part', 'cause', 'parts', 'leave', 'reject'];
+
+/** action: approve {ar, en} · merge {into} · reject */
+function apiAdmListAct(token, id, action, d) {
+  return adm_(token, function () {
+    d = d || {};
+    var l = Db.get('Lists', id);
+    if (!l || l.status !== 'pending') throw new Error('البند غير موجود أو اعتُمد من قبل.');
+    if (action === 'approve') {
+      var ar = String(d.ar || '').trim(), en = String(d.en || '').trim();
+      if (!ar) throw new Error('اكتب صياغة البند بالعربية.');
+      if (!en) throw new Error('اكتب الترجمة الإنجليزية.');
+      if (Db.find('Lists', function (x) { return x.item_id !== id && x.status === 'active' && x.list === l.list && (x.type === l.type || x.type === 'all') && x.ar === ar; })) throw new Error('يوجد بند معتمد بنفس الصياغة: ادمجه فيه بدلاً من ذلك.');
+      var max = 0;
+      Db.all('Lists', function (x) { return x.list === l.list && x.status === 'active'; }).forEach(function (x) { max = Math.max(max, Number(x.sort) || 0); });
+      Db.update('Lists', id, { ar: ar, en: en, status: 'active', orig: ar !== String(l.ar) ? l.ar : '', sort: max + 1 });
+    } else if (action === 'merge') {
+      var into = Db.get('Lists', d.into);
+      if (!into || into.status !== 'active' || into.list !== l.list) throw new Error('اختر البند الذي تدمجه فيه من نفس القائمة.');
+      Db.update('Lists', id, { status: 'merged', merged_into: into.item_id });
+    } else if (action === 'reject') {
+      Db.update('Lists', id, { status: 'rejected' });
+    } else throw new Error('إجراء غير معروف.');
+    Kpi.rebuild();
+    return {};
+  });
+}
+
+/** بند معتمد: إضافة أو تعديل الصياغة والترجمة. d: {id?, type, list, ar, en} */
+function apiAdmListSave(token, d) {
+  return adm_(token, function () {
+    var ar = String(d.ar || '').trim(), en = String(d.en || '').trim();
+    if (!ar) throw new Error('اكتب البند بالعربية.');
+    if (d.id) {
+      var l = Db.get('Lists', d.id);
+      if (!l) throw new Error('البند غير موجود.');
+      Db.update('Lists', d.id, { ar: ar, en: en, orig: ar !== String(l.ar) ? (l.orig || l.ar) : (l.orig || '') });
+      return {};
+    }
+    if (['ac', 'el', 'all'].indexOf(d.type) === -1 || LIST_KEYS.indexOf(d.list) === -1) throw new Error('اختر القائمة.');
+    var max = 0;
+    Db.all('Lists', function (x) { return x.list === d.list; }).forEach(function (x) { max = Math.max(max, Number(x.sort) || 0); });
+    Db.insert('Lists', { type: d.type, list: d.list, ar: ar, en: en, status: 'active', created_by: 'admin', sort: max + 1 });
+    return {};
+  });
+}
+
+// ───────── العتبات ─────────
+/** rows: {resp:{full,half,weight}, ready:{…}, info:{…}, sat:{…}} لنوع متعهد واحد */
+function apiAdmSaveThresholds(token, type, rows) {
+  return adm_(token, function () {
+    if (['ac', 'el', 'sf'].indexOf(type) === -1) throw new Error('اختر نوع المتعهد.');
+    var kpis = ['resp', 'ready', 'info', 'sat'], sum = 0;
+    kpis.forEach(function (k) {
+      var r = rows[k] || {}, full = Number(r.full), half = Number(r.half), w = Number(r.weight);
+      if (!(full >= 0) || !(half >= 0) || !(w >= 0) || isNaN(full) || isNaN(half) || isNaN(w)) throw new Error('اكتب أرقاماً صحيحة في كل الخانات.');
+      if (k === 'resp' && half < full) throw new Error('الاستجابة: حد نصف النقاط يكون أكبر من حد كامل النقاط (الأقل أفضل).');
+      if (k !== 'resp' && (half > full || full > 100)) throw new Error('النسب: حد كامل النقاط أكبر من حد النصف، ولا يتجاوز 100.');
+      sum += w;
+    });
+    if (Math.round(sum) !== 100) throw new Error('مجموع الأوزان ' + sum + '، والمطلوب 100.');
+    kpis.forEach(function (k) {
+      var r = rows[k], patch = { full: Number(r.full), half: Number(r.half), weight: Number(r.weight) };
+      if (!Db.updateWhere('Thresholds', function (t) { return t.type === type && t.kpi === k; }, patch)) {
+        patch.type = type; patch.kpi = k; Db.insert('Thresholds', patch);
+      }
+    });
+    return {};
+  });
+}
+
+function apiAdmKpiRebuild(token) {
+  return adm_(token, function () { return { n: Kpi.rebuild() }; });
 }
 
 // ───────── من قائمة أعوان في ملف البيانات ─────────

@@ -431,5 +431,77 @@ t('الرقم السري: 5 محاولات خاطئة تقفل مؤقتاً', ()
   throws(`apiConLogin('WARIF2', '${acPin}')`, 'انتظر');
 });
 
+// ───────── المرحلة الثانية: البنود واللوحات والعتبات واللغة ─────────
+t('الأداء: يُحسب مسبقاً في KpiSummary بعد الإغلاق (الجاهزية والموثوقية والرضا والاستجابة)', () => {
+  const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  const m = run('Kpi.month(new Date())');
+  const row = run(`Kpi.rows(r => r.con_id === '${con}' && r.hotel_id === '${HID}', 6)`).find(r => r.month === m);
+  if (!row) throw new Error('لا يوجد ملخص');
+  const d = row.d;
+  eq(d.closed, 1); eq(d.readyN, 1); eq(d.readyOk, 0);       // أُعيد فتحها فلا تُحسب جاهزة
+  eq(d.satN, 1); eq(d.satSum, 100);
+  if (!(d.infoN >= 1) || d.infoOk !== 0) throw new Error('الموثوقية: ' + JSON.stringify(d));
+  if (!(d.respN >= 1)) throw new Error('الاستجابة لم تُحسب');
+  eq(d.parts['الكمبروسر'], 1);
+  const el = run(`Kpi.rows(r => r.hotel_id === '${HID}', 6)`).filter(r => r.con !== con);
+  eq(el.reduce((a, r) => a + r.d.trapped, 0), 1);
+  eq(el.reduce((a, r) => a + r.d.rescueN, 0), 1);
+});
+
+t('الأداء: المهندس يرى فنادقه، والمتعهد يرى أرقامه فقط', () => {
+  const e = run(`apiKpiBoot('${engTok}')`);
+  if (e.rows.length < 2) throw new Error('صفوف المهندس ناقصة');
+  eq(e.thresholds.ac.resp.full, 30);
+  const c = run(`apiKpiBoot('${acTok}')`);
+  const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  eq(c.rows.every(r => r.con === con), true);
+  eq(c.cons.length, 1);
+});
+
+t('العتبات: المجموع 100، والاستجابة الأقل أفضل، ثم تُحفظ', () => {
+  const ok = { resp: { full: 25, half: 40, weight: 40 }, ready: { full: 90, half: 80, weight: 30 }, info: { full: 95, half: 90, weight: 15 }, sat: { full: 85, half: 75, weight: 15 } };
+  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, sat: { full: 85, half: 75, weight: 10 } })})`, '100');
+  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, resp: { full: 40, half: 25, weight: 40 } })})`, 'الأقل أفضل');
+  run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify(ok)})`);
+  const th = run(`apiAdmBoot('${adminTok}')`).thresholds.ac;
+  eq(th.resp.full, 25); eq(th.sat.half, 75); eq(th.ready.weight, 30);
+  eq(run(`Db.all('Thresholds').length`), 12);
+  eq(run(`apiAdmBoot('${adminTok}')`).thresholds.el.resp.full, 45);
+});
+
+t('اعتماد البنود: إعادة صياغة مع الإنجليزية، ودمج، ورفض', () => {
+  const a = run(`apiAdmBoot('${adminTok}')`);
+  const p = a.lists.find(l => l.status === 'pending' && l.ar === 'كمبروسر جديد');
+  if (!p) throw new Error('البند المعلّق غير موجود');
+  throws(`apiAdmListAct('${adminTok}', '${p.id}', 'approve', { ar: 'كمبروسر' })`, 'الإنجليزية');
+  run(`apiAdmListAct('${adminTok}', '${p.id}', 'approve', { ar: 'كمبروسر', en: 'Compressor' })`);
+  const l = run(`Db.get('Lists', '${p.id}')`);
+  eq(l.status, 'active'); eq(l.ar, 'كمبروسر'); eq(l.orig, 'كمبروسر جديد');
+  eq(run(`listsFor_('ac').parts.some(x => x.ar === 'كمبروسر' && x.en === 'Compressor')`), true);
+  // دمج: بند معلّق يُدمج في بند قائم
+  const m = run(`Db.insert('Lists', { type: 'ac', list: 'cause', ar: 'وسخ', status: 'pending', created_by: 'x', sort: 999 }).item_id`);
+  const into = run(`Db.find('Lists', x => x.ar === 'اتساخ' && x.type === 'ac').item_id`);
+  throws(`apiAdmListAct('${adminTok}', '${m}', 'merge', { into: '${run(`Db.find('Lists', x => x.ar === 'المروحة').item_id`)}' })`, 'نفس القائمة');
+  run(`apiAdmListAct('${adminTok}', '${m}', 'merge', { into: '${into}' })`);
+  eq(run(`Db.get('Lists', '${m}').status`), 'merged');
+  const r = run(`Db.insert('Lists', { type: 'ac', list: 'sym', ar: 'كلام فارغ', status: 'pending', created_by: 'x', sort: 999 }).item_id`);
+  run(`apiAdmListAct('${adminTok}', '${r}', 'reject', {})`);
+  eq(run(`Db.get('Lists', '${r}').status`), 'rejected');
+  eq(run(`apiAdmBoot('${adminTok}')`).pending, 0);
+  // بند معتمد: إضافة وتعديل الترجمة
+  run(`apiAdmListSave('${adminTok}', { type: 'el', list: 'parts', ar: 'كفرات باب', en: 'Door shoes' })`);
+  eq(run(`listsFor_('el').parts.some(x => x.en === 'Door shoes')`), true);
+});
+
+t('اللغة: كل مستخدم يختار لغة واجهته، والترجمات تصل مع الإقلاع', () => {
+  eq(run(`apiSetLang('${engTok}', 'en')`), 'en');
+  const b = run(`apiEngBoot('${engTok}')`);
+  eq(b.me.lang, 'en');
+  if (!b.i18n.some(p => p[0] === 'لا يبرد' && p[1] === 'Not cooling')) throw new Error('الترجمات ناقصة');
+  run(`apiSetLang('${acTok}', 'en')`);
+  eq(run(`apiConBoot('${acTok}')`).me.lang, 'en');
+  eq(run("apiReqBoot('warif2')").i18n.length > 10, true);
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);
