@@ -974,7 +974,7 @@ var SUP_ROLES_ = ['supmgr', 'sup'];
 function supBoot_(s) {
   var me = Db.get('Users', s.id) || {};
   var hs = Ops.supHotels(s), R = Orders.refs();
-  var conOf = function (h, t) { var c = Orders.activeContract(h, t); return c ? { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '', perWeek: Number(c.wa_per_week) || 0 } : null; };
+  var conOf = function (h, t) { var c = Orders.activeContract(h, t); return c ? { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '', perWeek: Number(c.wa_per_week) || 0, start: Orders.ms(c.start) || 0 } : null; };
   var L = listsFor_('pc');
   var cons = [];
   Object.keys(R.cons).forEach(function (k) {

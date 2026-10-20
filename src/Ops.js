@@ -318,11 +318,22 @@ var Ops = (function () {
     var a = new Date(from + 'T00:00:00').getTime(), b = new Date(to + 'T23:59:59').getTime(), days = Math.max(1, Math.round((b - a) / 864e5));
     var inR = function (t) { t = ms(t); return t >= a && t <= b; };
     var V = {}, X = {};
+    // أيام الفترة التي كان فيها عقد ساري لهذا المتعهد في الفندق (لا يُحاسب على ما قبل العقد)
+    var cdays = function (h, field) {
+      var best = 0, n = 0;
+      Db.all('Contracts', function (c) { return c.con_id === con.con_id && csv(c.hotel_ids).indexOf(h) !== -1; }).forEach(function (c) {
+        var s0 = Math.max(a, c.start ? ms(c.start) : a), e0 = Math.min(b, c.end ? ms(c.end) + 864e5 - 1 : b);
+        var d = Math.max(0, Math.round((e0 - s0) / 864e5));
+        if (d > 0) { n += d; if (field) best += (Number(c[field]) || 0) * d / 7; }
+      });
+      return field ? best : n;
+    };
     if (con.type === 'wa') {
-      var per = 0;
-      hotelIds.forEach(function (h) { var c = Orders.activeContract(h, 'wa', con.con_id); per += c ? Number(c.wa_per_week) || 0 : 0; });
+      var exp = 0;
+      hotelIds.forEach(function (h) { exp += cdays(h, 'wa_per_week'); });
+      exp = Math.round(exp);
       var vs = Db.all('WasteVisits', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && inR(v.at); });
-      var done = vs.filter(function (v) { return yes_(v.truck) && yes_(v.removed); }).length, exp = Math.round(per * days / 7);
+      var done = vs.filter(function (v) { return yes_(v.truck) && yes_(v.removed); }).length;
       var rated = vs.filter(function (v) { return Number(v.rating) > 0; }), came = vs.filter(function (v) { return yes_(v.truck); });
       V.pickup = exp ? Math.min(100, pct_(done, exp)) : null;
       V.clean = rated.length ? Math.round(rated.reduce(function (s, v) { return s + Number(v.rating); }, 0) / rated.length * 20) : null;
@@ -331,13 +342,13 @@ var Ops = (function () {
     } else if (con.type === 'pc') {
       var expS = 0, gotS = 0;
       hotelIds.forEach(function (h) {
-        var sch = schedule(h), sprays = {};
+        var sch = schedule(h), sprays = {}, hd = cdays(h);
         Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && inR(l.at); }).forEach(function (l) { csv(l.zones).forEach(function (z) { sprays[z] = (sprays[z] || 0) + 1; }); });
         var floors = {}; Db.all('Floors', function (f) { return f.hotel_id === h; }).forEach(function (f) { floors[f.floor_id] = f; });
         Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) {
           var ft = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST), ev = sch[ft];
           if (!ev) return;
-          var e = Math.max(1, Math.floor(days / ev)); expS += e; gotS += Math.min(e, sprays[r.room_id] || 0);
+          var e = Math.floor(hd / ev); if (!e) return; expS += e; gotS += Math.min(e, sprays[r.room_id] || 0);
         });
       });
       var fl = Db.all('PestFlags', function (f) { return hotelIds.indexOf(f.hotel_id) !== -1 && inR(f.created_at) && f.status !== 'cancelled'; });
