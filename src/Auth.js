@@ -119,12 +119,62 @@ var Auth = (function () {
     for (var tries = 0; tries < 20; tries++) {
       pin = digits_(6);
       if (pin.charAt(0) === '0' || weakPin_(pin)) continue;
-      var clash = others.some(function (c) { return hash(pin, c.salt) === c.pin_hash; });
+      var clash = others.some(function (c) { return hash(pin, c.salt) === c.pin_hash; }) || supTaken_(pin, '');
       if (!clash) break;
     }
     var s = salt_();
     Db.update('Contractors', conId, { pin_hash: hash(pin, s), salt: s });
     return pin;
+  }
+
+  // ───────── الإشراف: مدير الإشراف والمشرف الميداني ─────────
+  var SUP_ROLES = ['supmgr', 'sup'];
+  function isSup(role) { return SUP_ROLES.indexOf(role) !== -1; }
+  function pinSet_(u) { return !!u.secret_hash && !(u.must_change === true || String(u.must_change).toUpperCase() === 'TRUE'); }
+  function supTaken_(pin, exceptId) {
+    return Db.all('Users', function (u) { return isSup(u.role) && u.user_id !== exceptId && pinSet_(u); })
+      .some(function (u) { return hash(pin, u.salt) === u.secret_hash; });
+  }
+  /** الرقم السري محجوز لمتعهد أو مشرف آخر؟ (الرقم وحده يعرّف صاحبه، فلا يتكرر) */
+  function pinTaken(pin, exceptUserId) {
+    return supTaken_(pin, exceptUserId || '') || Db.all('Contractors', function (c) { return !!c.pin_hash; }).some(function (c) { return hash(pin, c.salt) === c.pin_hash; });
+  }
+
+  /** أول دخول (أو بعد إعادة التعيين): اسم الدخول المعرّف + رقم يختاره بنفسه */
+  function supSetPin(username, pin) {
+    var u = String(username || '').trim().toLowerCase();
+    pin = String(pin || '').trim();
+    guard_('sps_' + u);
+    var user = Db.find('Users', function (r) { return String(r.username).toLowerCase() === u && isSup(r.role); });
+    if (!user || String(user.active).toUpperCase() === 'FALSE') { fail_('sps_' + u); throw new Error('اسم الدخول غير معرّف للإشراف. راجع مشرف النظام.'); }
+    if (pinSet_(user)) throw new Error('رقمك السري محدد من قبل. ادخل به، أو اطلب من مشرف النظام إعادة تعيينه إن نسيته.');
+    if (!/^\d{6}$/.test(pin)) throw new Error('الرقم السري 6 أرقام.');
+    if (weakPin_(pin)) throw new Error('اختر رقماً أصعب: لا تكرار ولا تسلسل.');
+    if (pinTaken(pin, user.user_id)) throw new Error('هذا الرقم محجوز، اختر رقماً آخر.');
+    var st = salt_();
+    Db.update('Users', user.user_id, { secret_hash: hash(pin, st), salt: st, must_change: false });
+    clear_('sps_' + u);
+    return { token: newSession_({ role: user.role, id: user.user_id }), user: user };
+  }
+
+  function supLogin(pin) {
+    pin = String(pin || '').trim();
+    var user = null;
+    if (/^\d{6}$/.test(pin)) {
+      user = Db.find('Users', function (u) { return isSup(u.role) && String(u.active).toUpperCase() !== 'FALSE' && pinSet_(u) && hash(pin, u.salt) === u.secret_hash; });
+    }
+    if (!user) return null;
+    return { token: newSession_({ role: user.role, id: user.user_id }), user: user };
+  }
+
+  /** دخول بالرقم السري من صفحة الويب: متعهد أو إشراف */
+  function pinWebLogin(pin) {
+    guard_('pin_web');
+    pin = String(pin || '').trim();
+    var s = supLogin(pin);
+    if (s) { clear_('pin_web'); return { kind: 'sup', token: s.token, user: s.user }; }
+    try { var c = conWebLogin(pin); clear_('pin_web'); return { kind: 'con', token: c.token, con: c.con }; }
+    catch (e) { fail_('pin_web'); throw new Error('الرقم السري غير صحيح.'); }
   }
 
   // ───────── الموظفون ─────────
@@ -159,7 +209,12 @@ var Auth = (function () {
     var u = String(username || '').trim().toLowerCase();
     if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error('اسم الدخول بالإنجليزية بلا مسافات (3 أحرف على الأقل)، مثل: eng.ahmed');
     if (Db.find('Users', function (r) { return String(r.username).toLowerCase() === u; })) throw new Error('اسم الدخول مستخدم من قبل.');
-    if (['admin', 'engineer', 'management', 'gm', 'om'].indexOf(role) === -1) throw new Error('دور غير معروف.');
+    if (['admin', 'engineer', 'management', 'gm', 'om', 'supmgr', 'sup'].indexOf(role) === -1) throw new Error('دور غير معروف.');
+    if (isSup(role)) {
+      // الإشراف بلا كلمة مرور: يختار رقمه السري عند أول دخول
+      return { user: Db.insert('Users', { name: String(name || '').trim(), role: role, username: u, email: email || '', hotel_ids: hotelIds || '',
+        secret_hash: '', salt: '', must_change: true, failed: 0, lang: 'ar', active: true }), password: null };
+    }
     var pw = tempPassword_(), st = salt_();
     var rec = Db.insert('Users', {
       name: String(name || '').trim(), role: role, username: u, email: email || '', hotel_ids: hotelIds || '',
@@ -169,6 +224,8 @@ var Auth = (function () {
   }
 
   function resetUser(userId) {
+    var usr = Db.get('Users', userId);
+    if (usr && isSup(usr.role)) { Db.update('Users', userId, { secret_hash: '', salt: '', must_change: true }); return null; }
     var pw = tempPassword_(), st = salt_();
     Db.update('Users', userId, { secret_hash: hash(pw, st), salt: st, must_change: true });
     return pw;
@@ -177,6 +234,7 @@ var Auth = (function () {
   return {
     hash: hash, validPassword: validPassword, session: session, need: need, logout: logout,
     conLogin: conLogin, conWebLogin: conWebLogin, setPin: setPin, staffLogin: staffLogin, changePassword: changePassword,
-    createUser: createUser, resetUser: resetUser
+    createUser: createUser, resetUser: resetUser,
+    isSup: isSup, pinTaken: pinTaken, supSetPin: supSetPin, supLogin: supLogin, pinWebLogin: pinWebLogin
   };
 })();

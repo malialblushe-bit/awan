@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 11;
+var SCHEMA_VERSION = 12;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -15,7 +15,9 @@ var SCHEMA = [
   { name: 'Hotels', cols: [
     ['hotel_id', 'المعرّف'], ['code', 'رمز الفندق (يظهر في الباركود)'], ['name', 'الاسم'], ['city', 'المدينة'],
     ['towers', 'الأبراج (مفصولة بفاصلة، فارغ إن لم توجد)'],
-    ['engineer_ids', 'المهندسون (معرّفات مفصولة بفاصلة)'], ['active', 'نشط'], ['created_at', 'تاريخ الإنشاء']] },
+    ['engineer_ids', 'المهندسون (معرّفات مفصولة بفاصلة)'], ['active', 'نشط'], ['created_at', 'تاريخ الإنشاء'],
+    ['lat', 'خط العرض (لتحقق الموقع)'], ['lng', 'خط الطول'], ['geo_radius', 'نطاق الموقع بالمتر'],
+    ['geo_con', 'تحقق الموقع عند وصول المتعهد'], ['wa_carts', 'سعة منطقة النفايات (عربات)']] },
 
   { name: 'Floors', cols: [
     ['floor_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'اسم الدور أو المنطقة'],
@@ -23,7 +25,8 @@ var SCHEMA = [
 
   { name: 'Rooms', cols: [
     ['room_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['floor_id', 'الدور'], ['number', 'رقم الغرفة أو اسم المرفق'],
-    ['ac_units', 'وحدات التكييف (مفصولة بفاصلة)'], ['kind', 'room = غرفة · facility = مرفق']] },
+    ['ac_units', 'وحدات التكييف (مفصولة بفاصلة)'], ['kind', 'room = غرفة · facility = مرفق'],
+    ['ftype', 'نوع المرفق (لدورية المكافحة؛ الغرف: غرف النزلاء)']] },
 
   { name: 'Elevators', cols: [
     ['elev_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'الاسم'], ['active', 'نشط'],
@@ -32,13 +35,13 @@ var SCHEMA = [
     ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات'], ['tower', 'البرج']] },
 
   { name: 'Users', cols: [
-    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل)'],
+    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
 
   { name: 'Contractors', cols: [
-    ['con_id', 'المعرّف'], ['name', 'الاسم'], ['type', 'ac = تكييف · el = مصاعد · sf = سلامة'],
+    ['con_id', 'المعرّف'], ['name', 'الاسم'], ['type', 'ac = تكييف · el = مصاعد · sf = سلامة · wa = نفايات · pc = مكافحة الآفات'],
     ['phone', 'الجوال'], ['contact', 'جهة الاتصال'], ['emails', 'البريد (أكثر من عنوان مفصولة بفاصلة)'],
     ['pin_hash', 'الرقم السري مشفّراً'], ['salt', 'الملح'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
@@ -49,11 +52,11 @@ var SCHEMA = [
     ['alert_days', 'التنبيه قبل (يوم)'], ['resp_normal', 'الاستجابة: عادي (دقيقة)'],
     ['resp_urgent', 'الاستجابة: طارئ (دقيقة)'], ['pm_per_month', 'زيارات دورية في الشهر'],
     ['prev_contract_id', 'العقد السابق (عند التجديد)'], ['created_at', 'تاريخ الإنشاء'],
-    ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)']] },
+    ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع']] },
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
-    ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الإجراء المتخذ · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض'],
+    ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الإجراء المتخذ · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض · pest = الآفة · ftype = نوع المرفق · material = مادة المكافحة'],
     ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · merged · rejected'],
     ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة'], ['price', 'السعر بالريال (لخدمات الإجراء)']] },
 
@@ -95,6 +98,35 @@ var SCHEMA = [
     ['wo_id', 'العملية (اختياري)'], ['text', 'الملاحظة'], ['by_id', 'المرسل'], ['by_name', 'اسم المرسل'], ['by_role', 'دوره'],
     ['created_at', 'وقت الإرسال'], ['seen_at', 'وقت الاطلاع'], ['seen_by', 'اطلع عليها']] },
 
+  { name: 'WasteVisits', cols: [
+    ['visit_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'متعهد النفايات'], ['by_id', 'سجّلها'], ['by_name', 'الاسم'], ['by_role', 'contractor · sup · supmgr'],
+    ['at', 'الوقت (من الخادم)'], ['truck', 'حضرت الشاحنة؟ نعم · لا'], ['removed', 'رُحّلت النفايات؟ نعم · لا'], ['left_carts', 'العربات المتبقية'],
+    ['washed', 'نُظّف وغُسل المكان؟ نعم · لا'], ['rating', 'مستوى النظافة من 5'], ['note', 'ملاحظة'], ['photos', 'الصور'],
+    ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
+
+  { name: 'PestLogs', cols: [
+    ['log_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['zones', 'المناطق (معرّفات الغرف والمرافق)'],
+    ['kind', 'spray = رش · inspect = فحص · trap = فحص مصيدة'], ['pests', 'الآفات المستهدفة'], ['material', 'المادة'],
+    ['finding', 'none · light · medium · heavy'], ['trap_id', 'المصيدة'], ['note', 'ملاحظة'], ['photos', 'الصور'], ['by_name', 'الفني'],
+    ['at', 'الوقت'], ['flags_closed', 'البلاغات المنجزة بها']] },
+
+  { name: 'PestFlags', cols: [
+    ['flag_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['zone', 'المنطقة (غرفة أو مرفق)'], ['kind', 'ready = متاحة للرش · infest = بلاغ إصابة'],
+    ['pests', 'الآفة'], ['note', 'ملاحظة'], ['photos', 'الصور'], ['by_id', 'المبلّغ'], ['by_name', 'اسمه'], ['created_at', 'وقت البلاغ'],
+    ['status', 'open · done · cancelled'], ['done_at', 'وقت الإنجاز'], ['done_log', 'سجل المعالجة']] },
+
+  { name: 'Traps', cols: [
+    ['trap_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['zone', 'المنطقة'], ['label', 'رقم المصيدة'], ['kind', 'النوع'],
+    ['placed_at', 'موعد الوضع'], ['every_days', 'الفحص كل (يوم)'], ['last_check', 'آخر فحص'], ['last_result', 'آخر نتيجة'],
+    ['removed_at', 'موعد الرفع'], ['status', 'active · removed'], ['by_name', 'وضعها']] },
+
+  { name: 'PestSchedule', cols: [
+    ['key', 'الفندق|نوع المرفق'], ['hotel_id', 'الفندق'], ['ftype', 'نوع المرفق'], ['every_days', 'الرش كل (يوم)']] },
+
+  { name: 'Evaluations', cols: [
+    ['eval_id', 'المعرّف'], ['con_id', 'المتعهد'], ['type', 'النوع'], ['hotel_ids', 'الفنادق'], ['from', 'من'], ['to', 'إلى'],
+    ['data', 'المؤشرات (JSON)'], ['score', 'الدرجة'], ['decision', 'القرار'], ['note', 'الملاحظة'], ['by', 'أصدره'], ['created_at', 'وقت الإصدار']] },
+
   { name: 'KpiSummary', cols: [
     ['key', 'المتعهد|الفندق|الشهر'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر'],
     ['data', 'الأرقام (JSON)'], ['updated_at', 'آخر تحديث']] }
@@ -114,7 +146,8 @@ var STATUS = {
 
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
-  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT'
+  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
+  WasteVisits: 'WV', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV'
 };
 
 function tableDef(name) {
@@ -127,14 +160,17 @@ var SEED_SETTINGS = [
   ['repeat_window_days', 30, 'نافذة العطل المتكرر (يوم)'],
   ['chronic_count', 2, 'المعدة مزمنة بعد هذا العدد من الأعطال خلال 90 يوماً'],
   ['session_hours', 6, 'مدة الجلسة (ساعات)'],
-  ['photos_folder_id', '', 'مجلد الصور في Drive (يُنشأ تلقائياً)']
+  ['photos_folder_id', '', 'مجلد الصور في Drive (يُنشأ تلقائياً)'],
+  ['geo_radius', 150, 'نطاق تحقق الموقع الافتراضي (متر)']
 ];
 
 /** [type, kpi, full, half, weight] — الاستجابة بالدقائق (الأقل أفضل)، والبقية نسب (الأعلى أفضل) */
 var SEED_THRESHOLDS = [
   ['ac', 'resp', 30, 40, 30], ['ac', 'ready', 90, 85, 30], ['ac', 'info', 95, 90, 20], ['ac', 'sat', 85, 80, 20],
   ['el', 'resp', 45, 60, 30], ['el', 'ready', 90, 85, 30], ['el', 'info', 95, 90, 20], ['el', 'sat', 85, 80, 20],
-  ['sf', 'resp', 60, 80, 30], ['sf', 'ready', 90, 85, 30], ['sf', 'info', 95, 90, 20], ['sf', 'sat', 85, 80, 20]
+  ['sf', 'resp', 60, 80, 30], ['sf', 'ready', 90, 85, 30], ['sf', 'info', 95, 90, 20], ['sf', 'sat', 85, 80, 20],
+  ['wa', 'pickup', 95, 85, 50], ['wa', 'clean', 80, 60, 30], ['wa', 'wash', 95, 85, 20],
+  ['pc', 'ontime', 90, 75, 40], ['pc', 'flagresp', 24, 48, 30], ['pc', 'traps', 90, 75, 30]
 ];
 
 /** [type, list, ar, en] */
@@ -169,6 +205,13 @@ var SEED_LISTS = [
   ['el', 'action', 'ضبط', 'Adjusted'], ['el', 'action', 'تنظيف', 'Cleaning'], ['el', 'action', 'تشحيم', 'Lubricated'],
   ['el', 'action', 'استبدال قطعة', 'Part replaced'], ['el', 'action', 'إصلاح توصيلات كهربائية', 'Wiring repaired'], ['el', 'action', 'إعادة تشغيل', 'Restarted'],
   ['el', 'leave', 'بانتظار قطعة', 'Waiting for a part'], ['el', 'leave', 'يحتاج فريقاً إضافياً', 'Needs extra crew'], ['el', 'leave', 'انتهى وقت العمل', 'End of shift'],
+
+  ['pc', 'pest', 'صراصير', 'Cockroaches'], ['pc', 'pest', 'نمل', 'Ants'], ['pc', 'pest', 'فئران وقوارض', 'Rodents'], ['pc', 'pest', 'بق الفراش', 'Bed bugs'],
+  ['pc', 'pest', 'ذباب', 'Flies'], ['pc', 'pest', 'بعوض', 'Mosquitoes'], ['pc', 'pest', 'عناكب', 'Spiders'], ['pc', 'pest', 'نمل أبيض', 'Termites'],
+  ['pc', 'material', 'جل', 'Gel'], ['pc', 'material', 'رش سائل', 'Liquid spray'], ['pc', 'material', 'طعوم', 'Baits'], ['pc', 'material', 'بودرة', 'Dust'], ['pc', 'material', 'تبخير', 'Fumigation'],
+  ['pc', 'ftype', 'غرف النزلاء', 'Guest rooms'], ['pc', 'ftype', 'الممرات', 'Corridors'], ['pc', 'ftype', 'المطبخ', 'Kitchen'], ['pc', 'ftype', 'المطعم', 'Restaurant'],
+  ['pc', 'ftype', 'المخازن', 'Stores'], ['pc', 'ftype', 'مرمى النفايات', 'Waste area'], ['pc', 'ftype', 'الساحات الخارجية', 'Outdoor yards'],
+  ['pc', 'ftype', 'دورات المياه العامة', 'Public restrooms'], ['pc', 'ftype', 'مرافق الموظفين', 'Staff areas'], ['pc', 'ftype', 'المكاتب', 'Offices'],
 
   ['all', 'reject', 'صور غير واضحة', 'Unclear photos'], ['all', 'reject', 'تقرير ناقص', 'Incomplete report'],
   ['all', 'reject', 'رقم معدة خاطئ', 'Wrong equipment number'], ['all', 'reject', 'العمل غير مطابق', 'Work does not match'],

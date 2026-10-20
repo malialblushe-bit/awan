@@ -24,7 +24,7 @@ function webUrl_() {
 }
 
 function listsFor_(type) {
-  var out = { sym: [], part: [], cause: [], action: [], parts: [], leave: [], reject: [] };
+  var out = { sym: [], part: [], cause: [], action: [], parts: [], leave: [], reject: [], pest: [], material: [], ftype: [] };
   Db.all('Lists', function (l) { return l.status === 'active' && (l.type === type || l.type === 'all'); })
     .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
     .forEach(function (l) { if (out[l.list]) out[l.list].push({ ar: l.ar, en: l.en }); });
@@ -164,7 +164,7 @@ function apiReqSubmit(code, d) {
 }
 
 // ───────── المتعهد ─────────
-function apiConLogin(code, pin) {
+function apiConLogin(code, pin, geo) {
   return Db.withLock(function () {
     ensureSchemaVersion_();
     var h = Orders.hotelByCode(code);
@@ -173,6 +173,7 @@ function apiConLogin(code, pin) {
       Auth.logout(r.token);
       throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
     }
+    if (Orders.truthy(h.geo_con)) { try { Ops.geoCheck(h, geo); } catch (e) { Auth.logout(r.token); throw e; } }
     Kpi.touch(Orders.arrive(r.con.con_id, h.hotel_id));
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
@@ -238,6 +239,9 @@ function conBoot_(s) {
   return {
     pmLast: pmLast,
     sugg: sugg,
+    pest: con.type === 'pc' ? Ops.pestBoot(Object.keys(hotels)) : null,
+    waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
+    evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
@@ -330,7 +334,8 @@ function engBoot_(s) {
     reasons: listsFor_('ac').reject.map(function (x) { return x.ar; }),
     syms: { ac: listsFor_('ac').sym.map(function (x) { return x.ar; }), el: listsFor_('el').sym.map(function (x) { return x.ar; }) },
     cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
-    notes: notesFor_(s, myHotels),
+    notes: notesFor_(s, myHotels, 'maint'),
+    evals: Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
@@ -377,11 +382,11 @@ function apiEngCreate(token, d) {
 
 // ───────── ملاحظات الإدارة ومدير الفندق ومدير التشغيل ─────────
 /** المهندس يرى ملاحظات الصيانة (تكييف، مصاعد، سلامة) لفنادقه؛ والمرسل يرى ما أرسله وهل اطُّلع عليه */
-function notesFor_(s, hotels) {
+function notesFor_(s, hotels, to) {
   var since = Date.now() - 30 * 864e5, R = Orders.refs();
   return Db.all('Notes', function (n) {
     if (hotels.indexOf(n.hotel_id) === -1) return false;
-    var mine = VIEW_ROLES.indexOf(s.role) !== -1 ? n.by_id === s.id : n.to === 'maint';
+    var mine = VIEW_ROLES.indexOf(s.role) !== -1 ? n.by_id === s.id : n.to === (to || 'maint');
     return mine && (!n.seen_at || (Orders.ms(n.created_at) || 0) >= since);
   }).map(function (n) {
     return { id: n.note_id, hotel_id: n.hotel_id, hotel: (R.hotels[n.hotel_id] || {}).name || '', service: n.service, to: n.to, wo_id: n.wo_id || '', text: n.text,
@@ -408,13 +413,14 @@ function apiNote(token, d) {
 }
 
 function apiNoteSeen(token, noteId) {
-  var s = Auth.need(token, ['admin', 'engineer']);
+  var s = Auth.need(token, ['admin', 'engineer', 'supmgr']);
   return Db.withLock(function () {
     var n = Db.get('Notes', noteId), me = Db.get('Users', s.id);
     if (!n) throw new Error('الملاحظة غير موجودة.');
+    if (s.role === 'supmgr' && (n.to !== 'sup' || Ops.supHotels(s).indexOf(n.hotel_id) === -1)) throw new Error('لا تملك صلاحية هذا الإجراء.');
     if (!n.seen_at) Db.update('Notes', noteId, { seen_at: new Date(), seen_by: me ? me.name : '' });
     Db.reset();
-    return { boot: engBoot_(s) };
+    return { boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
   });
 }
 
@@ -537,6 +543,8 @@ function admBoot_() {
       var elevs = elevatorCards_(h.hotel_id);
       return {
         id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h),
+        lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
+        geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
         totals: {
           floors: layout.length,
@@ -557,13 +565,14 @@ function admBoot_() {
           return {
             id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
-            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x)
+            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0
           };
         })
       };
     }),
     users: Db.all('Users').map(function (u) {
-      return { id: u.user_id, name: u.name, role: u.role, username: u.username, hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE' };
+      return { id: u.user_id, name: u.name, role: u.role, username: u.username, hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
+        pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null };
     }),
     pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
     lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
@@ -807,7 +816,8 @@ function apiAdmSaveConInfo(token, conId, d) {
 
 function apiAdmSaveContract(token, d) {
   return adm_(token, function () {
-    if (['ac', 'el', 'sf'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
+    if (['ac', 'el', 'sf', 'wa', 'pc'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
+    if (d.type === 'wa' && !(Number(d.wa_per_week) > 0)) throw new Error('اكتب عدد مرات الرفع في الأسبوع.');
     if (!d.hotel_ids || !d.hotel_ids.length) throw new Error('اختر فندقاً واحداً على الأقل.');
     if (!d.start || !d.end || d.end < d.start) throw new Error('حدّد تاريخ البداية والنهاية.');
     var pin = null, conId = d.con_id;
@@ -821,7 +831,7 @@ function apiAdmSaveContract(token, d) {
       con_id: conId, type: d.type, hotel_ids: d.hotel_ids.join(','), elevator_ids: (d.elevator_ids || []).join(','),
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
-      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices)
+      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || ''
     });
     return { pin: pin };
   });
@@ -843,8 +853,20 @@ function apiAdmResetUser(token, userId) {
   return adm_(token, function () { return { password: Auth.resetUser(userId) }; });
 }
 
+/** إعدادات الفندق للإشراف: الموقع ونطاقه، وتحقق وصول المتعهد، وسعة منطقة النفايات */
+function apiAdmSaveHotelOps(token, hotelId, d) {
+  return adm_(token, function () {
+    if (!Db.get('Hotels', hotelId)) throw new Error('الفندق غير موجود.');
+    var g = Ops.parseGeo(d.geo), r = String(d.geo_radius || '').trim(), c = String(d.wa_carts || '').trim();
+    if (r !== '' && !(Number(r) >= 30 && Number(r) <= 2000)) throw new Error('نطاق الموقع بين 30 و2000 متر.');
+    if (c !== '' && !(Number(c) >= 0 && Number(c) <= 500)) throw new Error('سعة منطقة النفايات عدد عربات صحيح.');
+    Db.update('Hotels', hotelId, { lat: g.lat, lng: g.lng, geo_radius: r === '' ? '' : Number(r), geo_con: !!d.geo_con && g.lat !== '', wa_carts: c === '' ? '' : Number(c) });
+    return {};
+  });
+}
+
 // ───────── اعتماد البنود ─────────
-var LIST_KEYS = ['sym', 'part', 'cause', 'action', 'parts', 'leave', 'reject'];
+var LIST_KEYS = ['sym', 'part', 'cause', 'action', 'parts', 'leave', 'reject', 'pest', 'material', 'ftype'];
 
 /** action: approve {ar, en} · merge {into} · reject */
 function apiAdmListAct(token, id, action, d) {
@@ -892,7 +914,7 @@ function apiAdmListSave(token, d) {
       Db.update('Lists', d.id, patch);
       return {};
     }
-    if (['ac', 'el', 'all'].indexOf(d.type) === -1 || LIST_KEYS.indexOf(d.list) === -1) throw new Error('اختر القائمة.');
+    if (['ac', 'el', 'pc', 'all'].indexOf(d.type) === -1 || LIST_KEYS.indexOf(d.list) === -1) throw new Error('اختر القائمة.');
     var max = 0;
     Db.all('Lists', function (x) { return x.list === d.list; }).forEach(function (x) { max = Math.max(max, Number(x.sort) || 0); });
     Db.insert('Lists', { type: d.type, list: d.list, ar: ar, en: en, price: price_(d.price), status: 'active', created_by: 'admin', sort: max + 1 });
@@ -904,13 +926,14 @@ function apiAdmListSave(token, d) {
 /** rows: {resp:{full,half,weight}, ready:{…}, info:{…}, sat:{…}} لنوع متعهد واحد */
 function apiAdmSaveThresholds(token, type, rows) {
   return adm_(token, function () {
-    if (['ac', 'el', 'sf'].indexOf(type) === -1) throw new Error('اختر نوع المتعهد.');
-    var kpis = ['resp', 'ready', 'info', 'sat'], sum = 0;
+    var KPIS = { ac: ['resp', 'ready', 'info', 'sat'], el: ['resp', 'ready', 'info', 'sat'], sf: ['resp', 'ready', 'info', 'sat'], wa: ['pickup', 'clean', 'wash'], pc: ['ontime', 'flagresp', 'traps'] };
+    if (!KPIS[type]) throw new Error('اختر نوع المتعهد.');
+    var kpis = KPIS[type], sum = 0;
     kpis.forEach(function (k) {
       var r = rows[k] || {}, full = Number(r.full), half = Number(r.half), w = Number(r.weight);
       if (!(full >= 0) || !(half >= 0) || !(w >= 0) || isNaN(full) || isNaN(half) || isNaN(w)) throw new Error('اكتب أرقاماً صحيحة في كل الخانات.');
-      if (k === 'resp' && half < full) throw new Error('الاستجابة: حد نصف النقاط يكون أكبر من حد كامل النقاط (الأقل أفضل).');
-      if (k !== 'resp' && (half > full || full > 100)) throw new Error('النسب: حد كامل النقاط أكبر من حد النصف، ولا يتجاوز 100.');
+      if ((k === 'resp' || k === 'flagresp') && half < full) throw new Error('الاستجابة: حد نصف النقاط يكون أكبر من حد كامل النقاط (الأقل أفضل).');
+      if (k !== 'resp' && k !== 'flagresp' && (half > full || full > 100)) throw new Error('النسب: حد كامل النقاط أكبر من حد النصف، ولا يتجاوز 100.');
       sum += w;
     });
     if (Math.round(sum) !== 100) throw new Error('مجموع الأوزان ' + sum + '، والمطلوب 100.');
@@ -943,4 +966,126 @@ function createAdminPrompt() {
   ui.alert('تم إنشاء حساب المشرف',
     'اسم الدخول: ' + r.user.username + '\nكلمة المرور المؤقتة: ' + r.password +
     '\n\nتظهر مرة واحدة فقط. ستُطلب منك كلمة مرور جديدة عند أول دخول.\nرابط النظام: ' + webUrl_(), ui.ButtonSet.OK);
+}
+
+// ───────── الإشراف: مدير الإشراف والمشرف الميداني ─────────
+var SUP_ROLES_ = ['supmgr', 'sup'];
+
+function supBoot_(s) {
+  var me = Db.get('Users', s.id) || {};
+  var hs = Ops.supHotels(s), R = Orders.refs();
+  var conOf = function (h, t) { var c = Orders.activeContract(h, t); return c ? { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '', perWeek: Number(c.wa_per_week) || 0 } : null; };
+  var L = listsFor_('pc');
+  var cons = [];
+  Object.keys(R.cons).forEach(function (k) {
+    var c = R.cons[k];
+    if (c.type !== 'wa' && c.type !== 'pc') return;
+    var on = R.contracts.some(function (x) { return x.con_id === c.con_id && Orders.csv(x.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); });
+    if (on) cons.push({ id: c.con_id, name: c.name, type: c.type });
+  });
+  return {
+    me: { name: me.name, role: s.role, lang: me.lang || 'ar' },
+    hotels: hs.map(function (id) {
+      var h = R.hotels[id] || {};
+      return { id: id, name: h.name, code: h.code, carts: Number(h.wa_carts) || 0, geo: Ops.hasGeo(h), wa: conOf(id, 'wa'), pc: conOf(id, 'pc'),
+        floors: Db.all('Floors', function (f) { return f.hotel_id === id; }).sort(sortFloors_).map(function (f) { return { id: f.floor_id, label: floorLabel_(f) }; }) };
+    }),
+    pest: Ops.pestBoot(hs),
+    waste: Ops.waVisits(hs, Date.now() - 35 * 864e5),
+    notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
+    cons: cons,
+    evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
+    lists: { pest: L.pest, material: L.material, ftype: L.ftype },
+    webUrl: webUrl_(),
+    i18n: i18nPairs_()
+  };
+}
+
+function apiSupBoot(token) { var s = Auth.need(token, SUP_ROLES_); ensureSchemaVersion_(); return supBoot_(s); }
+
+/** صفحة الويب: الرقم السري لمتعهد أو مشرف */
+function apiPinWebLogin(pin) {
+  return Db.withLock(function () {
+    ensureSchemaVersion_();
+    var r = Auth.pinWebLogin(pin);
+    if (r.kind === 'sup') return { kind: 'sup', token: r.token, boot: supBoot_(Auth.session(r.token)) };
+    return { kind: 'con', token: r.token, boot: conBoot_(Auth.session(r.token)) };
+  });
+}
+
+/** أول دخول للمشرف: اسم الدخول + رقم يختاره (يُرفض المحجوز) */
+function apiSupSetPin(username, pin) {
+  return Db.withLock(function () {
+    ensureSchemaVersion_();
+    var r = Auth.supSetPin(username, pin);
+    return { token: r.token, boot: supBoot_(Auth.session(r.token)) };
+  });
+}
+
+function sup_(token, roles, fn) {
+  var s = Auth.need(token, roles || SUP_ROLES_);
+  return Db.withLock(function () { var out = fn(s) || {}; Db.reset(); out.boot = supBoot_(s); return out; });
+}
+
+function apiPestFlag(token, d) {
+  return sup_(token, null, function (s) { d = d || {}; d.photos = savePhotos_(d.photos, 'PF'); return { n: Ops.flag(s, d) }; });
+}
+function apiPestFlagCancel(token, flagId) { return sup_(token, null, function (s) { Ops.cancelFlag(s, flagId); }); }
+function apiPestSchedule(token, hotelId, rows) { return sup_(token, ['supmgr'], function (s) { Ops.saveSchedule(s, hotelId, rows); }); }
+function apiPestZoneType(token, hotelId, zoneIds, ftype) { return sup_(token, ['supmgr'], function (s) { Ops.setZoneType(s, hotelId, zoneIds, ftype); }); }
+function apiSupAddZone(token, hotelId, floorId, name, ftype) {
+  return sup_(token, ['supmgr'], function (s) {
+    if (Ops.supHotels(s).indexOf(hotelId) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
+    var f = Db.get('Floors', floorId);
+    if (!f || f.hotel_id !== hotelId) throw new Error('اختر الدور أو المنطقة.');
+    if (!String(name || '').trim()) throw new Error('اكتب اسم المرفق.');
+    addFacilities_(hotelId, floorId, [{ name: name, ac: 0 }]);
+    var r = Db.find('Rooms', function (x) { return x.floor_id === floorId && String(x.number) === String(name).trim(); });
+    if (r && ftype) Db.update('Rooms', r.room_id, { ftype: String(ftype).trim() });
+  });
+}
+
+// ───────── المتعهد: المكافحة ─────────
+function apiPestLog(token, d) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'PL'); var r = Ops.log(s, d); Db.reset(); return { result: r, boot: conBoot_(s) }; });
+}
+function apiPestTrap(token, action, d) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { var r = Ops.trap(s, action, d || {}); Db.reset(); return { result: r, boot: conBoot_(s) }; });
+}
+
+// ───────── النفايات: باركود منطقة النفايات ─────────
+function apiWaBoot(code) {
+  ensureSchemaVersion_();
+  return Ops.waBoot(Orders.hotelByCode(code));
+}
+function apiWaLogin(code, pin, geo) {
+  return Db.withLock(function () {
+    ensureSchemaVersion_();
+    var w = Ops.waLogin(code, pin, geo);
+    return { token: w.token, name: w.name, role: w.role, boot: Ops.waBoot(Orders.hotelByCode(code)) };
+  });
+}
+function apiWaSubmit(token, code, d, geo) {
+  var s = Auth.session(token);
+  return Db.withLock(function () {
+    d = d || {};
+    d.photos = savePhotos_(d.photos, 'WA');
+    var r = Ops.waSubmit(s, code, d, geo);
+    Db.reset();
+    return { id: r.id, boot: Ops.waBoot(Orders.hotelByCode(code)) };
+  });
+}
+
+// ───────── التقييم الدوري ─────────
+var EVAL_ROLES_ = ['admin', 'engineer', 'supmgr'];
+function apiEvalPreview(token, conId, from, to) { var s = Auth.need(token, EVAL_ROLES_); return Ops.evalPreview(s, conId, from, to); }
+function apiEvalIssue(token, conId, from, to, decision, note) {
+  var s = Auth.need(token, EVAL_ROLES_);
+  return Db.withLock(function () {
+    var r = Ops.evalIssue(s, conId, from, to, decision, note);
+    Db.reset();
+    return { id: r.id, boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
+  });
 }

@@ -76,6 +76,14 @@ function seedMissingLists_() {
   var recs = SEED_LISTS.filter(function (r) { return !have[r[0] + '|' + r[1] + '|' + r[2]]; })
     .map(function (r, i) { return { type: r[0], list: r[1], ar: r[2], en: r[3], status: 'active', created_by: 'system', sort: max + i + 1 }; });
   Db.insertMany('Lists', recs);
+  // عتبات وإعدادات الأنواع الجديدة (النفايات والمكافحة) دون المساس بما عُدّل
+  var th = {};
+  Db.all('Thresholds').forEach(function (t) { th[t.type + '|' + t.kpi] = true; });
+  Db.insertMany('Thresholds', SEED_THRESHOLDS.filter(function (r) { return !th[r[0] + '|' + r[1]]; })
+    .map(function (r) { return { type: r[0], kpi: r[1], full: r[2], half: r[3], weight: r[4] }; }));
+  var st = {};
+  Db.all('Settings').forEach(function (r) { st[r.key] = true; });
+  Db.insertMany('Settings', SEED_SETTINGS.filter(function (r) { return !st[r[0]]; }).map(function (r) { return { key: r[0], value: r[1], note: r[2] }; }));
   // بنود بذور قديمة استُبدلت (مثل إجراءات التكييف العامة بخدمات المتعهد): تُوقف دون حذف
   var seeded = {};
   SEED_LISTS.forEach(function (r) { seeded[r[0] + '|' + r[1] + '|' + r[2]] = true; });

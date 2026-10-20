@@ -157,7 +157,7 @@ t('الإعداد ينشئ كل الجداول ويحذف الورقة الاف�
 });
 
 t('البذور: الإعدادات والعتبات والقوائم', () => {
-  eq(run("Db.all('Thresholds').length"), 12);
+  eq(run("Db.all('Thresholds').length"), 18);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
   eq(run("Db.all('Lists')[0].item_id"), 'LST-00001');
   if (!run("Db.setting('photos_folder_id')")) throw new Error('مجلد الصور لم يُنشأ');
@@ -166,7 +166,7 @@ t('البذور: الإعدادات والعتبات والقوائم', () => {
 t('الإعداد آمن للتكرار ولا يكرر البذور', () => {
   run('Db.reset(); setupAwan()');
   run('Db.reset()');
-  eq(run("Db.all('Thresholds').length"), 12);
+  eq(run("Db.all('Thresholds').length"), 18);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
 });
 
@@ -465,7 +465,7 @@ t('العتبات: المجموع 100، والاستجابة الأقل أفضل
   run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify(ok)})`);
   const th = run(`apiAdmBoot('${adminTok}')`).thresholds.ac;
   eq(th.resp.full, 25); eq(th.sat.half, 75); eq(th.ready.weight, 30);
-  eq(run(`Db.all('Thresholds').length`), 12);
+  eq(run(`Db.all('Thresholds').length`), 18);
   eq(run(`apiAdmBoot('${adminTok}')`).thresholds.el.resp.full, 45);
 });
 
@@ -656,6 +656,100 @@ t('التسهيلات: تنبيه الرافع بطلب مفتوح لنفس ال
   const r = run(`apiEngBulkClose('${engTok}', ['${a}', '${b}'], 'good')`);
   eq(r.n, 2); eq(run(`Db.get('WorkOrders', '${a}').status`), 'closed'); eq(run(`Db.get('WorkOrders', '${b}').sat`), 'good');
   eq(run(`apiReqBoot('WARIF2')`).open.some(o => o.id === a), false);
+});
+
+let waPin, pcPin, mgrTok, supTok;
+t('الإشراف: حساب بلا كلمة مرور، يختار رقمه السري أول مرة، ويُرفض الرقم المحجوز', () => {
+  eq(run(`apiAdmAddUser('${adminTok}', { name: 'مدير الإشراف', role: 'supmgr', username: 'sup.mgr', hotel_ids: ['${HID}'] })`).password, null);
+  run(`apiAdmAddUser('${adminTok}', { name: 'علي المشرف', role: 'sup', username: 'sup.ali', hotel_ids: ['${HID}'] })`);
+  throws(`apiStaffLogin('sup.mgr', '')`, 'اكتب');
+  throws(`apiSupSetPin('sup.mgr', '111111')`, 'أصعب');
+  throws(`apiSupSetPin('nobody', '135792')`, 'غير معرّف');
+  throws(`apiSupSetPin('sup.mgr', '${acPin}')`, 'محجوز');
+  mgrTok = run(`apiSupSetPin('sup.mgr', '135792')`).token;
+  throws(`apiSupSetPin('sup.mgr', '246813')`, 'محدد من قبل');
+  throws(`apiSupSetPin('sup.ali', '135792')`, 'محجوز');
+  supTok = run(`apiSupSetPin('sup.ali', '246813')`).token;
+  const r = run(`apiPinWebLogin('135792')`); eq(r.kind, 'sup'); eq(r.boot.me.role, 'supmgr');
+  eq(run(`apiPinWebLogin('${acPin}')`).kind, 'con');
+  const u = run(`apiAdmBoot('${adminTok}')`).users.find(x => x.username === 'sup.ali'); eq(u.pinSet, true);
+});
+
+t('النفايات: باركود منطقة النفايات بتحقق الموقع، للمتعهد أو المشرف، والأسئلة الأربعة والتقييم', () => {
+  throws(`apiAdmSaveContract('${adminTok}', { name: 'شركة النظافة', type: 'wa', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`, 'الرفع');
+  waPin = run(`apiAdmSaveContract('${adminTok}', { name: 'شركة النظافة', type: 'wa', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', wa_per_week: 3 })`).pin;
+  throws(`apiAdmSaveHotelOps('${adminTok}', '${HID}', { geo: 'هنا' })`, 'الإحداثيات');
+  run(`apiAdmSaveHotelOps('${adminTok}', '${HID}', { geo: 'https://www.google.com/maps/place/x/@21.4225,39.8262,17z', geo_radius: 150, wa_carts: 6 })`);
+  const b = run(`apiWaBoot('WARIF2')`); eq(b.hotel.carts, 6); eq(b.hotel.geo, true); eq(b.perWeek, 3);
+  run(`CacheService.getScriptCache().remove('F_con_${HID}')`);
+  const near = { lat: 21.4230, lng: 39.8265, acc: 20 }, far = { lat: 21.4425, lng: 39.8262, acc: 20 };
+  throws(`apiWaLogin('WARIF2', '${waPin}', null)`, 'الموقع مطلوب');
+  throws(`apiWaLogin('WARIF2', '${waPin}', ${JSON.stringify(far)})`, 'خارج');
+  throws(`apiWaLogin('WARIF2', '${acPin}', ${JSON.stringify(near)})`, 'النفايات');
+  const w = run(`apiWaLogin('WARIF2', '${waPin}', ${JSON.stringify(near)})`); eq(w.role, 'contractor');
+  throws(`apiWaSubmit('${w.token}', 'WARIF2', { truck: 'نعم', removed: 'لا', washed: 'نعم', rating: 4 }, ${JSON.stringify(near)})`, 'العربات');
+  throws(`apiWaSubmit('${w.token}', 'WARIF2', { truck: 'نعم', removed: 'نعم', washed: 'نعم' }, ${JSON.stringify(near)})`, 'قيّم');
+  throws(`apiWaSubmit('${w.token}', 'WARIF2', { truck: 'نعم', removed: 'نعم', washed: 'نعم', rating: 4 }, ${JSON.stringify(far)})`, 'خارج');
+  run(`apiWaSubmit('${w.token}', 'WARIF2', { truck: 'نعم', removed: 'نعم', washed: 'نعم', rating: 4 }, ${JSON.stringify(near)})`);
+  const s = run(`apiWaLogin('WARIF2', '246813', ${JSON.stringify(near)})`); eq(s.role, 'sup');
+  const r = run(`apiWaSubmit('${s.token}', 'WARIF2', { truck: 'لا', left_carts: 5, rating: 2, note: 'لم تحضر' }, ${JSON.stringify(near)})`);
+  const v = run(`Db.get('WasteVisits', '${r.id}')`); eq(v.removed, 'لا'); eq(v.by_name, 'علي المشرف');
+  const sb = run(`apiSupBoot('${mgrTok}')`); eq(sb.waste.length, 2); eq(sb.hotels[0].wa.perWeek, 3);
+  // ملاحظة مدير الفندق للإشراف تصل لمدير الإشراف
+  eq(sb.notes.some(n => n.service === 'wa'), true);
+  run(`apiNoteSeen('${mgrTok}', '${sb.notes.find(n => n.service === 'wa').id}')`);
+  throws(`apiNoteSeen('${supTok}', '${sb.notes[0].id}')`, 'صلاحية');
+});
+
+t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف، معالجة المتعهد تُنجز البلاغ، والمصائد', () => {
+  pcPin = run(`apiAdmSaveContract('${adminTok}', { name: 'مكافحة الخليج', type: 'pc', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`).pin;
+  const fl = run(`floorsOf_('${HID}')`);
+  const svc = fl.find(f => f.kind === 'service') || fl[0];
+  throws(`apiSupAddZone('${supTok}', '${HID}', '${svc.id}', 'المطبخ الرئيسي', 'المطبخ')`, 'صلاحية');
+  run(`apiSupAddZone('${mgrTok}', '${HID}', '${svc.id}', 'المطبخ الرئيسي', 'المطبخ')`);
+  throws(`apiPestSchedule('${mgrTok}', '${HID}', { 'المطبخ': 'x' })`, 'الدورية');
+  run(`apiPestSchedule('${mgrTok}', '${HID}', { 'غرف النزلاء': 30, 'المطبخ': 7 })`);
+  let st = run(`apiSupBoot('${mgrTok}')`).pest.hotels[HID].floors;
+  const zones = [].concat(...st.map(f => f.zones));
+  const kitchen = zones.find(z => z.name === 'المطبخ الرئيسي'), room = zones.find(z => z.name === '712');
+  eq(kitchen.ftype, 'المطبخ'); eq(kitchen.every, 7); eq(kitchen.overdue, true); eq(room.ftype, 'غرف النزلاء');
+  throws(`apiPestFlag('${supTok}', { hotel_id: '${HID}', zone: '${room.id}', kind: 'infest' })`, 'الآفة');
+  run(`apiPestFlag('${supTok}', { hotel_id: '${HID}', zone: '${room.id}', kind: 'ready' })`);
+  run(`apiPestFlag('${supTok}', { hotel_id: '${HID}', zone: '${kitchen.id}', kind: 'infest', pests: ['صراصير'], note: 'تحت المغسلة' })`);
+  const ct = run(`apiConLogin('WARIF2', '${pcPin}', ${JSON.stringify({ lat: 21.4230, lng: 39.8265, acc: 20 })})`).token;
+  const cb = run(`apiConBoot('${ct}')`); eq(cb.me.type, 'pc'); eq(cb.pest.flags.filter(f => f.status === 'open').length, 2);
+  throws(`apiPestLog('${ct}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'spray', finding: 'none' })`, 'المادة');
+  const r = run(`apiPestLog('${ct}', { hotel_id: '${HID}', zones: ['${room.id}', '${kitchen.id}'], kind: 'spray', pests: ['صراصير'], material: 'جل', finding: 'light' })`);
+  eq(r.result.flags, 2);
+  st = run(`apiSupBoot('${mgrTok}')`).pest;
+  const k2 = [].concat(...st.hotels[HID].floors.map(f => f.zones)).find(z => z.id === kitchen.id);
+  eq(k2.overdue, false); eq(k2.flags.length, 0); eq(st.flags.filter(f => f.status === 'done').length, 2);
+  const tp = run(`apiPestTrap('${ct}', 'place', { hotel_id: '${HID}', zone: '${kitchen.id}', kind: 'محطة طعوم قوارض', every_days: 7 })`).result;
+  eq(tp.label, 'T-01');
+  run(`apiPestTrap('${ct}', 'check', { trap_id: '${tp.id}', result: 'نظيفة' })`);
+  eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps[0].result, 'نظيفة');
+  run(`apiPestTrap('${ct}', 'remove', { trap_id: '${tp.id}' })`);
+  eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps.length, 0);
+  // متعهد التكييف لا يسجّل مكافحة
+  throws(`apiPestLog('${acTok}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`, 'المكافحة');
+});
+
+t('التقييم الدوري: يصدره المختص لفترة يختارها، ويُحفظ بدرجته وقراره ويظهر في التقارير', () => {
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10), from = yesterday.slice(0, 8) + '01';
+  const wa = run(`Db.find('Contractors', c => c.type === 'wa').con_id`), ac = run(`Db.find('Contractors', c => c.type === 'ac').con_id`);
+  throws(`apiEvalPreview('${engTok}', '${wa}', '${from}', '${today}')`, 'صلاحية');
+  throws(`apiEvalPreview('${mgrTok}', '${ac}', '${from}', '${today}')`, 'صلاحية');
+  const p = run(`apiEvalPreview('${mgrTok}', '${wa}', '${from}', '${today}')`);
+  eq(p.X.visits, 2); eq(p.X.noTruck, 1); eq(p.V.wash, 100); eq(p.V.clean, 60);
+  throws(`apiEvalIssue('${mgrTok}', '${wa}', '${from}', '${today}', 'ممتاز', '')`, 'القرار');
+  run(`apiEvalIssue('${mgrTok}', '${wa}', '${from}', '${today}', 'مستمر مع خطة تحسين', 'تأخر الشاحنة مرة')`);
+  const ev = run(`apiSupBoot('${mgrTok}')`).evals; eq(ev.length, 1); eq(ev[0].from, from); eq(ev[0].decision, 'مستمر مع خطة تحسين');
+  const pa = run(`apiEvalPreview('${engTok}', '${ac}', '${from}', '${today}')`); if (pa.V.resp == null && pa.X.orders === 0) throw new Error('no ac data');
+  run(`apiEvalIssue('${engTok}', '${ac}', '${from}', '${today}', 'مستمر', '')`);
+  eq(run(`apiEngBoot('${engTok}')`).evals.length, 1);
+  eq(run(`apiConBoot('${acTok}')`).evals.length, 1);
+  const pc = run(`Db.find('Contractors', c => c.type === 'pc').con_id`);
+  const pp = run(`apiEvalPreview('${mgrTok}', '${pc}', '${from}', '${today}')`); eq(pp.X.flags, 2); eq(pp.X.open, 0);
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);
