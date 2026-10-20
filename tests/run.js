@@ -523,16 +523,18 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   const rep = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === r.id).reports.slice(-1)[0];
   eq(rep.action.join(), 'تعبئة فريون 60%');
   // الخدمات مسعّرة وتُجمع في الكشف الشهري بعد الإغلاق، والإجراءات العامة القديمة أُوقفت
-  const it = run(`Db.find('Lists', l => l.ar === 'تعبئة فريون 60%')`);
-  throws(`apiAdmListSave('${adminTok}', { id: '${it.item_id}', ar: 'تعبئة فريون 60%', en: 'Freon refill 60%', price: 'abc' })`, 'السعر');
-  run(`apiAdmListSave('${adminTok}', { id: '${it.item_id}', ar: 'تعبئة فريون 60%', en: 'Freon refill 60%', price: '120' })`);
+  const ctr = run(`Db.find('Contracts', c => c.type === 'ac').contract_id`);
+  throws(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', { 'تعبئة فريون 60%': 'abc' })`, 'السعر');
+  run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', { 'تعبئة فريون 60%': '120', 'استبدال كمبروسر': '2400', 'تغيير ريموت': '' })`);
+  eq(JSON.stringify(run(`pricesOf_(Db.get('Contracts', '${ctr}'))`)), JSON.stringify({ 'تعبئة فريون 60%': 120, 'استبدال كمبروسر': 2400 }));
+  eq(run(`apiEngBoot('${engTok}')`).hotels.find(x => x.id === HID).cons.ac.prices['استبدال كمبروسر'], 2400);
   run(`Db.insert('Lists', { type: 'ac', list: 'action', ar: 'تعبئة غاز', en: 'x', status: 'active', created_by: 'system', sort: 1 })`);
   run('seedMissingLists_()');
   eq(run(`Db.find('Lists', l => l.ar === 'تعبئة غاز').status`), 'rejected');
   run(`apiEngAct('${engTok}', '${r.id}', 'close', { sat: 'good' })`);
   const k = run(`apiKpiBoot('${engTok}')`);
-  eq(k.prices['ac|تعبئة فريون 60%'], 120);
   const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  eq(k.prices[con + '|تعبئة فريون 60%'], 120);
   const row = k.rows.find(x => x.con === con && x.hotel === HID && x.month === k.month);
   eq(row.d.acts['تعبئة فريون 60%'], 1);
 });

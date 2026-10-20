@@ -292,7 +292,7 @@ function engBoot_(s) {
       var cons = {};
       ['ac', 'el'].forEach(function (t) {
         var c = Orders.activeContract(id, t);
-        if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null };
+        if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null, prices: pricesOf_(c) };
       });
       return { id: id, name: h.name, floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
     }),
@@ -353,7 +353,7 @@ function apiKpiBoot(token) {
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
     month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30,
-    prices: (function () { var p = {}; Db.all('Lists', function (l) { return l.list === 'action' && l.price !== '' && l.price != null; }).forEach(function (l) { p[l.type + '|' + l.ar] = Number(l.price); }); return p; })(),
+    prices: (function () { var p = {}; R.contracts.slice().sort(function (a, b) { return Orders.ms(a.created_at) - Orders.ms(b.created_at); }).forEach(function (c) { var m = pricesOf_(c); Object.keys(m).forEach(function (k) { p[c.con_id + '|' + k] = Number(m[k]); }); }); return p; })(),
     pmTarget: (function () { var t = {}; R.contracts.forEach(function (c) { if (Number(c.pm_per_month) > 0) Orders.csv(c.hotel_ids).forEach(function (h) { t[c.con_id + '|' + h] = Number(c.pm_per_month); }); }); return t; })()
   };
 }
@@ -366,8 +366,19 @@ function apiStatement(token, conId, hotelId, month) {
   if (hotelId && hotelId !== 'all') scope = scope.filter(function (h) { return h === hotelId; });
   var con = R.cons[conId];
   if (!con) throw new Error('المتعهد غير موجود.');
-  var price = {}, en = {};
-  Db.all('Lists', function (l) { return l.list === 'action' && (l.status === 'active' || l.status === 'rejected'); }).forEach(function (l) { if (l.price !== '' && l.price != null) price[l.ar] = Number(l.price); en[l.ar] = l.en || ''; });
+  var en = {};
+  Db.all('Lists', function (l) { return l.list === 'action'; }).forEach(function (l) { en[l.ar] = l.en || ''; });
+  // السعر من عقد المتعهد لذلك الفندق (يُكتب في صفحة التعاقد)
+  var cprice = function (o) {
+    var best = null;
+    R.contracts.forEach(function (c) {
+      if (c.con_id !== o.con_id || c.type !== o.type || Orders.csv(c.hotel_ids).indexOf(o.hotel_id) === -1) return;
+      var t = Orders.ms(o.created_at), st = Orders.ms(c.start) || 0, en2 = (Orders.ms(c.end) || 9e15) + 864e5;
+      var fits = t >= st && t <= en2;
+      if (!best || (fits && !best.fits) || (fits === best.fits && Orders.ms(c.created_at) > Orders.ms(best.c.created_at))) best = { c: c, fits: fits };
+    });
+    return best ? pricesOf_(best.c) : {};
+  };
   var lines = {}, orders = [];
   Db.all('WorkOrders', function (o) { return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && Kpi.month(o.created_at) === month; })
     .sort(function (a, b) { return Orders.ms(a.closed_at) - Orders.ms(b.closed_at); })
@@ -375,8 +386,12 @@ function apiStatement(token, conId, hotelId, month) {
       var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
       var acts = null; (Array.isArray(reps) ? reps : [reps]).forEach(function (r) { if (r && r.action && r.action.length) acts = r.action; });
       if (!acts) return;
-      var amount = 0;
-      acts.forEach(function (a) { var L = lines[a] || (lines[a] = { svc: a, en: en[a] || '', qty: 0, price: price[a] == null ? null : price[a] }); L.qty++; if (L.price != null) amount += L.price; });
+      var amount = 0, price = cprice(o);
+      acts.forEach(function (a) {
+        var pr = price[a] == null ? null : Number(price[a]), key = a + '|' + (pr == null ? '' : pr);
+        var L = lines[key] || (lines[key] = { svc: a, en: en[a] || '', qty: 0, price: pr });
+        L.qty++; if (pr != null) amount += pr;
+      });
       var v = Orders.view(R, o, false);
       orders.push({ id: o.wo_id, hotel: v.hotel, loc: v.loc, closed: v.closed, acts: acts, amount: amount });
     });
@@ -434,7 +449,7 @@ function admBoot_() {
           return {
             id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
-            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month
+            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x)
           };
         })
       };
@@ -645,6 +660,27 @@ function apiAdmSaveElevator(token, hotelId, d) {
 }
 
 /** d: con_id? name type phone contact hotel_ids[] elevator_ids[] start end alert_days resp_normal resp_urgent pm_per_month */
+/** أسعار خدمات العقد: {الخدمة: ريال}، والخانة الفارغة تُترك */
+function cleanPrices_(obj) {
+  var out = {};
+  Object.keys(obj || {}).forEach(function (k) { var v = price_(obj[k]); if (v !== '') out[String(k).trim()] = v; });
+  return out;
+}
+function pricesOf_(contract) {
+  var p = contract && contract.prices;
+  if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { p = {}; } }
+  return p || {};
+}
+
+/** أسعار عقد قائم (عقد التكييف) */
+function apiAdmSaveContractPrices(token, contractId, prices) {
+  return adm_(token, function () {
+    if (!Db.get('Contracts', contractId)) throw new Error('العقد غير موجود.');
+    Db.update('Contracts', contractId, { prices: cleanPrices_(prices) });
+    return {};
+  });
+}
+
 /** عدة عناوين بريد مفصولة بفاصلة أو سطر أو مسافة */
 function emails_(v) {
   var list = String(v || '').split(/[\s,،;]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(String);
@@ -677,7 +713,7 @@ function apiAdmSaveContract(token, d) {
       con_id: conId, type: d.type, hotel_ids: d.hotel_ids.join(','), elevator_ids: (d.elevator_ids || []).join(','),
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
-      prev_contract_id: d.prev_contract_id || '', created_at: new Date()
+      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices)
     });
     return { pin: pin };
   });
