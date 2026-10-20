@@ -220,7 +220,7 @@ var Orders = (function () {
     if (isPm) pmParse_(d);
     else if (con.type === 'el' && d.outcome !== 'report' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var o = create({
-      hotel_id: hotelId, type: con.type, kind: isPm ? 'periodic' : (d.outcome === 'report' ? 'report' : 'diag'), source: 'contractor', con_id: con.con_id,
+      hotel_id: hotelId, type: con.type, kind: isPm ? 'periodic' : (d.outcome === 'report' ? 'report' : (d.outcome === 'fix' ? 'corrective' : 'diag')), source: 'contractor', con_id: con.con_id,
       floor_id: d.floor_id || '', room: d.room || '', equip: isPm ? (d.units || []).join('، ') : (d.equip || ''),
       symptom: isPm ? 'صيانة دورية' : (d.sym || d.title || '')
     }, con.name).order;

@@ -125,6 +125,7 @@ function ensureSchemaVersion_() {
 
 // ───────── فريق العمل: رفع الطلب ─────────
 function apiReqBoot(code) {
+  ensureSchemaVersion_();
   var h = Orders.hotelByCode(code);
   return {
     hotel: { code: h.code, name: h.name, towers: towersOf_(h) },
@@ -161,6 +162,7 @@ function apiReqSubmit(code, d) {
 // ───────── المتعهد ─────────
 function apiConLogin(code, pin) {
   return Db.withLock(function () {
+    ensureSchemaVersion_();
     var h = Orders.hotelByCode(code);
     var r = Auth.conLogin(h, pin);
     if (!Orders.activeContract(h.hotel_id, r.con.type, r.con.con_id)) {
@@ -174,6 +176,7 @@ function apiConLogin(code, pin) {
 
 function apiConWebLogin(pin) {
   return Db.withLock(function () {
+    ensureSchemaVersion_();
     var r = Auth.conWebLogin(pin);
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
@@ -234,7 +237,7 @@ function conBoot_(s) {
   };
 }
 
-function apiConBoot(token) { return conBoot_(Auth.need(token, ['contractor'])); }
+function apiConBoot(token) { var s = Auth.need(token, ['contractor']); ensureSchemaVersion_(); return conBoot_(s); }
 
 /** action: submit | new | rescue */
 function apiConAct(token, action, woId, d) {

@@ -578,5 +578,17 @@ t('المتعهد: أكثر من بريد، والكشف الشهري يجمع �
   throws(`apiStatement('${acTok}', '${con}', 'all', '2026-10-01', '2026-10-31')`, 'صلاحية');
 });
 
+t('التكييف: إصلاح مباشر بمبادرة المتعهد بالإجراء المتخذ، والدخول يزامن الهيكل والقوائم', () => {
+  run(`Db.update('Settings', 'schema_version', { value: 1 })`);
+  run(`Db.all('Lists').filter(l => l.list === 'action' && l.type === 'ac').forEach(l => Db.remove('Lists', l.item_id))`);
+  const b = run(`apiConBoot('${acTok}')`);
+  eq(b.lists.action.some(x => x.ar === 'تغيير ريموت'), true);
+  eq(String(run(`Db.setting('schema_version')`)), String(run('SCHEMA_VERSION')));
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const r = run(`apiConAct('${acTok}', 'new', null, { outcome: 'fix', hotel_id: '${HID}', floor_id: '${fl}', room: '707', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  const o = run(`Db.get('WorkOrders', '${r.result.id}')`);
+  eq(o.kind, 'corrective'); eq(o.status, 'matching'); eq(o.room, '707');
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);
