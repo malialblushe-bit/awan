@@ -567,11 +567,15 @@ t('المتعهد: أكثر من بريد، والكشف الشهري يجمع �
   throws(`apiAdmSaveConInfo('${adminTok}', '${con}', { emails: 'a@x.com, خطأ' })`, 'البريد غير صحيح');
   run(`apiAdmSaveConInfo('${adminTok}', '${con}', { phone: '0500000000', emails: 'Ops@Cool.sa, billing@cool.sa ops@cool.sa' })`);
   eq(run(`apiAdmBoot('${adminTok}')`).contractors.find(c => c.id === con).emails.join(), 'ops@cool.sa,billing@cool.sa');
+  throws(`apiStatement('${engTok}', '${con}', 'all', '2026-10-20', '2026-10-01')`, 'الفترة');
+  const empty = run(`apiStatement('${engTok}', '${con}', 'all', '2020-01-01', '2020-01-31')`);
+  eq(empty.orders.length, 0); eq(empty.total, 0);
   const st = run(`apiStatement('${engTok}', '${con}', 'all', Kpi.month(new Date()))`);
+  eq(st.from.slice(8), '01');
   const l = st.lines.find(x => x.svc === 'تعبئة فريون 60%');
   eq(l.qty, 1); eq(l.price, 120); eq(l.total, 120);
   eq(st.total >= 120, true); eq(st.orders.length >= 1, true); eq(st.con.emails.length, 2);
-  throws(`apiStatement('${acTok}', '${con}', 'all', '2026-10')`, 'صلاحية');
+  throws(`apiStatement('${acTok}', '${con}', 'all', '2026-10-01', '2026-10-31')`, 'صلاحية');
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

@@ -358,8 +358,15 @@ function apiKpiBoot(token) {
   };
 }
 
-/** الكشف الشهري للطباعة: خدمات العمليات المغلقة بعد المطابقة لمتعهد في شهر (حسب تاريخ الرفع) */
-function apiStatement(token, conId, hotelId, month) {
+/** كشف الخدمات المنفذة للطباعة: خدمات العمليات المغلقة بعد المطابقة لمتعهد خلال فترة يختارها المستخدم */
+function apiStatement(token, conId, hotelId, from, to) {
+  // الفترة بتاريخ الإغلاق (المطابقة): من–إلى شاملة؛ أو شهر كامل إن جاء «YYYY-MM» وحده
+  if (/^\d{4}-\d{2}$/.test(String(from)) && !to) {
+    var y = Number(from.slice(0, 4)), m = Number(from.slice(5, 7)), last = new Date(y, m, 0).getDate();
+    to = from + '-' + (last < 10 ? '0' : '') + last; from = from + '-01';
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to)) || to < from) throw new Error('حدّد الفترة: من تاريخ إلى تاريخ.');
+  var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
   var s = Auth.need(token, ['admin', 'engineer', 'management']);
   var me = Db.get('Users', s.id), R = Orders.refs();
   var scope = s.role === 'engineer' ? Orders.csv(me.hotel_ids) : Object.keys(R.hotels);
@@ -380,7 +387,7 @@ function apiStatement(token, conId, hotelId, month) {
     return best ? pricesOf_(best.c) : {};
   };
   var lines = {}, orders = [];
-  Db.all('WorkOrders', function (o) { return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && Kpi.month(o.created_at) === month; })
+  Db.all('WorkOrders', function (o) { var d = dayOf(o.closed_at); return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && d >= from && d <= to; })
     .sort(function (a, b) { return Orders.ms(a.closed_at) - Orders.ms(b.closed_at); })
     .forEach(function (o) {
       var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
@@ -398,7 +405,7 @@ function apiStatement(token, conId, hotelId, month) {
   var list = Object.keys(lines).map(function (k) { var L = lines[k]; L.total = L.price == null ? null : Math.round(L.price * L.qty * 100) / 100; return L; })
     .sort(function (a, b) { return b.qty - a.qty; });
   return {
-    con: { name: con.name, type: con.type, emails: Orders.csv(con.emails) }, month: month,
+    con: { name: con.name, type: con.type, emails: Orders.csv(con.emails) }, from: from, to: to,
     hotels: scope.map(function (h) { return (R.hotels[h] || {}).name || h; }),
     lines: list, orders: orders,
     total: Math.round(list.reduce(function (a, L) { return a + (L.total || 0); }, 0) * 100) / 100,
