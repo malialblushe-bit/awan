@@ -353,7 +353,41 @@ function apiKpiBoot(token) {
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
     month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30,
+    prices: (function () { var p = {}; Db.all('Lists', function (l) { return l.list === 'action' && l.price !== '' && l.price != null; }).forEach(function (l) { p[l.type + '|' + l.ar] = Number(l.price); }); return p; })(),
     pmTarget: (function () { var t = {}; R.contracts.forEach(function (c) { if (Number(c.pm_per_month) > 0) Orders.csv(c.hotel_ids).forEach(function (h) { t[c.con_id + '|' + h] = Number(c.pm_per_month); }); }); return t; })()
+  };
+}
+
+/** الكشف الشهري للطباعة: خدمات العمليات المغلقة بعد المطابقة لمتعهد في شهر (حسب تاريخ الرفع) */
+function apiStatement(token, conId, hotelId, month) {
+  var s = Auth.need(token, ['admin', 'engineer', 'management']);
+  var me = Db.get('Users', s.id), R = Orders.refs();
+  var scope = s.role === 'engineer' ? Orders.csv(me.hotel_ids) : Object.keys(R.hotels);
+  if (hotelId && hotelId !== 'all') scope = scope.filter(function (h) { return h === hotelId; });
+  var con = R.cons[conId];
+  if (!con) throw new Error('المتعهد غير موجود.');
+  var price = {}, en = {};
+  Db.all('Lists', function (l) { return l.list === 'action' && (l.status === 'active' || l.status === 'rejected'); }).forEach(function (l) { if (l.price !== '' && l.price != null) price[l.ar] = Number(l.price); en[l.ar] = l.en || ''; });
+  var lines = {}, orders = [];
+  Db.all('WorkOrders', function (o) { return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && Kpi.month(o.created_at) === month; })
+    .sort(function (a, b) { return Orders.ms(a.closed_at) - Orders.ms(b.closed_at); })
+    .forEach(function (o) {
+      var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
+      var acts = null; (Array.isArray(reps) ? reps : [reps]).forEach(function (r) { if (r && r.action && r.action.length) acts = r.action; });
+      if (!acts) return;
+      var amount = 0;
+      acts.forEach(function (a) { var L = lines[a] || (lines[a] = { svc: a, en: en[a] || '', qty: 0, price: price[a] == null ? null : price[a] }); L.qty++; if (L.price != null) amount += L.price; });
+      var v = Orders.view(R, o, false);
+      orders.push({ id: o.wo_id, hotel: v.hotel, loc: v.loc, closed: v.closed, acts: acts, amount: amount });
+    });
+  var list = Object.keys(lines).map(function (k) { var L = lines[k]; L.total = L.price == null ? null : Math.round(L.price * L.qty * 100) / 100; return L; })
+    .sort(function (a, b) { return b.qty - a.qty; });
+  return {
+    con: { name: con.name, type: con.type, emails: Orders.csv(con.emails) }, month: month,
+    hotels: scope.map(function (h) { return (R.hotels[h] || {}).name || h; }),
+    lines: list, orders: orders,
+    total: Math.round(list.reduce(function (a, L) { return a + (L.total || 0); }, 0) * 100) / 100,
+    missing: list.filter(function (L) { return L.price == null; }).length
   };
 }
 
@@ -392,7 +426,7 @@ function admBoot_() {
     contractors: Object.keys(R.cons).map(function (k) {
       var c = R.cons[k];
       return {
-        id: c.con_id, name: c.name, type: c.type, phone: c.phone || '', contact: c.contact || '', hasPin: !!c.pin_hash,
+        id: c.con_id, name: c.name, type: c.type, phone: String(c.phone || ''), contact: c.contact || '', emails: Orders.csv(c.emails), hasPin: !!c.pin_hash,
         contracts: R.contracts.filter(function (x) { return x.con_id === c.con_id; }).map(function (x) {
           var s = x.start ? Utilities.formatDate(new Date(x.start), 'Asia/Riyadh', 'yyyy-MM-dd') : '';
           var e = x.end ? Utilities.formatDate(new Date(x.end), 'Asia/Riyadh', 'yyyy-MM-dd') : '';
@@ -411,7 +445,7 @@ function admBoot_() {
     pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
     lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
       .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
-      .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), status: l.status, by: l.created_by || '' }; }),
+      .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), price: l.price === '' || l.price == null ? '' : Number(l.price), status: l.status, by: l.created_by || '' }; }),
     thresholds: Kpi.thresholds()
   };
 }
@@ -611,6 +645,22 @@ function apiAdmSaveElevator(token, hotelId, d) {
 }
 
 /** d: con_id? name type phone contact hotel_ids[] elevator_ids[] start end alert_days resp_normal resp_urgent pm_per_month */
+/** عدة عناوين بريد مفصولة بفاصلة أو سطر أو مسافة */
+function emails_(v) {
+  var list = String(v || '').split(/[\s,،;]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(String);
+  list.forEach(function (e) { if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(e)) throw new Error('البريد غير صحيح: ' + e); });
+  return list.filter(function (e, i) { return list.indexOf(e) === i; });
+}
+
+/** بيانات تواصل المتعهد: الجوال وجهة الاتصال والبريد */
+function apiAdmSaveConInfo(token, conId, d) {
+  return adm_(token, function () {
+    if (!Db.get('Contractors', conId)) throw new Error('المتعهد غير موجود.');
+    Db.update('Contractors', conId, { phone: String(d.phone || '').trim(), contact: String(d.contact || '').trim(), emails: emails_(d.emails).join(',') });
+    return {};
+  });
+}
+
 function apiAdmSaveContract(token, d) {
   return adm_(token, function () {
     if (['ac', 'el', 'sf'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
@@ -619,7 +669,7 @@ function apiAdmSaveContract(token, d) {
     var pin = null, conId = d.con_id;
     if (!conId) {
       if (!String(d.name || '').trim()) throw new Error('اكتب اسم المتعهد.');
-      var c = Db.insert('Contractors', { name: d.name.trim(), type: d.type, phone: d.phone || '', contact: d.contact || '', failed: 0, lang: 'ar', active: true });
+      var c = Db.insert('Contractors', { name: d.name.trim(), type: d.type, phone: d.phone || '', contact: d.contact || '', emails: emails_(d.emails).join(','), failed: 0, lang: 'ar', active: true });
       conId = c.con_id;
       pin = Auth.setPin(conId);
     }
@@ -678,6 +728,13 @@ function apiAdmListAct(token, id, action, d) {
   });
 }
 
+function price_(v) {
+  if (v === '' || v == null) return '';
+  var t = String(v).trim(), n = Number(t);
+  if (!/^\d+(\.\d+)?$/.test(t) || isNaN(n)) throw new Error('السعر رقم بالريال.');
+  return n;
+}
+
 /** بند معتمد: إضافة أو تعديل الصياغة والترجمة. d: {id?, type, list, ar, en} */
 function apiAdmListSave(token, d) {
   return adm_(token, function () {
@@ -686,13 +743,15 @@ function apiAdmListSave(token, d) {
     if (d.id) {
       var l = Db.get('Lists', d.id);
       if (!l) throw new Error('البند غير موجود.');
-      Db.update('Lists', d.id, { ar: ar, en: en, orig: ar !== String(l.ar) ? (l.orig || l.ar) : (l.orig || '') });
+      var patch = { ar: ar, en: en, orig: ar !== String(l.ar) ? (l.orig || l.ar) : (l.orig || '') };
+      if (d.price !== undefined) patch.price = price_(d.price);
+      Db.update('Lists', d.id, patch);
       return {};
     }
     if (['ac', 'el', 'all'].indexOf(d.type) === -1 || LIST_KEYS.indexOf(d.list) === -1) throw new Error('اختر القائمة.');
     var max = 0;
     Db.all('Lists', function (x) { return x.list === d.list; }).forEach(function (x) { max = Math.max(max, Number(x.sort) || 0); });
-    Db.insert('Lists', { type: d.type, list: d.list, ar: ar, en: en, status: 'active', created_by: 'admin', sort: max + 1 });
+    Db.insert('Lists', { type: d.type, list: d.list, ar: ar, en: en, price: price_(d.price), status: 'active', created_by: 'admin', sort: max + 1 });
     return {};
   });
 }

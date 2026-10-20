@@ -54,7 +54,7 @@ var Kpi = (function () {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,
       trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0, pm: 0,
-      parts: {}, causes: {}, syms: {}, locs: {}
+      acts: {}, parts: {}, causes: {}, syms: {}, locs: {}
     };
     mine.forEach(function (o) {
       // الاستجابة: الطلبات التي أُسندت له ووصل إليها (لا ما فتحه بنفسه)
@@ -94,6 +94,12 @@ var Kpi = (function () {
       if (reps && !Array.isArray(reps)) reps = [reps];
       // آخر قيمة مكتوبة لكل حقل عبر تقارير العملية (التقرير المعاد قد لا يكررها)
       if (o.kind === 'periodic') return;   // الزيارة الدورية لا تدخل أنماط الأعطال؛ متابعاتها تدخل
+      // الكشف الشهري: خدمات آخر تقرير فيه إجراء، للعمليات المغلقة بعد المطابقة فقط (لا تُحسب إعادة التسليم مرتين)
+      if (o.status === 'closed') {
+        var lastAct = null;
+        (reps || []).forEach(function (r) { if (r && r.action && r.action.length) lastAct = r.action; });
+        (lastAct || []).forEach(function (a) { bump_(d.acts, canon(o.type, 'action', a)); });
+      }
       var part = '', cause = [], sym = '';
       (reps || []).forEach(function (r) {
         if (!r || ['fix', 'diag', 'comp'].indexOf(r.outcome) === -1) return;

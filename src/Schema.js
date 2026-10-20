@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 6;
+var SCHEMA_VERSION = 8;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -39,7 +39,7 @@ var SCHEMA = [
 
   { name: 'Contractors', cols: [
     ['con_id', 'المعرّف'], ['name', 'الاسم'], ['type', 'ac = تكييف · el = مصاعد · sf = سلامة'],
-    ['phone', 'الجوال'], ['contact', 'جهة الاتصال'],
+    ['phone', 'الجوال'], ['contact', 'جهة الاتصال'], ['emails', 'البريد (أكثر من عنوان مفصولة بفاصلة)'],
     ['pin_hash', 'الرقم السري مشفّراً'], ['salt', 'الملح'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
 
@@ -54,7 +54,7 @@ var SCHEMA = [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
     ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الإجراء المتخذ · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض'],
     ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · merged · rejected'],
-    ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة']] },
+    ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة'], ['price', 'السعر بالريال (لخدمات الإجراء)']] },
 
   { name: 'Thresholds', cols: [
     ['type', 'نوع المتعهد'], ['kpi', 'resp · ready · info · sat'],
@@ -137,8 +137,15 @@ var SEED_LISTS = [
   ['ac', 'parts', 'جلدة', 'Gasket'], ['ac', 'parts', 'كباستر', 'Capacitor'], ['ac', 'parts', 'مروحة', 'Fan'],
   ['ac', 'parts', 'فلتر', 'Filter'], ['ac', 'parts', 'ريموت', 'Remote'],
 
-  ['ac', 'action', 'تنظيف', 'Cleaning'], ['ac', 'action', 'تسليك التصريف', 'Drain unclogged'], ['ac', 'action', 'تعبئة غاز', 'Gas refill'],
-  ['ac', 'action', 'استبدال قطعة', 'Part replaced'], ['ac', 'action', 'ضبط الثرموستات', 'Thermostat adjusted'], ['ac', 'action', 'إصلاح توصيلات كهربائية', 'Wiring repaired'], ['ac', 'action', 'إعادة تشغيل', 'Restarted'],
+  // خدمات متعهد التكييف (لكل خدمة سعرها، وتُجمع في الكشف الشهري)
+  ['ac', 'action', 'تغيير جلبة دينمو داخلي', 'Indoor motor bushing replaced'], ['ac', 'action', 'تغيير بلور مروحة داخلي', 'Indoor fan blower replaced'],
+  ['ac', 'action', 'تصليح صوت مكيف داخلي', 'Indoor unit noise repaired'], ['ac', 'action', 'تصليح صوت مكيف خارجي', 'Outdoor unit noise repaired'],
+  ['ac', 'action', 'تركيب قريل', 'Grille replaced or serviced'], ['ac', 'action', 'تغيير ريموت', 'Remote replaced'], ['ac', 'action', 'تغيير مكان الريموت', 'Remote relocated'],
+  ['ac', 'action', 'تغيير مبيلة كبير', 'Large capacitor replaced'], ['ac', 'action', 'تغيير مبيلة صغير', 'Small capacitor replaced'],
+  ['ac', 'action', 'تصليح أسلاك محروقة', 'Burnt wiring repaired'], ['ac', 'action', 'إخراج زيت محروق', 'Burnt oil purged'],
+  ['ac', 'action', 'تصليح تنسيم (لحام مواسير النحاس)', 'Copper pipe brazing'], ['ac', 'action', 'تصليح تسريب مويا داخلي', 'Indoor water leak repaired'],
+  ['ac', 'action', 'تعبئة فريون 50%', 'Freon refill 50%'], ['ac', 'action', 'تعبئة فريون 60%', 'Freon refill 60%'], ['ac', 'action', 'تعبئة فريون 70%', 'Freon refill 70%'],
+  ['ac', 'action', 'تعبئة فريون 80%', 'Freon refill 80%'], ['ac', 'action', 'تعبئة فريون 90%', 'Freon refill 90%'], ['ac', 'action', 'تعبئة فريون 100%', 'Freon refill 100%'],
 
   ['el', 'sym', 'متوقف', 'Stopped'], ['el', 'sym', 'توقف بين الأدوار', 'Stuck between floors'], ['el', 'sym', 'الباب لا يُغلق', 'Door not closing'],
   ['el', 'sym', 'صوت أو اهتزاز', 'Noise or vibration'], ['el', 'sym', 'الأزرار لا تستجيب', 'Buttons not responding'],

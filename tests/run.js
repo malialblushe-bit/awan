@@ -508,7 +508,7 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   eq(run(`listsFor_('ac').action.length`), 0);
   eq(run('seedMissingLists_()') > 0, true);
   eq(run('seedMissingLists_()'), 0);
-  eq(run(`listsFor_('ac').action.some(x => x.ar === 'تعبئة غاز' && x.en === 'Gas refill')`), true);
+  eq(run(`listsFor_('ac').action.some(x => x.ar === 'تعبئة فريون 60%' && x.en === 'Freon refill 60%')`), true);
   const b = run(`apiEngBoot('${engTok}')`);
   eq(b.syms.ac.includes('لا يبرد'), true);
   const h = b.hotels.find(x => x.id === HID);
@@ -519,9 +519,22 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   const o = run(`Db.get('WorkOrders', '${r.id}')`);
   eq(o.symptom, 'صوت طقطقة من الوحدة'); eq(!!o.photos, true);
   throws(`apiEngCreate('${engTok}', { hotel_id: '${HID}', type: 'ac', symptom: 'x' })`, 'الدور');
-  run(`apiConAct('${acTok}', 'submit', '${r.id}', { outcome: 'fix', equip: 'AC-703-A', sym: 'صوت مرتفع', part: 'المروحة', cause: ['اتساخ'], action: ['تنظيف'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${r.id}', { outcome: 'fix', equip: 'AC-703-A', sym: 'صوت مرتفع', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], follow: 'لا' })`);
   const rep = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === r.id).reports.slice(-1)[0];
-  eq(rep.action.join(), 'تنظيف');
+  eq(rep.action.join(), 'تعبئة فريون 60%');
+  // الخدمات مسعّرة وتُجمع في الكشف الشهري بعد الإغلاق، والإجراءات العامة القديمة أُوقفت
+  const it = run(`Db.find('Lists', l => l.ar === 'تعبئة فريون 60%')`);
+  throws(`apiAdmListSave('${adminTok}', { id: '${it.item_id}', ar: 'تعبئة فريون 60%', en: 'Freon refill 60%', price: 'abc' })`, 'السعر');
+  run(`apiAdmListSave('${adminTok}', { id: '${it.item_id}', ar: 'تعبئة فريون 60%', en: 'Freon refill 60%', price: '120' })`);
+  run(`Db.insert('Lists', { type: 'ac', list: 'action', ar: 'تعبئة غاز', en: 'x', status: 'active', created_by: 'system', sort: 1 })`);
+  run('seedMissingLists_()');
+  eq(run(`Db.find('Lists', l => l.ar === 'تعبئة غاز').status`), 'rejected');
+  run(`apiEngAct('${engTok}', '${r.id}', 'close', { sat: 'good' })`);
+  const k = run(`apiKpiBoot('${engTok}')`);
+  eq(k.prices['ac|تعبئة فريون 60%'], 120);
+  const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  const row = k.rows.find(x => x.con === con && x.hotel === HID && x.month === k.month);
+  eq(row.d.acts['تعبئة فريون 60%'], 1);
 });
 
 t('الصيانة الدورية للمصاعد: زيارة واحدة لكل مصاعد العقد، والبند O أو المتوقف يفتح متابعة، و«لا ينطبق» يُتذكَّر', () => {
@@ -545,6 +558,18 @@ t('الصيانة الدورية للمصاعد: زيارة واحدة لكل م
   const row = run(`Kpi.rows(r => r.con_id === '${con}' && r.hotel_id === '${HID}', 6)`).find(x => x.month === run('Kpi.month(new Date())'));
   eq(row.d.pm, 1);
   eq(run(`apiKpiBoot('${engTok}')`).pmTarget[con + '|' + HID] >= 0, true);
+});
+
+t('المتعهد: أكثر من بريد، والكشف الشهري يجمع الخدمات بأسعارها من العمليات المغلقة', () => {
+  const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  throws(`apiAdmSaveConInfo('${adminTok}', '${con}', { emails: 'a@x.com, خطأ' })`, 'البريد غير صحيح');
+  run(`apiAdmSaveConInfo('${adminTok}', '${con}', { phone: '0500000000', emails: 'Ops@Cool.sa, billing@cool.sa ops@cool.sa' })`);
+  eq(run(`apiAdmBoot('${adminTok}')`).contractors.find(c => c.id === con).emails.join(), 'ops@cool.sa,billing@cool.sa');
+  const st = run(`apiStatement('${engTok}', '${con}', 'all', Kpi.month(new Date()))`);
+  const l = st.lines.find(x => x.svc === 'تعبئة فريون 60%');
+  eq(l.qty, 1); eq(l.price, 120); eq(l.total, 120);
+  eq(st.total >= 120, true); eq(st.orders.length >= 1, true); eq(st.con.emails.length, 2);
+  throws(`apiStatement('${acTok}', '${con}', 'all', '2026-10')`, 'صلاحية');
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

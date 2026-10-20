@@ -76,6 +76,12 @@ function seedMissingLists_() {
   var recs = SEED_LISTS.filter(function (r) { return !have[r[0] + '|' + r[1] + '|' + r[2]]; })
     .map(function (r, i) { return { type: r[0], list: r[1], ar: r[2], en: r[3], status: 'active', created_by: 'system', sort: max + i + 1 }; });
   Db.insertMany('Lists', recs);
+  // بنود بذور قديمة استُبدلت (مثل إجراءات التكييف العامة بخدمات المتعهد): تُوقف دون حذف
+  var seeded = {};
+  SEED_LISTS.forEach(function (r) { seeded[r[0] + '|' + r[1] + '|' + r[2]] = true; });
+  Db.all('Lists').forEach(function (l) {
+    if (l.created_by === 'system' && l.status === 'active' && l.type === 'ac' && l.list === 'action' && !seeded[l.type + '|' + l.list + '|' + l.ar]) Db.update('Lists', l.item_id, { status: 'rejected' });
+  });
   return recs.length;
 }
 
