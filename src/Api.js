@@ -128,7 +128,7 @@ function apiReqBoot(code) {
   ensureSchemaVersion_();
   var h = Orders.hotelByCode(code);
   return {
-    hotel: { code: h.code, name: h.name, towers: towersOf_(h) },
+    hotel: { code: h.code, name: h.name, towers: towersOf_(h), brand: h.brand || 'nawazi' },
     floors: floorsOf_(h.hotel_id),
     elevators: elevatorsOf_(h.hotel_id),
     has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el') },
@@ -244,7 +244,7 @@ function conBoot_(s) {
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
-    hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
+    hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : ''), brand: s.web ? '' : (here.brand || 'nawazi') },
     web: !!s.web,
     hotels: Object.keys(hotels).map(function (k) { return hotels[k]; }),
     jobs: jobs, archive: archive.slice(0, 50),
@@ -542,7 +542,7 @@ function admBoot_() {
       var layout = hotelLayout_(h.hotel_id);
       var elevs = elevatorCards_(h.hotel_id);
       return {
-        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h),
+        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi',
         lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
         geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
@@ -608,10 +608,12 @@ function apiAdmSaveHotel(token, d) {
       var used = {};
       Db.all('Floors', function (f) { return f.hotel_id === d.id && f.tower; }).forEach(function (f) { used[f.tower] = true; });
       Object.keys(used).forEach(function (t) { if (towers.indexOf(t) === -1) throw new Error('البرج «' + t + '» عليه أدوار، لا يمكن حذفه أو تغيير اسمه.'); });
-      Db.update('Hotels', d.id, { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(',') });
+      var up = { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(',') };
+      if (d.brand !== undefined) up.brand = d.brand === 'warf' ? 'warf' : 'nawazi';
+      Db.update('Hotels', d.id, up);
       return { id: d.id };
     }
-    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(','), active: true, created_at: new Date() });
+    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(','), brand: d.brand === 'warf' ? 'warf' : 'nawazi', active: true, created_at: new Date() });
     return { id: h.hotel_id };
   });
 }

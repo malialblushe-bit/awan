@@ -73,7 +73,7 @@ var Ops = (function () {
     var c = waContract(h.hotel_id);
     var last = Db.all('WasteVisits', function (v) { return v.hotel_id === h.hotel_id; }).sort(function (a, b) { return ms(b.at) - ms(a.at); })[0];
     return {
-      hotel: { code: h.code, name: h.name, carts: Number(h.wa_carts) || 0, geo: hasGeo_(h) },
+      hotel: { code: h.code, name: h.name, carts: Number(h.wa_carts) || 0, geo: hasGeo_(h), brand: h.brand || 'nawazi' },
       con: c ? ((Db.get('Contractors', c.con_id) || {}).name || '') : '', perWeek: c ? Number(c.wa_per_week) || 0 : 0,
       last: last ? { at: ms(last.at), by: last.by_name, truck: last.truck, removed: last.removed, left: Number(last.left_carts) || 0, rating: Number(last.rating) || 0 } : null
     };

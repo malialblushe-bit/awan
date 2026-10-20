@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 12;
+var SCHEMA_VERSION = 13;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -17,7 +17,8 @@ var SCHEMA = [
     ['towers', 'الأبراج (مفصولة بفاصلة، فارغ إن لم توجد)'],
     ['engineer_ids', 'المهندسون (معرّفات مفصولة بفاصلة)'], ['active', 'نشط'], ['created_at', 'تاريخ الإنشاء'],
     ['lat', 'خط العرض (لتحقق الموقع)'], ['lng', 'خط الطول'], ['geo_radius', 'نطاق الموقع بالمتر'],
-    ['geo_con', 'تحقق الموقع عند وصول المتعهد'], ['wa_carts', 'سعة منطقة النفايات (عربات)']] },
+    ['geo_con', 'تحقق الموقع عند وصول المتعهد'], ['wa_carts', 'سعة منطقة النفايات (عربات)'],
+    ['brand', 'هوية صفحات الفندق: nawazi = كحلي وبيج · warf = زيتي وبيج']] },
 
   { name: 'Floors', cols: [
     ['floor_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'اسم الدور أو المنطقة'],
