@@ -590,5 +590,33 @@ t('التكييف: إصلاح مباشر بمبادرة المتعهد بالإ�
   eq(o.kind, 'corrective'); eq(o.status, 'matching'); eq(o.room, '707');
 });
 
+t('الإجراء التصحيحي: من المطابقة يعود للمتعهد ويُغلق «فعّالاً» بالإغلاق، والمستقل يرد عليه المتعهد ويتحقق المهندس', () => {
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '709', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-709-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  throws(`apiEngAct('${engTok}', '${id}', 'ca', {})`, 'سبب');
+  run(`apiEngAct('${engTok}', '${id}', 'ca', { reason: 'صور غير واضحة', required: 'أرفق صورة الوحدة بعد العمل' })`);
+  let ca = run(`Db.find('CorrectiveActions', c => c.wo_id === '${id}')`);
+  eq(ca.status, 'open'); eq(run(`Db.get('WorkOrders', '${id}').status`), 'in_progress');
+  const cb = run(`apiConBoot('${acTok}')`).cas; if (!cb.some(c => c.wo_id === id && c.required.includes('صورة'))) throw new Error(JSON.stringify(cb));
+  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-709-A', action: ['تغيير ريموت'], follow: 'لا', note: 'أرفقت الصورة', photos: ['data:image/jpeg;base64,AA'] })`);
+  eq(run(`Db.get('CorrectiveActions', '${ca.ca_id}').status`), 'responded');
+  run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'ok' })`);
+  ca = run(`Db.get('CorrectiveActions', '${ca.ca_id}')`); eq(ca.status, 'closed'); eq(ca.effective, 'نعم');
+  // مستقل
+  const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
+  throws(`apiEngCA('${engTok}', { con_id: '${con}', hotel_id: '${HID}', reason: 'تأخر متكرر' })`, 'المطلوب');
+  const r = run(`apiEngCA('${engTok}', { con_id: '${con}', hotel_id: '${HID}', reason: 'تأخر متكرر', required: 'خطة لتقليل زمن الوصول', due: '2026-12-01' })`);
+  throws(`apiEngCAAct('${engTok}', '${r.id}', 'close')`, 'بانتظار رد');
+  throws(`apiConCA('${acTok}', '${r.id}', '')`, 'اكتب');
+  run(`apiConCA('${acTok}', '${r.id}', 'فني ثانٍ في الدوام المسائي', [])`);
+  throws(`apiEngCAAct('${engTok}', '${r.id}', 'return', '')`, 'سبب الإعادة');
+  run(`apiEngCAAct('${engTok}', '${r.id}', 'return', 'أرفق جدول الدوام')`);
+  eq(run(`Db.get('CorrectiveActions', '${r.id}').status`), 'open'); eq(run(`Db.get('CorrectiveActions', '${r.id}').rounds`), 1);
+  run(`apiConCA('${acTok}', '${r.id}', 'أرفقنا الجدول', [])`);
+  run(`apiEngCAAct('${engTok}', '${r.id}', 'close', 'تم')`);
+  eq(run(`apiEngBoot('${engTok}')`).cas.find(c => c.id === r.id).effective, 'نعم');
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);

@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 9;
+var SCHEMA_VERSION = 10;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -84,6 +84,12 @@ var SCHEMA = [
   { name: 'Arrivals', cols: [
     ['arrival_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['at', 'وقت المسح']] },
 
+  { name: 'CorrectiveActions', cols: [
+    ['ca_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['wo_id', 'العملية (فارغ = إجراء مستقل)'],
+    ['reason', 'السبب'], ['required', 'المطلوب من المتعهد'], ['due', 'الموعد'], ['status', 'open · responded · closed'],
+    ['response', 'رد المتعهد'], ['photos', 'صور الرد'], ['by', 'أصدره'], ['created_at', 'وقت الإصدار'], ['responded_at', 'وقت الرد'],
+    ['closed_at', 'وقت الإغلاق'], ['effective', 'فعّال؟ نعم · لا'], ['verify_note', 'ملاحظة التحقق'], ['rounds', 'مرات الإعادة']] },
+
   { name: 'KpiSummary', cols: [
     ['key', 'المتعهد|الفندق|الشهر'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر'],
     ['data', 'الأرقام (JSON)'], ['updated_at', 'آخر تحديث']] }
@@ -103,7 +109,7 @@ var STATUS = {
 
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
-  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV'
+  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA'
 };
 
 function tableDef(name) {

@@ -219,6 +219,7 @@ function conBoot_(s) {
   var here = R.hotels[s.hotel_id] || {};
   return {
     pmLast: pmLast,
+    cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
     web: !!s.web,
@@ -303,6 +304,7 @@ function engBoot_(s) {
     cons: Object.keys(R.cons).map(function (k) { var c = R.cons[k]; return { id: c.con_id, name: c.name, type: c.type }; }),
     reasons: listsFor_('ac').reject.map(function (x) { return x.ar; }),
     syms: { ac: listsFor_('ac').sym.map(function (x) { return x.ar; }), el: listsFor_('el').sym.map(function (x) { return x.ar; }) },
+    cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
@@ -332,6 +334,21 @@ function apiEngCreate(token, d) {
     Db.reset();
     return { id: id, boot: engBoot_(s) };
   });
+}
+
+// ───────── الإجراء التصحيحي ─────────
+function apiEngCA(token, d) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  return Db.withLock(function () { var c = Quality.create(s, d || {}); Db.reset(); return { id: c.ca_id, boot: engBoot_(s) }; });
+}
+/** action: close (فعّال) · return (غير فعّال، يُعاد للمتعهد) */
+function apiEngCAAct(token, caId, action, note) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  return Db.withLock(function () { Quality.verify(s, caId, action, note); Db.reset(); return { boot: engBoot_(s) }; });
+}
+function apiConCA(token, caId, text, photos) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { Quality.respond(s, caId, text, savePhotos_(photos, caId)); Db.reset(); return { boot: conBoot_(s) }; });
 }
 
 // ───────── لوحات الأداء (تقرأ من KpiSummary فقط) ─────────

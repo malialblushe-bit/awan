@@ -157,6 +157,7 @@ var Orders = (function () {
     var all = Array.isArray(hist) ? hist : (hist ? [hist] : []);
     all.push(report);
 
+    var hadCA = !!o.reject_reason;   // قبل التحديث (السجل نفسه يتغير بالتحديث)
     var patch = { report: all, reject_reason: '', equip: d.equip || o.equip };
     if (d.photos && d.photos.length) patch.photos = csv(o.photos).concat(d.photos).join(',');
     stopWork_(o, patch, t);
@@ -173,6 +174,7 @@ var Orders = (function () {
     }
     Db.update('WorkOrders', woId, patch);
     log_(woId, con ? con.name : s.id, 'submit:' + oc, o.status, to, d.note || '');
+    if (hadCA) Quality.respondForOrder(woId, d.note || '');
 
     var extra = [];
     if (d.follow === 'نعم') {
@@ -271,10 +273,13 @@ var Orders = (function () {
       if (o.status !== 'matching') throw new Error('العملية ليست بانتظار المطابقة.');
       if (!d.sat) throw new Error('حدّد رضاك عن العمل.');
       to = 'closed'; patch.closed_at = t; patch.sat = d.sat;
-    } else if (action === 'reopen') {
+      Quality.closeForOrder(woId);
+    } else if (action === 'ca' || action === 'reopen') {
+      // إجراء تصحيحي من المطابقة (بديل إعادة الفتح): يعود للمتعهد بالسبب والمطلوب، ويُسجَّل في سجل عدم المطابقة
       if (o.status !== 'matching') throw new Error('العملية ليست بانتظار المطابقة.');
-      if (!d.reason) throw new Error('اختر سبب إعادة الفتح.');
-      to = 'in_progress'; patch.reject_reason = d.reason; patch.reopens = (Number(o.reopens) || 0) + 1; note = d.reason;
+      if (!d.reason) throw new Error('اختر سبب الإجراء التصحيحي.');
+      to = 'in_progress'; patch.reject_reason = d.reason + (d.required ? ' — ' + String(d.required).trim() : ''); patch.reopens = (Number(o.reopens) || 0) + 1; note = patch.reject_reason;
+      Quality.openForOrder(o, d, me ? me.name : s.id);
     } else if (action === 'assign') {
       if (OPEN.indexOf(o.status) === -1) throw new Error('العملية مغلقة.');
       patch.con_id = d.con_id; patch.assigned_at = t;
