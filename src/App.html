@@ -324,6 +324,7 @@ var DICT={
 // أنماط فيها أسماء أو أرقام متغيرة
 var PAT=[
  [/^الدور (.+)$/,function(m){return 'Floor '+m[1]}],
+ [/^هل (.+) يعمل الآن؟$/,function(m){return 'Is '+m[1]+' working now?'}],
  [/^متعهد (.+)$/,function(m){var r=T(m[1]);return r===m[1]?null:r+' contractor'}],
  [/^برج (.+)$/,function(m){return 'Tower '+m[1]}],
  [/^غرفة (.+)$/,function(m){return 'Room '+m[1]}],
@@ -493,7 +494,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   if(oc==='report')f=E.concat([{k:'text',key:'title',l:'العنوان',req:true},photo('صورة'),{k:'area',key:'body',l:'التقرير'}]);
   if(oc==='pm'){var ph=C.b.hotels.filter(function(h){return h.id===(C.newHotel||C.b.hotel.id)})[0]||{elevators:[],mine:[]};if(!C.sel.units)C.sel.units=(ph.mine||ph.elevators||[]).slice();
    f=[H('المصاعد'),{k:'many',key:'units',l:'المصاعد المشمولة في الزيارة',opts:ph.elevators||[],req:true},{k:'text',key:'techs',l:'أسماء الفنيين'}];
-   ph.elevators.filter(function(u){return C.sel.units.indexOf(u)!==-1}).forEach(function(u){f.push(H(u),{k:'grid',unit:u},{k:'one',key:'w|'+u,l:'هل المصعد يعمل الآن؟',opts:['نعم','لا'],req:true})});
+   ph.elevators.filter(function(u){return C.sel.units.indexOf(u)!==-1}).forEach(function(u){PM_G.forEach(function(gr,gi){f.push(H(u+' · '+gr[1]),{k:'grid',unit:u,sec:gi})});f.push({k:'one',key:'w|'+u,l:'هل '+u+' يعمل الآن؟',opts:['نعم','لا'],req:true})});
    f.push(H('الملاحظات'),{k:'area',key:'replaced',l:'القطع المستبدلة'},{k:'area',key:'adjust',l:'الضبط الذي تم'},{k:'area',key:'toreplace',l:'بنود تحتاج استبدالاً أو إعادة صيانة'},{k:'area',key:'others',l:'أخرى'},photo('صورة (اختياري)'));
    return f}
   if(isNew&&!el)f=[{k:'floor',key:'floor_id',l:'الدور',req:true},{k:'text',key:'room',l:'الغرفة أو المرفق',dl:1}].concat(f);
@@ -501,13 +502,14 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  filled:function(f){if(f.k==='head'||f.k==='grid')return true;if(f.k==='photo')return C.photos.length>0;var v=C.sel[f.key];return f.k==='many'?(v||[]).length>0:!!(v&&String(v).trim())},
  gget:function(u){return C.sel['g|'+u]||(C.sel['g|'+u]=((C.b.pmLast||{})[u]||'').length===PM_EL.length?C.b.pmLast[u]:Array(PM_EL.length+1).join('x'))},
  gset:function(u,i,v){var g=C.gget(u).split('');g[i]=v;C.sel['g|'+u]=g.join('');render()},
- gall:function(u){C.sel['g|'+u]=C.gget(u).replace(/o/g,'x');render()},
- gridHtml:function(u){var g=C.gget(u),cnt={x:0,o:0,n:0};g.split('').forEach(function(c){cnt[c]++});
-  var h='<div class="pmg"><div class="row" style="flex-wrap:wrap"><span class="small"><b style="color:#245244">'+cnt.x+' سليم</b> · <b style="color:#8E3A2E">'+cnt.o+' يحتاج صيانة</b> · <span class="muted">'+cnt.n+' لا ينطبق</span></span>'+(cnt.o?'<button class="btn btn-o sm" data-v="'+esc(u)+'" onclick="C.gall(this.dataset.v)">الكل سليم</button>':'')+'</div><p class="small muted" style="margin:0">✓ سليم · O يحتاج صيانة أو استبدال · — لا ينطبق. غيّر المختلف فقط.</p>';
-  PM_EL.forEach(function(it,i){PM_G.forEach(function(gr){if(gr[0]===i)h+='<p class="pmh">'+gr[1]+'</p>'});var c=g.charAt(i);
+ pmRange:function(sec){var a=PM_G[sec][0],b=sec+1<PM_G.length?PM_G[sec+1][0]:PM_EL.length;return [a,b]},
+ gall:function(u,sec){var r=C.pmRange(sec),g=C.gget(u).split('');for(var i=r[0];i<r[1];i++)if(g[i]==='o')g[i]='x';C.sel['g|'+u]=g.join('');render()},
+ gridHtml:function(u,sec){var g=C.gget(u),r=C.pmRange(sec),cnt={x:0,o:0,n:0};for(var k=r[0];k<r[1];k++)cnt[g.charAt(k)]++;
+  var h='<div class="pmg"><div class="row" style="flex-wrap:wrap"><span class="small"><b style="color:#245244">'+cnt.x+' سليم</b> · <b style="color:#8E3A2E">'+cnt.o+' يحتاج صيانة</b> · <span class="muted">'+cnt.n+' لا ينطبق</span></span>'+(cnt.o?'<button class="btn btn-o sm" data-v="'+esc(u)+'" onclick="C.gall(this.dataset.v,'+sec+')">الكل سليم</button>':'')+'</div><p class="small muted" style="margin:0">✓ سليم · O يحتاج صيانة أو استبدال · — لا ينطبق. غيّر المختلف فقط.</p>';
+  PM_EL.forEach(function(it,i){if(i<r[0]||i>=r[1])return;var c=g.charAt(i);
    h+='<div class="pmr'+(c==='o'?' bad':c==='n'?' na':'')+'"><span class="n">'+(i+1)+'</span><span class="t" data-nt="1">'+esc(pmName(i))+'</span><div class="pmb">'+[['x','✓','سليم'],['o','O','يحتاج صيانة أو استبدال'],['n','—','لا ينطبق']].map(function(b){return '<button class="'+b[0]+(c===b[0]?' on':'')+'" aria-label="'+b[2]+'" aria-pressed="'+(c===b[0])+'" data-v="'+esc(u)+'" onclick="C.gset(this.dataset.v,'+i+',\''+b[0]+'\')">'+b[1]+'</button>'}).join('')+'</div></div>'});
   return h+'</div>'},
- field:function(f,i){if(f.k==='grid')return C.gridHtml(f.unit);if(f.k==='head')return '<div style="border-top:1px solid #E4E8EE;padding-top:12px;margin-top:2px"><h3 style="font-size:16px;color:#8A5E26">'+f.l+'</h3>'+(f.sub?'<p class="small muted" style="margin:2px 0 0">'+f.sub+'</p>':'')+'</div>';var v=C.sel[f.key],h='<div>';
+ field:function(f,i){if(f.k==='grid')return C.gridHtml(f.unit,f.sec);if(f.k==='head')return '<div style="border-top:1px solid #E4E8EE;padding-top:12px;margin-top:2px"><h3 style="font-size:16px;color:#8A5E26">'+f.l+'</h3>'+(f.sub?'<p class="small muted" style="margin:2px 0 0">'+f.sub+'</p>':'')+'</div>';var v=C.sel[f.key],h='<div>';
   if(f.k==='text'||f.k==='area'){h+='<label class="lbl" for="f'+i+'">'+f.l+(f.req?' <span class="req">*</span>':'')+'</label>';
    var dlh='';if(f.dl){var hh=C.b.hotels.filter(function(x){return x.id===(C.newHotel||C.b.hotel.id)})[0]||{floors:[]};var ff=hh.floors.filter(function(x){return x.id===C.sel.floor_id})[0];if(ff)dlh='<datalist id="dl'+i+'">'+ff.facilities.map(function(x){return '<option value="'+esc(x)+'">'}).join('')+'</datalist>'}
    h+=f.k==='text'?'<input id="f'+i+'" class="inp"'+(f.dl?' list="dl'+i+'"':'')+(f.num?' inputmode="decimal"':'')+' placeholder="'+esc(f.ph||'')+'" value="'+esc(v||'')+'" oninput="C.sel[\''+f.key+'\']=this.value;C.chk()">'+dlh:'<textarea id="f'+i+'" class="inp" rows="2" oninput="C.sel[\''+f.key+'\']=this.value">'+esc(v||'')+'</textarea>';}
@@ -538,7 +540,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
    if(C.b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+C.b.hotels.map(function(x){var on=(C.newHotel||C.b.hotel.id)===x.id;return '<button class="chip'+(on?' on':'')+'" onclick="C.newHotel=\''+x.id+'\';C.sel={};C.stp=0;render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
   }
   var st=C.allSteps(j),i=C.cur(st),cs=st[i];
-  if(st.length>1)h+='<div class="stack" style="gap:8px"><div class="row"><b style="font-size:15px">'+cs.t+'</b><span class="small muted">الخطوة '+(i+1)+' من '+st.length+'</span></div><div class="prog">'+st.map(function(x,k){return '<div class="ps'+(k<i?' done':k===i?' on':'')+'"><i></i><span>'+x.t.replace(' المتخذ','')+'</span></div>'}).join('')+'</div></div>';
+  if(st.length>1)h+='<div class="stack" style="gap:8px"><div class="row"><b style="font-size:15px">'+cs.t+'</b><span class="small muted">الخطوة '+(i+1)+' من '+st.length+'</span></div><div class="prog">'+st.map(function(x,k){return '<div class="ps'+(k<i?' done':k===i?' on':'')+'"><i></i>'+(st.length>7?'':'<span>'+x.t.replace(' المتخذ','')+'</span>')+'</div>'}).join('')+'</div></div>';
   if(cs.outcome){h+='<div class="stack" style="gap:10px">';C.outcomes(j).forEach(function(o){h+='<button class="opt'+(C.outcome===o[0]?' on':'')+'" aria-pressed="'+(C.outcome===o[0])+'" onclick="if(C.outcome!==\''+o[0]+'\'){C.outcome=\''+o[0]+'\';C.sel={};C.custom={};C.photos=[]}C.stp=1;render();window.scrollTo(0,0)"><span class="row"><b>'+o[1]+'</b>'+(o[3]?'<span class="pill st-review">يحتاج اعتماداً</span>':'')+'</span><span>'+o[2]+'</span></button>'});h+='</div>'}
   else{h+='<div class="stack" style="gap:18px">'+cs.fields.map(function(f,k){return C.field(f,i*100+k)}).join('')+'</div>';
    var oc=C.preset||C.outcome;
