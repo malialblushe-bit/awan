@@ -145,7 +145,7 @@ var Orders = (function () {
     var t = now_();
     var con = Db.get('Contractors', s.id);
     var report = {
-      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [],
+      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [], gas: d.gas || '', pb: d.pb || '', pa: d.pa || '',
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime()
     };

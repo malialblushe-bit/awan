@@ -133,6 +133,10 @@ function apiReqBoot(code) {
     elevators: elevatorsOf_(h.hotel_id),
     has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el') },
     syms: { ac: listsFor_('ac').sym, el: listsFor_('el').sym },
+    // الطلبات المفتوحة (موقعها فقط) لتنبيه الرافع إن كان نفس الموقع مرفوعاً
+    open: Db.all('WorkOrders', function (o) { return o.hotel_id === h.hotel_id && Orders.OPEN.indexOf(o.status) !== -1; }).map(function (o) {
+      return { id: o.wo_id, type: o.type, floor_id: o.floor_id, room: String(o.room || ''), equip: o.equip || '', sym: o.symptom || '' };
+    }),
     i18n: i18nPairs_()
   };
 }
@@ -216,9 +220,24 @@ function conBoot_(s) {
     var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
     (Array.isArray(reps) ? reps : [reps]).forEach(function (r) { if (r && r.grid) Object.keys(r.grid).forEach(function (u) { pmLast[u] = String(r.grid[u]).replace(/[^n]/g, 'x'); }); });
   });
+  // اقتراح الجزء والسبب حسب الملاحظة، من تاريخ نفس نوع الخدمة (الجدول مقروء أصلاً)
+  var sg = {};
+  Db.all('WorkOrders', function (o) { return o.type === con.type && o.report; }).forEach(function (o) {
+    var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
+    (Array.isArray(reps) ? reps : [reps]).forEach(function (r) {
+      if (!r || !r.sym || ['fix', 'diag'].indexOf(r.outcome) === -1) return;
+      var x = sg[r.sym] = sg[r.sym] || { part: {}, cause: {} };
+      if (r.part) x.part[r.part] = (x.part[r.part] || 0) + 1;
+      (r.cause || []).forEach(function (c) { x.cause[c] = (x.cause[c] || 0) + 1; });
+    });
+  });
+  var top3 = function (o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }).slice(0, 3); };
+  var sugg = {};
+  Object.keys(sg).forEach(function (k) { sugg[k] = { part: top3(sg[k].part), cause: top3(sg[k].cause) }; });
   var here = R.hotels[s.hotel_id] || {};
   return {
     pmLast: pmLast,
+    sugg: sugg,
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
@@ -329,6 +348,19 @@ function apiEngAct(token, woId, action, d) {
     Kpi.touch([woId]);
     Db.reset();
     return { to: to, boot: engBoot_(s) };
+  });
+}
+
+/** مطابقة جماعية: إغلاق عدة عمليات بتقييم واحد */
+function apiEngBulkClose(token, ids, sat) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  return Db.withLock(function () {
+    if (!(ids || []).length) throw new Error('حدّد العمليات.');
+    var n = 0;
+    ids.forEach(function (id) { Orders.engAct(s, id, 'close', { sat: sat }); n++; });
+    Kpi.touch(ids);
+    Db.reset();
+    return { n: n, boot: engBoot_(s) };
   });
 }
 

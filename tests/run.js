@@ -641,5 +641,22 @@ t('مدير الفندق: يطّلع على عمليات فندقه وأدائه
   throws(`apiAdmAddUser('${adminTok}', { name: 'x', role: 'boss', username: 'xx.boss', hotel_ids: [] })`, 'دور');
 });
 
+t('التسهيلات: تنبيه الرافع بطلب مفتوح لنفس الموقع، واقتراح الجزء والسبب، وضغط الفريون، والمطابقة الجماعية', () => {
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const a = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '711', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  const b = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '713', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  const op = run(`apiReqBoot('WARIF2')`).open;
+  if (!op.some(o => o.id === a && o.room === '711' && o.floor_id === fl)) throw new Error(JSON.stringify(op));
+  run(`apiConAct('${acTok}', 'submit', '${a}', { outcome: 'fix', equip: 'AC-711-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], gas: 'R410A', pb: '50', pa: '128', follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${b}', { outcome: 'fix', equip: 'AC-713-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  const rep = run(`Db.get('WorkOrders', '${a}').report`); const r0 = (typeof rep === 'string' ? JSON.parse(rep) : rep).slice(-1)[0];
+  eq(r0.gas, 'R410A'); eq(String(r0.pa), '128');
+  const sg = run(`apiConBoot('${acTok}')`).sugg['لا يبرد']; eq(sg.part[0], 'المروحة'); eq(sg.cause[0], 'اتساخ');
+  throws(`apiEngBulkClose('${acTok}', ['${a}'], 'good')`, 'صلاحية');
+  const r = run(`apiEngBulkClose('${engTok}', ['${a}', '${b}'], 'good')`);
+  eq(r.n, 2); eq(run(`Db.get('WorkOrders', '${a}').status`), 'closed'); eq(run(`Db.get('WorkOrders', '${b}').sat`), 'good');
+  eq(run(`apiReqBoot('WARIF2')`).open.some(o => o.id === a), false);
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);
