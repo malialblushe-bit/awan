@@ -159,7 +159,7 @@ var Auth = (function () {
     var u = String(username || '').trim().toLowerCase();
     if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error('اسم الدخول بالإنجليزية بلا مسافات (3 أحرف على الأقل)، مثل: eng.ahmed');
     if (Db.find('Users', function (r) { return String(r.username).toLowerCase() === u; })) throw new Error('اسم الدخول مستخدم من قبل.');
-    if (['admin', 'engineer', 'management'].indexOf(role) === -1) throw new Error('دور غير معروف.');
+    if (['admin', 'engineer', 'management', 'gm', 'om'].indexOf(role) === -1) throw new Error('دور غير معروف.');
     var pw = tempPassword_(), st = salt_();
     var rec = Db.insert('Users', {
       name: String(name || '').trim(), role: role, username: u, email: email || '', hotel_ids: hotelIds || '',

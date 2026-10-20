@@ -274,13 +274,19 @@ function apiStaffLogin(username, password) {
 function apiChangePassword(token, pw) { return Auth.changePassword(token, pw); }
 function apiLogout(token) { Auth.logout(token); return true; }
 
+/** أدوار المتابعة (اطلاع فقط + ملاحظة): الإدارة لكل الفنادق، ومدير الفندق ومدير التشغيل لفنادقهم */
+var STAFF_ROLES = ['admin', 'engineer', 'management', 'gm', 'om'];
+var VIEW_ROLES = ['management', 'gm', 'om'];
+function scopeHotels_(s, R) {
+  if (s.role === 'admin' || s.role === 'management') return Object.keys(R.hotels);
+  return Orders.csv((Db.get('Users', s.id) || {}).hotel_ids);
+}
+
 function engBoot_(s) {
   if (s.must) throw new Error('غيّر كلمة المرور المؤقتة أولاً.');
   var me = Db.get('Users', s.id);
   var R = Orders.refs();
-  var myHotels = s.role === 'admin' || s.role === 'management'
-    ? Object.keys(R.hotels)
-    : Orders.csv(me.hotel_ids);
+  var myHotels = scopeHotels_(s, R);
   var since = Date.now() - 30 * 864e5;
   var orders = Db.all('WorkOrders', function (o) {
     if (myHotels.indexOf(o.hotel_id) === -1) return false;
@@ -305,6 +311,7 @@ function engBoot_(s) {
     reasons: listsFor_('ac').reject.map(function (x) { return x.ar; }),
     syms: { ac: listsFor_('ac').sym.map(function (x) { return x.ar; }), el: listsFor_('el').sym.map(function (x) { return x.ar; }) },
     cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
+    notes: notesFor_(s, myHotels),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
@@ -313,7 +320,7 @@ function engBoot_(s) {
   };
 }
 
-function apiEngBoot(token) { var s = Auth.need(token, ['admin', 'engineer', 'management']); ensureSchemaVersion_(); return engBoot_(s); }
+function apiEngBoot(token) { var s = Auth.need(token, STAFF_ROLES); ensureSchemaVersion_(); return engBoot_(s); }
 
 function apiEngAct(token, woId, action, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
@@ -336,6 +343,49 @@ function apiEngCreate(token, d) {
   });
 }
 
+// ───────── ملاحظات الإدارة ومدير الفندق ومدير التشغيل ─────────
+/** المهندس يرى ملاحظات الصيانة (تكييف، مصاعد، سلامة) لفنادقه؛ والمرسل يرى ما أرسله وهل اطُّلع عليه */
+function notesFor_(s, hotels) {
+  var since = Date.now() - 30 * 864e5, R = Orders.refs();
+  return Db.all('Notes', function (n) {
+    if (hotels.indexOf(n.hotel_id) === -1) return false;
+    var mine = VIEW_ROLES.indexOf(s.role) !== -1 ? n.by_id === s.id : n.to === 'maint';
+    return mine && (!n.seen_at || (Orders.ms(n.created_at) || 0) >= since);
+  }).map(function (n) {
+    return { id: n.note_id, hotel_id: n.hotel_id, hotel: (R.hotels[n.hotel_id] || {}).name || '', service: n.service, to: n.to, wo_id: n.wo_id || '', text: n.text,
+      by: n.by_name, role: n.by_role, created: Orders.ms(n.created_at), seen: Orders.ms(n.seen_at), seen_by: n.seen_by || '' };
+  }).sort(function (a, b) { return b.created - a.created; });
+}
+
+/** d: {wo_id?} أو {hotel_id, service} + text. التكييف والمصاعد والسلامة ← مهندس الصيانة؛ النفايات والآفات ← الإشراف */
+function apiNote(token, d) {
+  var s = Auth.need(token, VIEW_ROLES);
+  return Db.withLock(function () {
+    var me = Db.get('Users', s.id), R = Orders.refs(), scope = scopeHotels_(s, R);
+    var text = String(d.text || '').trim();
+    if (!text) throw new Error('اكتب الملاحظة.');
+    var hotelId = d.hotel_id, service = d.service, woId = '';
+    if (d.wo_id) { var o = Db.get('WorkOrders', d.wo_id); if (!o) throw new Error('العملية غير موجودة.'); hotelId = o.hotel_id; service = o.type; woId = o.wo_id; }
+    if (scope.indexOf(hotelId) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
+    if (['ac', 'el', 'sf', 'wa', 'pc'].indexOf(service) === -1) throw new Error('اختر الخدمة.');
+    Db.insert('Notes', { hotel_id: hotelId, service: service, to: (service === 'wa' || service === 'pc') ? 'sup' : 'maint', wo_id: woId, text: text,
+      by_id: s.id, by_name: me ? me.name : '', by_role: s.role, created_at: new Date() });
+    Db.reset();
+    return { boot: engBoot_(s) };
+  });
+}
+
+function apiNoteSeen(token, noteId) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  return Db.withLock(function () {
+    var n = Db.get('Notes', noteId), me = Db.get('Users', s.id);
+    if (!n) throw new Error('الملاحظة غير موجودة.');
+    if (!n.seen_at) Db.update('Notes', noteId, { seen_at: new Date(), seen_by: me ? me.name : '' });
+    Db.reset();
+    return { boot: engBoot_(s) };
+  });
+}
+
 // ───────── الإجراء التصحيحي ─────────
 function apiEngCA(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
@@ -354,13 +404,12 @@ function apiConCA(token, caId, text, photos) {
 // ───────── لوحات الأداء (تقرأ من KpiSummary فقط) ─────────
 /** للمهندس والإدارة والمشرف: فنادقهم · وللمتعهد: أرقامه فقط */
 function apiKpiBoot(token) {
-  var s = Auth.need(token, ['admin', 'engineer', 'management', 'contractor']);
+  var s = Auth.need(token, STAFF_ROLES.concat(['contractor']));
   var R = Orders.refs(), rows, hotels;
   if (s.role === 'contractor') {
     rows = Kpi.rows(function (r) { return r.con_id === s.id; }, 6);
   } else {
-    var me = Db.get('Users', s.id);
-    hotels = s.role === 'engineer' ? Orders.csv(me.hotel_ids) : Object.keys(R.hotels);
+    hotels = scopeHotels_(s, R);
     rows = Kpi.rows(function (r) { return hotels.indexOf(r.hotel_id) !== -1; }, 6);
   }
   var cons = {}, hs = {};
@@ -387,9 +436,9 @@ function apiStatement(token, conId, hotelId, from, to) {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to)) || to < from) throw new Error('حدّد الفترة: من تاريخ إلى تاريخ.');
   var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
-  var s = Auth.need(token, ['admin', 'engineer', 'management']);
-  var me = Db.get('Users', s.id), R = Orders.refs();
-  var scope = s.role === 'engineer' ? Orders.csv(me.hotel_ids) : Object.keys(R.hotels);
+  var s = Auth.need(token, STAFF_ROLES);
+  var R = Orders.refs();
+  var scope = scopeHotels_(s, R);
   if (hotelId && hotelId !== 'all') scope = scope.filter(function (h) { return h === hotelId; });
   var con = R.cons[conId];
   if (!con) throw new Error('المتعهد غير موجود.');
@@ -435,7 +484,7 @@ function apiStatement(token, conId, hotelId, from, to) {
 
 /** لغة الواجهة لكل مستخدم: ar · en */
 function apiSetLang(token, lang) {
-  var s = Auth.need(token, ['admin', 'engineer', 'management', 'contractor']);
+  var s = Auth.need(token, STAFF_ROLES.concat(['contractor']));
   lang = lang === 'en' ? 'en' : 'ar';
   return Db.withLock(function () {
     if (s.role === 'contractor') Db.update('Contractors', s.id, { lang: lang });

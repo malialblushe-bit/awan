@@ -618,5 +618,28 @@ t('الإجراء التصحيحي: من المطابقة يعود للمتعه�
   eq(run(`apiEngBoot('${engTok}')`).cas.find(c => c.id === r.id).effective, 'نعم');
 });
 
+t('مدير الفندق: يطّلع على عمليات فندقه وأدائه فقط، ولا إجراء سوى ملاحظة تصل لمهندس الصيانة', () => {
+  const pw = run(`apiAdmAddUser('${adminTok}', { name: 'مدير وارف', role: 'gm', username: 'gm.warif', hotel_ids: ['${HID}'] })`).password;
+  run(`Auth.changePassword(apiStaffLogin('gm.warif', '${pw}').token, 'Gm2026xxx')`);
+  const tok = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
+  const b = run(`apiEngBoot('${tok}')`);
+  eq(b.me.role, 'gm'); eq(b.hotels.length, 1); eq(b.hotels[0].id, HID);
+  eq(b.orders.every(o => o.hotel_id === HID), true);
+  eq(run(`apiKpiBoot('${tok}')`).rows.every(r => r.hotel === HID), true);
+  const any = b.orders[0].id;
+  throws(`apiEngAct('${tok}', '${any}', 'close', { sat: 'good' })`, 'صلاحية');
+  throws(`apiEngCreate('${tok}', { hotel_id: '${HID}', type: 'ac', symptom: 'x' })`, 'صلاحية');
+  throws(`apiNote('${tok}', { wo_id: '${any}', text: '' })`, 'اكتب');
+  run(`apiNote('${tok}', { wo_id: '${any}', text: 'النزيل في الغرفة يشتكي، الرجاء الإسراع' })`);
+  run(`apiNote('${tok}', { hotel_id: '${HID}', service: 'wa', text: 'رائحة عند منطقة النفايات' })`);
+  const mine = run(`apiEngBoot('${tok}')`).notes;
+  eq(mine.length, 2); eq(mine.find(n => n.service === 'wa').to, 'sup');
+  const eng = run(`apiEngBoot('${engTok}')`).notes;
+  eq(eng.length, 1); eq(eng[0].wo_id, any);
+  run(`apiNoteSeen('${engTok}', '${eng[0].id}')`);
+  eq(!!run(`apiEngBoot('${tok}')`).notes.find(n => n.wo_id === any).seen, true);
+  throws(`apiAdmAddUser('${adminTok}', { name: 'x', role: 'boss', username: 'xx.boss', hotel_ids: [] })`, 'دور');
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);

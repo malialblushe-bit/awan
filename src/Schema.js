@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 10;
+var SCHEMA_VERSION = 11;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -32,7 +32,7 @@ var SCHEMA = [
     ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات'], ['tower', 'البرج']] },
 
   { name: 'Users', cols: [
-    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management'],
+    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل)'],
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
@@ -90,6 +90,11 @@ var SCHEMA = [
     ['response', 'رد المتعهد'], ['photos', 'صور الرد'], ['by', 'أصدره'], ['created_at', 'وقت الإصدار'], ['responded_at', 'وقت الرد'],
     ['closed_at', 'وقت الإغلاق'], ['effective', 'فعّال؟ نعم · لا'], ['verify_note', 'ملاحظة التحقق'], ['rounds', 'مرات الإعادة']] },
 
+  { name: 'Notes', cols: [
+    ['note_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['service', 'ac · el · sf · wa · pc'], ['to', 'maint = مهندس الصيانة · sup = الإشراف'],
+    ['wo_id', 'العملية (اختياري)'], ['text', 'الملاحظة'], ['by_id', 'المرسل'], ['by_name', 'اسم المرسل'], ['by_role', 'دوره'],
+    ['created_at', 'وقت الإرسال'], ['seen_at', 'وقت الاطلاع'], ['seen_by', 'اطلع عليها']] },
+
   { name: 'KpiSummary', cols: [
     ['key', 'المتعهد|الفندق|الشهر'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر'],
     ['data', 'الأرقام (JSON)'], ['updated_at', 'آخر تحديث']] }
@@ -109,7 +114,7 @@ var STATUS = {
 
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
-  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA'
+  Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT'
 };
 
 function tableDef(name) {
