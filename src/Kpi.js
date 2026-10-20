@@ -53,7 +53,7 @@ var Kpi = (function () {
     var d = {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,
-      trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0,
+      trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0, pm: 0,
       parts: {}, causes: {}, syms: {}, locs: {}
     };
     mine.forEach(function (o) {
@@ -66,15 +66,16 @@ var Kpi = (function () {
         d.infoN++;
         if (!(Number(o.reopens) > 0) && o.decision !== 'recheck' && o.status !== 'rejected') d.infoOk++;
       }
+      if (o.kind === 'periodic') d.pm++;
       if (o.status === 'closed') {
         d.closed++;
-        if (o.kind !== 'report') {
+        if (o.kind !== 'report' && o.kind !== 'periodic') {
           d.readyN++;
           var lk = locKey_(o), repeat = false;
           if (lk && o.closed_at) {
             var c = ms(o.closed_at);
             repeat = hotelOrders.some(function (x) {
-              return x.wo_id !== o.wo_id && x.type === o.type && x.follow_of !== o.wo_id && locKey_(x) === lk &&
+              return x.wo_id !== o.wo_id && x.type === o.type && x.kind !== 'periodic' && x.follow_of !== o.wo_id && locKey_(x) === lk &&
                 ms(x.created_at) > c && ms(x.created_at) <= c + win;
             });
           }
@@ -92,6 +93,7 @@ var Kpi = (function () {
       if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = null; } }
       if (reps && !Array.isArray(reps)) reps = [reps];
       // آخر قيمة مكتوبة لكل حقل عبر تقارير العملية (التقرير المعاد قد لا يكررها)
+      if (o.kind === 'periodic') return;   // الزيارة الدورية لا تدخل أنماط الأعطال؛ متابعاتها تدخل
       var part = '', cause = [], sym = '';
       (reps || []).forEach(function (r) {
         if (!r || ['fix', 'diag', 'comp'].indexOf(r.outcome) === -1) return;

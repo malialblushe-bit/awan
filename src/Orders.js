@@ -112,8 +112,23 @@ var Orders = (function () {
   // ───────── إجراءات المتعهد ─────────
   var OUTCOMES = {
     ac: ['ok', 'fix', 'comp', 'diag', 'report'],
-    el: ['fix', 'visit', 'diag', 'report']
+    el: ['fix', 'visit', 'diag', 'report', 'pm']
   };
+  var PM_EL_N = 38;   // بنود نموذج الصيانة الدورية للمصاعد (1–38)
+
+  /** يتحقق من زيارة الصيانة الدورية قبل أي كتابة */
+  function pmParse_(d) {
+    var units = (d.units || []).filter(String);
+    if (!units.length) throw new Error('اختر المصاعد المشمولة في الزيارة.');
+    var pm = { units: units, grid: {}, working: {} };
+    units.forEach(function (u) {
+      var g = String(d['g|' + u] || '');
+      if (!new RegExp('^[xon]{' + PM_EL_N + '}$').test(g)) throw new Error('بنود المصعد ' + u + ' ناقصة.');
+      if (d['w|' + u] !== 'نعم' && d['w|' + u] !== 'لا') throw new Error('حدّد: هل المصعد ' + u + ' يعمل الآن؟');
+      pm.grid[u] = g; pm.working[u] = d['w|' + u];
+    });
+    return pm;
+  }
 
   /** d: outcome + حقول التقرير. custom: [{list, ar}] بنود جديدة بزر + */
   function conSubmit(s, woId, d) {
@@ -123,7 +138,8 @@ var Orders = (function () {
     var oc = d.outcome;
     if ((OUTCOMES[o.type] || []).indexOf(oc) === -1) throw new Error('اختر النتيجة.');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
-    if (o.type === 'el' && oc !== 'report' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
+    if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
+    var pm = oc === 'pm' ? pmParse_(d) : null;
     if ((oc === 'comp' || oc === 'diag') && (o.decision === 'con' || o.decision === 'own')) throw new Error('هذه العملية معتمدة للتركيب. سجّل الإصلاح.');
 
     var t = now_();
@@ -133,6 +149,10 @@ var Orders = (function () {
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime()
     };
+    if (pm) {
+      report.units = pm.units; report.grid = pm.grid; report.working = pm.working;
+      report.techs = d.techs || ''; report.replaced = d.replaced || ''; report.adjust = d.adjust || ''; report.toreplace = d.toreplace || ''; report.others = d.others || '';
+    }
     var hist = parse_(o.report, null);
     var all = Array.isArray(hist) ? hist : (hist ? [hist] : []);
     all.push(report);
@@ -164,6 +184,22 @@ var Orders = (function () {
       extra.push('فُتحت عملية متابعة ' + f.wo_id + ' تلقائياً');
     }
     if (o.type === 'el' && d.working === 'نعم' && o.down_from) extra.push('أُغلق عدّاد توقف المصعد');
+    if (pm) {
+      // كل مصعد فيه بند يحتاج صيانة أو متوقف: عملية متابعة باسم المتعهد (والمتوقف يبدأ عدّاد توقفه)
+      pm.units.forEach(function (u) {
+        var bad = [];
+        pm.grid[u].split('').forEach(function (c, i) { if (c === 'o') bad.push(i + 1); });
+        var down = pm.working[u] === 'لا';
+        if (!bad.length && !down) return;
+        var f2 = create({
+          hotel_id: o.hotel_id, type: 'el', kind: 'corrective', source: 'contractor', con_id: o.con_id, equip: u,
+          symptom: down ? 'متوقف' : 'متابعة صيانة دورية', follow_of: woId,
+          description: (bad.length ? 'بنود تحتاج صيانة أو استبدال: ' + bad.join('، ') : '') + (d.toreplace ? (bad.length ? ' · ' : '') + d.toreplace : '')
+        }, con ? con.name : s.id).order;
+        Db.update('WorkOrders', f2.wo_id, { arrived_at: t, work_from: '' });
+        extra.push('فُتحت متابعة ' + f2.wo_id + ' لـ ' + u);
+      });
+    }
     if ((d.custom || []).length) {
       Db.insertMany('Lists', d.custom.map(function (c) {
         return { type: o.type, list: c.list, ar: String(c.ar || '').trim(), en: '', status: 'pending', created_by: con ? con.name : s.id, sort: 999 };
@@ -178,11 +214,20 @@ var Orders = (function () {
     var con = Db.get('Contractors', s.id);
     var hotelId = d.hotel_id || s.hotel_id;
     if (!activeContract(hotelId, con.type, con.con_id)) throw new Error('لا يوجد عقد ساري لك في هذا الفندق.');
+    var isPm = d.outcome === 'pm';
+    // التحقق قبل الإنشاء حتى لا تبقى عملية ناقصة
+    if ((OUTCOMES[con.type] || []).indexOf(d.outcome) === -1) throw new Error('اختر النتيجة.');
+    if (isPm) pmParse_(d);
+    else if (con.type === 'el' && d.outcome !== 'report' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var o = create({
-      hotel_id: hotelId, type: con.type, kind: d.outcome === 'report' ? 'report' : 'diag', source: 'contractor', con_id: con.con_id,
-      floor_id: d.floor_id || '', room: d.room || '', equip: d.equip || '', symptom: d.sym || d.title || ''
+      hotel_id: hotelId, type: con.type, kind: isPm ? 'periodic' : (d.outcome === 'report' ? 'report' : 'diag'), source: 'contractor', con_id: con.con_id,
+      floor_id: d.floor_id || '', room: d.room || '', equip: isPm ? (d.units || []).join('، ') : (d.equip || ''),
+      symptom: isPm ? 'صيانة دورية' : (d.sym || d.title || '')
     }, con.name).order;
-    Db.update('WorkOrders', o.wo_id, { arrived_at: now_(), work_from: now_() });
+    // الصيانة الدورية: وقت الدخول = آخر مسح لباركود أعوان اليوم في هذا الفندق
+    var t0 = now_(), last = isPm ? lastArrival_(con.con_id, hotelId) : null;
+    if (last && dayStr_(new Date(last)) === dayStr_(t0)) t0 = new Date(last);
+    Db.update('WorkOrders', o.wo_id, { arrived_at: t0, work_from: t0 });
     var res = conSubmit(s, o.wo_id, d);
     res.id = o.wo_id;
     return res;

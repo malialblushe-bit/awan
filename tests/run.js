@@ -524,5 +524,28 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   eq(rep.action.join(), 'تنظيف');
 });
 
+t('الصيانة الدورية للمصاعد: زيارة واحدة لكل مصاعد العقد، والبند O أو المتوقف يفتح متابعة، و«لا ينطبق» يُتذكَّر', () => {
+  const b = run(`apiConBoot('${elTok}')`);
+  const h = b.hotels.find(x => x.id === HID);
+  eq(h.mine.join(), 'مصعد النزلاء 1');
+  const ok = 'x'.repeat(38), withO = 'x'.repeat(4) + 'o' + 'x'.repeat(3) + 'nnn' + 'x'.repeat(27);
+  throws(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': 'xx' })`, 'ناقصة');
+  throws(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': '${ok}' })`, 'يعمل الآن');
+  const r = run(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1', 'مصعد الخدمة'], techs: 'أبوبكر، حسام', 'g|مصعد النزلاء 1': '${withO}', 'w|مصعد النزلاء 1': 'نعم', 'g|مصعد الخدمة': '${ok}', 'w|مصعد الخدمة': 'لا', replaced: '', toreplace: 'فرامل P8' })`);
+  const id = r.result.id, o = run(`Db.get('WorkOrders', '${id}')`);
+  eq(o.kind, 'periodic'); eq(o.status, 'matching'); eq(o.symptom, 'صيانة دورية');
+  const fol = run(`Db.all('WorkOrders', x => x.follow_of === '${id}')`);
+  eq(fol.length, 2);
+  const stop = fol.find(x => x.equip === 'مصعد الخدمة');
+  eq(stop.symptom, 'متوقف'); eq(!!stop.down_from, true);
+  if (!fol.find(x => x.equip === 'مصعد النزلاء 1').description.includes('5')) throw new Error('البند 5 لم يُذكر');
+  eq(run(`apiConBoot('${elTok}')`).pmLast['مصعد النزلاء 1'], 'x'.repeat(8) + 'nnn' + 'x'.repeat(27));
+  run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'good' })`);
+  const con = run(`Db.find('Contractors', c => c.name === 'شركة المصاعد').con_id`);
+  const row = run(`Kpi.rows(r => r.con_id === '${con}' && r.hotel_id === '${HID}', 6)`).find(x => x.month === run('Kpi.month(new Date())'));
+  eq(row.d.pm, 1);
+  eq(run(`apiKpiBoot('${engTok}')`).pmTarget[con + '|' + HID] >= 0, true);
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);

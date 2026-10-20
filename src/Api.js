@@ -201,11 +201,21 @@ function conBoot_(s) {
   R.contracts.filter(function (c) { return c.con_id === s.id; }).forEach(function (c) {
     Orders.csv(c.hotel_ids).forEach(function (hid) {
       var h = R.hotels[hid];
-      if (h) hotels[hid] = { id: hid, name: h.name, resp: Number(c.resp_normal) || null, floors: floorsOf_(hid), elevators: elevatorsOf_(hid) };
+      if (h) {
+        var all = elevatorsOf_(hid), inC = Orders.csv(c.elevator_ids).filter(function (e) { return all.indexOf(e) !== -1; });
+        hotels[hid] = { id: hid, name: h.name, resp: Number(c.resp_normal) || null, floors: floorsOf_(hid), elevators: all, mine: inC.length ? inC : all, pm: Number(c.pm_per_month) || 0 };
+      }
     });
+  });
+  // «لا ينطبق» من آخر زيارة دورية لكل مصعد، لتُعبّأ تلقائياً
+  var pmLast = {};
+  mine.filter(function (o) { return o.kind === 'periodic' && o.report; }).sort(function (a, b) { return Orders.ms(a.created_at) - Orders.ms(b.created_at); }).forEach(function (o) {
+    var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
+    (Array.isArray(reps) ? reps : [reps]).forEach(function (r) { if (r && r.grid) Object.keys(r.grid).forEach(function (u) { pmLast[u] = String(r.grid[u]).replace(/[^n]/g, 'x'); }); });
   });
   var here = R.hotels[s.hotel_id] || {};
   return {
+    pmLast: pmLast,
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : '') },
     web: !!s.web,
@@ -342,7 +352,8 @@ function apiKpiBoot(token) {
     rows: rows, thresholds: Kpi.thresholds(),
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
-    month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30
+    month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30,
+    pmTarget: (function () { var t = {}; R.contracts.forEach(function (c) { if (Number(c.pm_per_month) > 0) Orders.csv(c.hotel_ids).forEach(function (h) { t[c.con_id + '|' + h] = Number(c.pm_per_month); }); }); return t; })()
   };
 }
 
