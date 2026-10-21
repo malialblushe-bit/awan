@@ -105,8 +105,9 @@ var Water = (function () {
     }).sort(function (a, b) { return b.at - a.at; });
   }
 
-  /** اعتماد أو رفض نقلة أو أكثر */
+  /** اعتماد أو رفض نقلة واحدة (لا اعتماد جماعي) */
   function match(s, ids, ok, reason, scope) {
+    if (!ids || ids.length !== 1) throw new Error('تُطابق النقلات واحدة واحدة.');
     if (MATCH_ROLES.indexOf(s.role) === -1) throw new Error('المطابقة لمدير الفندق أو المدير المناوب.');
     reason = String(reason || '').trim();
     if (!ok && !reason) throw new Error('اكتب سبب الرفض.');
