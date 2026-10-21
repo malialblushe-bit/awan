@@ -58,10 +58,23 @@ var Tg = (function () {
       var h = Db.get('Hotels', o.hotel_id);
       if (!h || !h.tg_chat) return false;
       var r = api_('sendMessage', { chat_id: String(h.tg_chat), text: text_(o), parse_mode: 'HTML', reply_markup: keyboard_(o) });
-      if (r && r.ok) { Db.update('WorkOrders', woId, { tg_msg: r.result.message_id }); return true; }
+      if (r && r.ok) {
+        Db.update('WorkOrders', woId, { tg_msg: r.result.message_id });
+        // قائمة صغيرة في الخصائص لما ينتظر الاستلام، حتى لا يُقرأ جدول العمليات كل دقيقة
+        var min = Number(Db.setting('tg_remind_min')) || 10, pd = pend_();
+        pd.push({ id: woId, chat: String(h.tg_chat), msg: r.result.message_id, due: Date.now() + min * 60000, min: min });
+        savePend_(pd);
+        return true;
+      }
     } catch (e) { /* لا يمنع العمل */ }
     return false;
   }
+
+  function pend_() { try { return JSON.parse(props_().getProperty('TG_PEND') || '[]'); } catch (e) { return []; } }
+  function savePend_(a) { props_().setProperty('TG_PEND', JSON.stringify(a.slice(-200))); }
+  function unpend_(id) { var a = pend_(), b = a.filter(function (x) { return x.id !== id; }); if (b.length !== a.length) savePend_(b); }
+  /** هل يوجد طلب تجاوز مدة الاستلام؟ (بلا قراءة جداول) */
+  function due() { var now = Date.now(); return pend_().some(function (x) { return x.due <= now; }); }
 
   /** يحدّث رسالة الطلب بحالته */
   function refresh(woIds) {
@@ -89,6 +102,7 @@ var Tg = (function () {
     if (o.claimed_by) return api_('answerCallbackQuery', { callback_query_id: cb.id, text: 'استلمه ' + o.claimed_by + ' قبلك.', show_alert: true });
     if (Orders.OPEN.indexOf(o.status) === -1) return api_('answerCallbackQuery', { callback_query_id: cb.id, text: 'الطلب منتهٍ.' });
     Db.update('WorkOrders', id, { claimed_by: name_(cb.from), claimed_at: new Date(), tg_uid: String(cb.from.id) });
+    unpend_(id);
     api_('answerCallbackQuery', { callback_query_id: cb.id, text: 'الطلب باسمك. امسح باركود أعوان عند الوصول.' });
     refresh([id]);
   }
@@ -103,26 +117,32 @@ var Tg = (function () {
     api_('sendMessage', { chat_id: msg.chat.id, text: '✅ رُبطت المجموعة بـ ' + h.name + '. ستصل هنا طلبات التكييف، ويستلمها الفني بزر «أستلمه».' });
   }
 
-  /** تنبيه واحد في المجموعة لطلب لم يُستلم خلال المدة */
+  /** تنبيه واحد في المجموعة لطلب لم يُستلم خلال المدة (يقرأ الطلب المستحق فقط) */
   function remind_() {
-    var min = Number(Db.setting('tg_remind_min')) || 10, now = Date.now(), hotels = {};
-    Db.all('Hotels').forEach(function (h) { hotels[h.hotel_id] = h; });
-    Db.all('WorkOrders', function (o) {
-      return o.type === 'ac' && o.tg_msg && !o.claimed_by && !Orders.truthy(o.tg_reminded) && o.status === 'assigned' && now - Orders.ms(o.created_at) > min * 60000;
-    }).forEach(function (o) {
-      var h = hotels[o.hotel_id];
-      if (!h || !h.tg_chat) return;
-      api_('sendMessage', { chat_id: String(h.tg_chat), text: '⏰ الطلب ' + o.wo_id + ' لم يُستلم منذ ' + min + ' دقائق.', reply_to_message_id: Number(o.tg_msg) });
-      Db.update('WorkOrders', o.wo_id, { tg_reminded: true });
+    var now = Date.now(), keep = [];
+    pend_().forEach(function (x) {
+      if (x.due > now) { keep.push(x); return; }
+      var o = Db.get('WorkOrders', x.id);
+      if (!o || o.claimed_by || o.status !== 'assigned') return;
+      api_('sendMessage', { chat_id: x.chat, text: '⏰ الطلب ' + x.id + ' لم يُستلم منذ ' + x.min + ' دقائق.', reply_to_message_id: Number(x.msg) });
+      Db.update('WorkOrders', x.id, { tg_reminded: true });
     });
+    savePend_(keep);
   }
 
-  /** يُشغَّل كل دقيقة: الاستلامات وروابط المجموعات، ثم التنبيهات */
-  function poll() {
-    if (!on()) return 0;
-    var p = props_(), off = Number(p.getProperty('TG_OFFSET') || 0);
+  /** سحب التحديثات من تيليجرام (بلا قراءة جداول) */
+  function fetch() {
+    if (!on()) return [];
+    var off = Number(props_().getProperty('TG_OFFSET') || 0);
     var r = api_('getUpdates', { offset: off, timeout: 0, allowed_updates: ['message', 'callback_query'] });
-    var ups = (r && r.ok) ? r.result : [];
+    return (r && r.ok) ? r.result : [];
+  }
+
+  /** معالجة الاستلامات وروابط المجموعات، ثم التنبيهات المستحقة */
+  function poll(ups) {
+    if (!on()) return 0;
+    if (!ups) ups = fetch();
+    var p = props_(), off = Number(p.getProperty('TG_OFFSET') || 0);
     ups.forEach(function (u) {
       off = Math.max(off, u.update_id + 1);
       try {
@@ -130,8 +150,8 @@ var Tg = (function () {
         else if (u.message && u.message.text) link_(u.message);
       } catch (e) { /* تجاهل التحديث المعطوب */ }
     });
-    p.setProperty('TG_OFFSET', String(off));
-    remind_();
+    if (ups.length) p.setProperty('TG_OFFSET', String(off));
+    if (due()) remind_();
     return ups.length;
   }
 
@@ -158,10 +178,16 @@ var Tg = (function () {
     return c;
   }
 
-  return { on: on, post: post, refresh: refresh, poll: poll, setup: setup, bot: bot, newCode: newCode, text: text_ };
+  return { on: on, post: post, refresh: refresh, poll: poll, fetch: fetch, due: due, setup: setup, bot: bot, newCode: newCode, text: text_ };
 })();
 
 /** المشغّل الزمني (كل دقيقة) */
 function tgPoll() {
-  try { return Db.withLock(function () { return Tg.poll(); }); } catch (e) { return 0; }
+  // أغلب الدقائق لا جديد فيها: لا قفل ولا قراءة جداول، فيبقى زمن التشغيل اليومي قليلاً
+  try {
+    if (!Tg.on()) return 0;
+    var ups = Tg.fetch();
+    if (!ups.length && !Tg.due()) return 0;
+    return Db.withLock(function () { return Tg.poll(ups); });
+  } catch (e) { return 0; }
 }

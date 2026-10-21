@@ -839,7 +839,8 @@ t('تيليجرام: طلب التكييف يُنشر في مجموعة الفن
   eq(run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === id).claimed_by, 'أحمد علي');
   // تنبيه لطلب لم يُستلم
   const id2 = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '713', symptom: 'لا يبرد', name: 'سالم' })`).id;
-  run(`Db.update('WorkOrders', '${id2}', { created_at: new Date(Date.now() - 15 * 60000) })`);
+  run(`(function(){var P=PropertiesService.getScriptProperties(),p=JSON.parse(P.getProperty('TG_PEND'));p.forEach(function(x){x.due=0});P.setProperty('TG_PEND',JSON.stringify(p))})()`);
+  eq(run(`JSON.parse(PropertiesService.getScriptProperties().getProperty('TG_PEND')).length`), 1);
   const n1 = tgCalls.length; run(`tgPoll()`); run(`tgPoll()`);
   eq(tgCalls.slice(n1).filter(c => c.m === 'sendMessage' && c.p.text.includes('لم يُستلم')).length, 1);
   // الحالة تتحدّث مع الإجراءات
