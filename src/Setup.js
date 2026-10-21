@@ -112,3 +112,30 @@ function done_(title, report) {
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { /* خارج الواجهة (الاختبار) */ }
   return msg;
 }
+
+/** ليلياً: العمليات المغلقة أو المرفوضة منذ أكثر من ARCHIVE_DAYS تنتقل للأرشيف (ما عدا سداد معلّق) */
+function archiveAwan() {
+  return Db.withLock(function () {
+    var cut = Date.now() - ARCHIVE_DAYS * 864e5;
+    var all = Db.all('WorkOrders');
+    var old = all.filter(function (o) {
+      var c = Orders.ms(o.closed_at);
+      return (o.status === 'closed' || o.status === 'rejected') && c && c < cut && !Orders.truthy(o.pay_pending);
+    });
+    if (!old.length) return 0;
+    Db.insertMany('WorkOrdersArchive', old.map(function (o) { var c = {}; Object.keys(o).forEach(function (k) { c[k] = o[k]; }); return c; }));
+    var gone = {};
+    old.forEach(function (o) { gone[o.wo_id] = true; });
+    Db.rewrite('WorkOrders', all.filter(function (o) { return !gone[o.wo_id]; }));
+    return old.length;
+  });
+}
+
+/** المشغّلات الدائمة (مرة واحدة): الأرشفة الليلية */
+function ensureTriggers_() {
+  var p = PropertiesService.getScriptProperties();
+  if (p.getProperty('TRIG_ARCHIVE')) return;
+  var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction && t.getHandlerFunction() === 'archiveAwan'; });
+  if (!has) ScriptApp.newTrigger('archiveAwan').timeBased().everyDays(1).atHour(3).create();
+  p.setProperty('TRIG_ARCHIVE', '1');
+}

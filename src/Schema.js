@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 15;
+var SCHEMA_VERSION = 16;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -136,6 +136,10 @@ var SCHEMA = [
     ['key', 'المتعهد|الفندق|الشهر'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر'],
     ['data', 'الأرقام (JSON)'], ['updated_at', 'آخر تحديث']] }
 ];
+
+// أرشيف العمليات: نفس أعمدة WorkOrders. تنتقل إليه ليلاً العمليات المغلقة منذ أكثر من ARCHIVE_DAYS، فيبقى الجدول النشط صغيراً
+var ARCHIVE_DAYS = 60;
+SCHEMA.push({ name: 'WorkOrdersArchive', cols: tableDef('WorkOrders').cols.slice() });
 
 /** الحالات الثماني (كما يراها المهندس). المتعهد يرى decision و pay معاً "قيد المراجعة" */
 var STATUS = {

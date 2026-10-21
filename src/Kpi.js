@@ -151,8 +151,14 @@ var Kpi = (function () {
     });
     if (!list.length) return 0;
     var canon = canon_(), byHotel = {};
+    // شهر قديم قد تكون بعض عملياته مؤرشفة: يُضم الأرشيف (نادراً)
+    var archMonth = month_(new Date(Date.now() - (typeof ARCHIVE_DAYS !== 'undefined' ? ARCHIVE_DAYS : 60) * 864e5));
+    var needArch = list.some(function (k) { return k.month <= archMonth; });
     list.forEach(function (k) {
-      if (!byHotel[k.hotel]) byHotel[k.hotel] = Db.all('WorkOrders', function (o) { return o.hotel_id === k.hotel; });
+      if (!byHotel[k.hotel]) {
+        var f = function (o) { return o.hotel_id === k.hotel; };
+        byHotel[k.hotel] = Db.all('WorkOrders', f).concat(needArch ? Db.all('WorkOrdersArchive', f) : []);
+      }
       var d = compute_(k.con, k.hotel, k.month, byHotel[k.hotel], canon);
       if (d.orders || Db.find('KpiSummary', function (r) { return r.key === k.con + '|' + k.hotel + '|' + k.month; })) save_(k.con, k.hotel, k.month, d);
     });
@@ -182,7 +188,7 @@ var Kpi = (function () {
   /** إعادة حساب كل شيء (زر المشرف) */
   function rebuild() {
     var keys = {}, out = [];
-    Db.all('WorkOrders').forEach(function (o) {
+    Db.all('WorkOrders').concat(Db.all('WorkOrdersArchive')).forEach(function (o) {
       if (!o.con_id) return;
       var k = o.con_id + '|' + o.hotel_id + '|' + month_(o.created_at);
       if (!keys[k]) { keys[k] = true; out.push({ con: o.con_id, hotel: o.hotel_id, month: month_(o.created_at) }); }

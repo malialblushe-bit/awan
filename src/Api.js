@@ -401,6 +401,18 @@ function apiEngRfq(token, woId, preview) {
   });
 }
 
+/** فتح عملية برقمها، من النشط أو الأرشيف */
+function apiEngFind(token, woId) {
+  var s = Auth.need(token, STAFF_ROLES);
+  var id = String(woId || '').trim().toUpperCase();
+  var o = Db.get('WorkOrders', id) || Db.get('WorkOrdersArchive', id);
+  if (!o) throw new Error('لا توجد عملية بهذا الرقم.');
+  if (scopeHotels_(s, Orders.refs()).indexOf(o.hotel_id) === -1) throw new Error('العملية ليست ضمن فنادقك.');
+  var v = Orders.view(Orders.refs(), o, false);
+  v.archived = !Db.get('WorkOrders', id);
+  return v;
+}
+
 function apiEngCreate(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
@@ -528,7 +540,9 @@ function apiStatement(token, conId, hotelId, from, to) {
     return best ? pricesOf_(best.c) : {};
   };
   var lines = {}, orders = [];
-  Db.all('WorkOrders', function (o) { var d = dayOf(o.closed_at); return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && d >= from && d <= to; })
+  var inSt = function (o) { var d = dayOf(o.closed_at); return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && d >= from && d <= to; };
+  var archFrom = dayOf(new Date(Date.now() - ARCHIVE_DAYS * 864e5));
+  Db.all('WorkOrders', inSt).concat(from < archFrom ? Db.all('WorkOrdersArchive', inSt) : [])
     .sort(function (a, b) { return Orders.ms(a.closed_at) - Orders.ms(b.closed_at); })
     .forEach(function (o) {
       var reps = o.report; if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
@@ -624,6 +638,7 @@ function apiAdmBoot(token) { Auth.need(token, ['admin']); return admBoot_(); }
 function adm_(token, fn) {
   Auth.need(token, ['admin']);
   ensureSchemaVersion_();
+  try { ensureTriggers_(); } catch (e) { /* يُنشأ عند تشغيل authorizeAwan */ }
   return Db.withLock(function () {
     var out = fn() || {};
     Db.reset();

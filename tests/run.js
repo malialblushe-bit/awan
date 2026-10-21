@@ -39,6 +39,19 @@ class Range {
   }
   setValue(x) { return this.setValues([[x]]); }
   clearContent() { return this.setValues(Array.from({ length: this.nr }, () => Array(this.nc).fill(''))); }
+  getRow() { return this.r; }
+  createTextFinder(text) {
+    const self = this, t = String(text);
+    const f = { matchEntireCell: () => f, findNext: () => {
+      self.sh.ss.reads++;
+      for (let i = 0; i < self.nr; i++) for (let j = 0; j < self.nc; j++) {
+        const v = (self.sh.grid[self.r - 1 + i] || [])[self.c - 1 + j];
+        if (v !== undefined && String(v) === t) return new Range(self.sh, self.r + i, self.c + j, 1, 1);
+      }
+      return null;
+    } };
+    return f;
+  }
   setNotes() { return this; }
   setFontWeight() { return this; }
   setBackground() { return this; }
@@ -142,7 +155,7 @@ const ctx = {
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => triggers, deleteTrigger: () => {}, newTrigger: (fn) => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }), onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) },
+  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => triggers, deleteTrigger: () => {}, newTrigger: (fn) => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }), everyDays: () => ({ atHour: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }) }), onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) },
   UrlFetchApp: { getRequest: () => ({}), fetch: (url, o) => { const m = url.split('/').pop(), p = JSON.parse(o.payload || '{}'); tgCalls.push({ m, p }); const r = tgReply[m] ? tgReply[m](p) : { ok: true, result: { message_id: 500 + tgCalls.length } }; return { getContentText: () => JSON.stringify(r) }; } }
 };
 vm.createContext(ctx);
@@ -865,6 +878,35 @@ t('البريد الرسمي عنواناً بديلاً، وزمن الاستل
   eq(k.rows.some(r => r.d && (r.d.spend !== undefined || r.d.acts !== undefined)), false);
   const ks = run(`apiKpiBoot('${engTok}')`); if (!Object.keys(ks.prices).length) throw new Error('staff prices');
   const cl = ks.rows.reduce((a, r) => a + ((r.d && r.d.clN) || 0), 0); if (cl < 1) throw new Error('claim kpi');
+});
+
+t('البحث بالفهرس: الوصول لعملية بمعرّفها يقرأ صفاً واحداً، والأرشفة الليلية تبقي الجدول النشط صغيراً دون فقد شيء', () => {
+  const any = run(`Db.all('WorkOrders')[3].wo_id`);
+  run(`Db.reset()`);
+  const ss = run(`Db.ss()`); const r0 = ss.reads;
+  const o = run(`Db.get('WorkOrders', '${any}')`); eq(o.wo_id, any);
+  if (ss.reads - r0 > 4) throw new Error('reads ' + (ss.reads - r0));
+  run(`Db.update('WorkOrders', '${any}', { description: 'تحديث بالفهرس' })`);
+  run(`Db.reset()`); eq(run(`Db.all('WorkOrders').find(x => x.wo_id === '${any}').description`), 'تحديث بالفهرس');
+  eq(run(`Db.get('WorkOrders', 'AWN-99999')`), null);
+  // أرشفة: عملية مغلقة قديمة
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '701', symptom: 'لا يبرد', name: 'قديم' })`).id;
+  run(`Db.update('WorkOrders', '${id}', { status: 'closed', closed_at: new Date(Date.now() - 90 * 864e5), created_at: new Date(Date.now() - 95 * 864e5) })`);
+  const before = run(`Db.all('WorkOrders').length`);
+  const n = run(`archiveAwan()`); if (n < 1) throw new Error('archived ' + n);
+  run(`Db.reset()`);
+  eq(run(`Db.all('WorkOrders').length`), before - n);
+  eq(run(`Db.get('WorkOrders', '${id}')`), null); eq(run(`Db.get('WorkOrdersArchive', '${id}').requester`), 'قديم');
+  const f = run(`apiEngFind('${engTok}', '${id.toLowerCase()}')`); eq(f.id, id); eq(f.archived, true);
+  throws(`apiEngFind('${engTok}', 'AWN-99999')`, 'لا توجد');
+  eq(run(`archiveAwan()`), 0);
+  // الدورات ما زالت تعمل بعد الأرشفة
+  const id2 = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '702', symptom: 'لا يبرد', name: 'جديد' })`).id;
+  run(`apiConAct('${acTok}', 'submit', '${id2}', { outcome: 'fix', equip: 'AC-702-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  run(`apiEngAct('${engTok}', '${id2}', 'close', { sat: 'good' })`);
+  eq(run(`Db.get('WorkOrders', '${id2}').status`), 'closed');
+  run(`apiAdmKpiRebuild('${adminTok}')`);
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

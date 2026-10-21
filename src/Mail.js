@@ -178,5 +178,6 @@ var Mail = (function () {
 function authorizeAwan() {
   // يطلب الأذونات مرة واحدة: إرسال البريد فقط (Gmail API)، والاتصال الخارجي (تيليجرام)، والمشغّلات
   UrlFetchApp.getRequest('https://api.telegram.org');
+  ensureTriggers_();
   return 'البريد: ' + Session.getEffectiveUser().getEmail() + ' · المشغّلات: ' + ScriptApp.getProjectTriggers().length + ' · ' + (Gmail.Users ? 'Gmail API مفعّلة' : '');
 }

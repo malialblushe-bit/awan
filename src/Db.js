@@ -10,6 +10,10 @@
 var Db = (function () {
   var memo = {};
   var ssCache = null;
+  // البحث بالفهرس: الجداول الكبيرة يُوصل لسجلها بالمعرّف مباشرة (TextFinder داخل الجدول)
+  // فيُقرأ صف واحد بدل الجدول كاملاً، ما لم يكن الجدول محمّلاً أصلاً في هذا التنفيذ.
+  var INDEXED = { WorkOrders: true, WorkOrdersArchive: true };
+  var rowMemo = {}, heads = {};
 
   function ss() {
     if (ssCache) return ssCache;
@@ -56,6 +60,26 @@ var Db = (function () {
 
   function keyOf_(table) { return tableDef(table).cols[0][0]; }
 
+  function head_(table) {
+    if (memo[table]) return memo[table].head;
+    if (!heads[table]) { var sh = sheet_(table); heads[table] = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String); }
+    return heads[table];
+  }
+
+  /** موضع السجل بمعرّفه: {r: رقم الصف في الورقة، rec} — يقرأ عمود المعرّف داخل Sheets ثم الصف وحده */
+  function locate_(table, id) {
+    var rm = rowMemo[table] || (rowMemo[table] = {});
+    if (rm[id]) return rm[id];
+    var sh = sheet_(table), last = sh.getLastRow();
+    if (last < 2 || id == null || id === '') return null;
+    var cell = sh.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
+    if (!cell) return null;
+    var r = cell.getRow(), head = head_(table);
+    var rec = toObj_(head, sh.getRange(r, 1, 1, head.length).getValues()[0]);
+    if (rec[keyOf_(table)] !== id) return null;
+    return (rm[id] = { r: r, rec: rec });
+  }
+
   function all(table, filterFn) {
     var rows = load_(table).rows;
     return filterFn ? rows.filter(filterFn) : rows.slice();
@@ -68,6 +92,7 @@ var Db = (function () {
   }
 
   function get(table, id) {
+    if (INDEXED[table] && !memo[table]) { var x = locate_(table, id); return x ? x.rec : null; }
     var k = keyOf_(table);
     return find(table, function (r) { return r[k] === id; });
   }
@@ -85,18 +110,27 @@ var Db = (function () {
 
   function insertMany(table, recs) {
     if (!recs.length) return [];
-    var t = load_(table), sh = sheet_(table), k = keyOf_(table);
+    // الإضافة لا تحتاج قراءة الجدول: الترويسة فقط
+    var t = memo[table] || { head: head_(table), rows: null }, sh = sheet_(table), k = keyOf_(table);
     var ids = recs.some(function (r) { return !r[k]; }) ? nextIds_(table, recs.length) : [];
     recs.forEach(function (r, i) { if (!r[k]) r[k] = ids[i]; });
     var rows = recs.map(function (r) { return toRow_(t.head, r); });
     sh.getRange(sh.getLastRow() + 1, 1, rows.length, t.head.length).setValues(rows);
-    recs.forEach(function (r) { t.rows.push(toObj_(t.head, toRow_(t.head, r).map(function (v) { return (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v; }))); });
+    if (t.rows) recs.forEach(function (r) { t.rows.push(toObj_(t.head, toRow_(t.head, r).map(function (v) { return (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v; }))); });
     return recs;
   }
 
   function insert(table, rec) { return insertMany(table, [rec])[0]; }
 
   function update(table, id, patch) {
+    if (INDEXED[table] && !memo[table]) {
+      var x = locate_(table, id);
+      if (!x) throw new Error('سجل غير موجود: ' + table + ' ' + id);
+      Object.keys(patch).forEach(function (f) { x.rec[f] = patch[f]; });
+      var hd = head_(table);
+      sheet_(table).getRange(x.r, 1, 1, hd.length).setValues([toRow_(hd, x.rec)]);
+      return x.rec;
+    }
     var t = load_(table), k = keyOf_(table);
     var idx = -1;
     for (var i = 0; i < t.rows.length; i++) if (t.rows[i][k] === id) { idx = i; break; }
@@ -123,7 +157,7 @@ var Db = (function () {
   function remove(table, id) {
     var t = load_(table), k = keyOf_(table);
     for (var i = 0; i < t.rows.length; i++) {
-      if (t.rows[i][k] === id) { sheet_(table).deleteRow(i + 2); t.rows.splice(i, 1); return true; }
+      if (t.rows[i][k] === id) { sheet_(table).deleteRow(i + 2); t.rows.splice(i, 1); rowMemo[table] = {}; return true; }
     }
     return false;
   }
@@ -139,7 +173,16 @@ var Db = (function () {
     return r ? r.value : '';
   }
 
-  function reset() { memo = {}; ssCache = null; }
+  function reset() { memo = {}; ssCache = null; rowMemo = {}; heads = {}; }
 
-  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, withLock: withLock, setting: setting, reset: reset };
+  /** يستبدل كل صفوف الجدول بعملية كتابة واحدة (للأرشفة) */
+  function rewrite(table, rows) {
+    var t = load_(table), sh = sheet_(table), last = sh.getLastRow();
+    if (last > 1) sh.getRange(2, 1, last - 1, t.head.length).clearContent();
+    if (rows.length) sh.getRange(2, 1, rows.length, t.head.length).setValues(rows.map(function (r) { return toRow_(t.head, r); }));
+    t.rows = rows.map(function (r) { return toObj_(t.head, toRow_(t.head, r).map(function (v) { return (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v; })); });
+    rowMemo[table] = {};
+  }
+
+  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, rewrite: rewrite, withLock: withLock, setting: setting, reset: reset };
 })();
