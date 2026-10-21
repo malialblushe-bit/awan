@@ -478,7 +478,8 @@ function apiKpiBoot(token) {
   var s = Auth.need(token, STAFF_ROLES.concat(['contractor']));
   var R = Orders.refs(), rows, hotels;
   if (s.role === 'contractor') {
-    rows = Kpi.rows(function (r) { return r.con_id === s.id; }, 6);
+    // لا معلومات مالية لدى المتعهد: لا أسعار ولا قيم قطع
+    rows = Kpi.rows(function (r) { return r.con_id === s.id; }, 6).map(function (r) { if (r.d) { delete r.d.spend; delete r.d.spendN; delete r.d.acts; } return r; });
   } else {
     hotels = scopeHotels_(s, R);
     rows = Kpi.rows(function (r) { return hotels.indexOf(r.hotel_id) !== -1; }, 6);
@@ -493,7 +494,7 @@ function apiKpiBoot(token) {
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
     month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30,
-    prices: (function () { var p = {}; R.contracts.slice().sort(function (a, b) { return Orders.ms(a.created_at) - Orders.ms(b.created_at); }).forEach(function (c) { var m = pricesOf_(c); Object.keys(m).forEach(function (k) { p[c.con_id + '|' + k] = Number(m[k]); }); }); return p; })(),
+    prices: s.role === 'contractor' ? {} : (function () { var p = {}; R.contracts.slice().sort(function (a, b) { return Orders.ms(a.created_at) - Orders.ms(b.created_at); }).forEach(function (c) { var m = pricesOf_(c); Object.keys(m).forEach(function (k) { p[c.con_id + '|' + k] = Number(m[k]); }); }); return p; })(),
     pmTarget: (function () { var t = {}; R.contracts.forEach(function (c) { if (Number(c.pm_per_month) > 0) Orders.csv(c.hotel_ids).forEach(function (h) { t[c.con_id + '|' + h] = Number(c.pm_per_month); }); }); return t; })()
   };
 }
@@ -613,7 +614,8 @@ function admBoot_() {
       .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
       .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), price: l.price === '' || l.price == null ? '' : Number(l.price), status: l.status, by: l.created_by || '' }; }),
     thresholds: Kpi.thresholds(),
-    tgBot: Tg.bot()
+    tgBot: Tg.bot(),
+    mailFrom: String(Db.setting('mail_from') || '')
   };
 }
 
@@ -921,6 +923,7 @@ function apiAdmTgCode(token, hotelId) {
     return { code: Tg.newCode(hotelId) };
   });
 }
+function apiAdmMailFrom(token, addr) { return adm_(token, function () { return { from: Mail.setFrom(addr) }; }); }
 function apiAdmTgUnlink(token, hotelId) { return adm_(token, function () { Db.update('Hotels', hotelId, { tg_chat: '', tg_code: '' }); return {}; }); }
 
 // ───────── اعتماد البنود ─────────

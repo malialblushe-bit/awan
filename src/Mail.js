@@ -135,15 +135,35 @@ var Mail = (function () {
   }
 
   function send(m, replyTo) {
+    var from = String(Db.setting('mail_from') || '').trim();
+    if (from) {
+      // البريد الرسمي (Zoho) عنواناً بديلاً في Gmail حساب الصيانة
+      GmailApp.sendEmail(m.to, m.subject, m.text, { from: from, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: BRAND_AR, htmlBody: m.html });
+      return;
+    }
     MailApp.sendEmail({ to: m.to, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: BRAND_AR, subject: m.subject, htmlBody: m.html, body: m.text });
   }
 
-  return { rfq: rfq, notice: notice, send: send };
+  /** يتحقق أن العنوان مضاف في Gmail («إرسال البريد بصفة») قبل اعتماده مرسلاً */
+  function setFrom(addr) {
+    addr = String(addr || '').trim().toLowerCase();
+    if (addr) {
+      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(addr)) throw new Error('البريد غير صحيح: ' + addr);
+      var al = GmailApp.getAliases().map(function (x) { return String(x).toLowerCase(); });
+      if (al.indexOf(addr) === -1) throw new Error('العنوان غير مضاف في Gmail حساب الصيانة. أضفه أولاً من الإعدادات ← الحسابات ← «إرسال البريد بصفة» وأكّده.');
+    }
+    var row = Db.find('Settings', function (r) { return r.key === 'mail_from'; });
+    if (row) Db.update('Settings', 'mail_from', { value: addr }); else Db.insert('Settings', { key: 'mail_from', value: addr, note: 'المرسل الرسمي (عنوان بديل في Gmail)' });
+    return addr;
+  }
+
+  return { rfq: rfq, notice: notice, send: send, setFrom: setFrom };
 })();
 
 /** يُشغَّل مرة واحدة من محرر السكربت بحساب الصيانة لمنح إذن إرسال البريد */
 function authorizeAwan() {
   // يطلب كل الأذونات مرة واحدة: البريد، والاتصال الخارجي (تيليجرام)، والمشغّلات
   UrlFetchApp.getRequest('https://api.telegram.org');
+  GmailApp.getAliases();
   return 'المتبقي من البريد اليوم: ' + MailApp.getRemainingDailyQuota() + ' · المشغّلات: ' + ScriptApp.getProjectTriggers().length;
 }

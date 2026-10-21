@@ -54,7 +54,7 @@ var Kpi = (function () {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,
       trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0, pm: 0,
-      repN: 0, okN: 0, qSum: 0, qN: 0, spend: 0, spendN: 0, okBy: {},
+      repN: 0, okN: 0, qSum: 0, qN: 0, spend: 0, spendN: 0, okBy: {}, clSum: 0, clN: 0,
       acts: {}, parts: {}, causes: {}, syms: {}, locs: {}
     };
     mine.forEach(function (o) {
@@ -97,6 +97,8 @@ var Kpi = (function () {
         if (lastR && lastR.outcome === 'ok') { d.okN++; bump_(d.okBy, o.requester || (o.source === 'engineer' ? 'المهندس' : '')); }
       }
       // زمن عرض السعر (من طلبه بالبريد إلى وصوله) والقطع المعتمدة بقيمتها
+      // زمن الاستلام: من رفع الطلب إلى «أستلمه» في تيليجرام
+      if (o.claimed_at) { d.clSum += Math.max(0, (ms(o.claimed_at) - ms(o.created_at)) / 60000); d.clN++; }
       if (o.rfq_at && o.quote_at) { d.qSum += Math.max(0, (ms(o.quote_at) - ms(o.rfq_at)) / 36e5); d.qN++; }
       if (o.decision === 'con' && Number(o.quote) > 0 && o.status !== 'rejected') { d.spend += Number(o.quote); d.spendN++; }
       if (o.type === 'el' && o.down_from && o.down_to) { d.downMin += Math.max(0, (ms(o.down_to) - ms(o.down_from)) / 60000); d.downN++; }
@@ -124,7 +126,7 @@ var Kpi = (function () {
       if (sym || o.symptom) bump_(d.syms, canon(o.type, 'sym', sym || o.symptom));
       bump_(d.locs, o.type === 'el' ? o.equip : (o.room ? String(o.room) : ''));
     });
-    d.qSum = Math.round(d.qSum); d.okBy = top_(d.okBy, 5);
+    d.qSum = Math.round(d.qSum); d.clSum = Math.round(d.clSum); d.okBy = top_(d.okBy, 5);
     d.respSum = Math.round(d.respSum); d.rescueSum = Math.round(d.rescueSum); d.downMin = Math.round(d.downMin);
     d.parts = top_(d.parts, 8); d.causes = top_(d.causes, 8); d.syms = top_(d.syms, 8); d.locs = top_(d.locs, 8);
     return d;

@@ -128,6 +128,7 @@ const ctx = {
       return x;
     }
   },
+  GmailApp: { getAliases: () => ['maint@nawazi.sa'], sendEmail: (to, subj, body, o) => { sentMail.push({ to: Object.assign({ to: to, subject: subj }, o), gmail: true }); } },
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
@@ -837,6 +838,20 @@ t('تيليجرام: طلب التكييف يُنشر في مجموعة الفن
   // المصاعد لا تُنشر
   const n2 = tgCalls.length; run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'متوقف', name: 'سالم' })`);
   eq(tgCalls.slice(n2).filter(c => c.m === 'sendMessage').length, 0);
+});
+
+t('البريد الرسمي عنواناً بديلاً، وزمن الاستلام، ولا معلومات مالية لدى المتعهد', () => {
+  throws(`apiAdmMailFrom('${adminTok}', 'x@other.sa')`, 'غير مضاف');
+  eq(run(`apiAdmMailFrom('${adminTok}', 'Maint@Nawazi.sa')`).from, 'maint@nawazi.sa');
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
+  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
+  const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${id}')`);
+  eq(sentMail[n0].gmail, true); eq(sentMail[n0].to.from, 'maint@nawazi.sa');
+  run(`apiAdmMailFrom('${adminTok}', '')`);
+  const k = run(`apiKpiBoot('${acTok}')`); eq(Object.keys(k.prices).length, 0);
+  eq(k.rows.some(r => r.d && (r.d.spend !== undefined || r.d.acts !== undefined)), false);
+  const ks = run(`apiKpiBoot('${engTok}')`); if (!Object.keys(ks.prices).length) throw new Error('staff prices');
+  const cl = ks.rows.reduce((a, r) => a + ((r.d && r.d.clN) || 0), 0); if (cl < 1) throw new Error('claim kpi');
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

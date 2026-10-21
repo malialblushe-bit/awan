@@ -365,7 +365,7 @@ var Ops = (function () {
       X = { sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.length - dn.length, trapChecks: tl, trapExpected: tExp };
     } else {
       var m1 = from.slice(0, 7), m2 = to.slice(0, 7);
-      var z = { respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0, orders: 0, closed: 0, pm: 0, trapped: 0 };
+      var z = { respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0, orders: 0, closed: 0, pm: 0, trapped: 0, clSum: 0, clN: 0 };
       Db.all('KpiSummary', function (r) { var k = String(r.key).split('|'); return k[0] === con.con_id && hotelIds.indexOf(k[1]) !== -1 && k[2] >= m1 && k[2] <= m2; }).forEach(function (r) {
         var d = r.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
         Object.keys(z).forEach(function (k) { z[k] += Number(d[k]) || 0; });
@@ -374,7 +374,7 @@ var Ops = (function () {
       V.ready = z.readyN ? pct_(z.readyOk, z.readyN) : null;
       V.info = z.infoN ? pct_(z.infoOk, z.infoN) : null;
       V.sat = z.satN ? Math.round(z.satSum / z.satN) : null;
-      X = { orders: z.orders, closed: z.closed, pm: z.pm, trapped: z.trapped, respN: z.respN, readyN: z.readyN, infoN: z.infoN, satN: z.satN, months: m1 === m2 ? m1 : m1 + ' — ' + m2 };
+      X = { orders: z.orders, closed: z.closed, pm: z.pm, trapped: z.trapped, claim: z.clN ? Math.round(z.clSum / z.clN) + ' د' : '', respN: z.respN, readyN: z.readyN, infoN: z.infoN, satN: z.satN, months: m1 === m2 ? m1 : m1 + ' — ' + m2 };
     }
     var cas = Db.all('CorrectiveActions', function (c) { return c.con_id === con.con_id && hotelIds.indexOf(c.hotel_id) !== -1 && inR(c.created_at); });
     X.ca = cas.length; X.caOpen = cas.filter(function (c) { return c.status !== 'closed'; }).length;
