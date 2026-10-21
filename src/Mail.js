@@ -50,7 +50,7 @@ var Mail = (function () {
       '<div style="text-align:center;margin-top:10px"><span style="font-size:12px;background:' + BEIGE + ';color:' + DEEP + ';border-radius:20px;padding:4px 14px" dir="ltr">' + esc(o.wo_id) + '</span></div></td></tr>' +
       '<tr><td style="padding:10px 24px 22px;color:' + NAVY + ';line-height:1.8">' +
       bi_('<div style="font-size:21px;font-weight:bold;color:' + NAVY + '">' + esc(p.titleAr) + '</div>', '<div style="font-size:18px;font-weight:bold;color:' + NAVY + '">' + esc(p.titleEn) + '</div>') +
-      bi_('<p style="margin:2px 0 14px;color:' + INK + ';font-size:14px">' + esc(p.subAr) + '</p>', '<p style="margin:2px 0 14px;color:' + INK + ';font-size:13px">' + esc(p.subEn) + '</p>') +
+      (p.subAr ? bi_('<p style="margin:2px 0 14px;color:' + INK + ';font-size:14px">' + esc(p.subAr) + '</p>', '<p style="margin:2px 0 14px;color:' + INK + ';font-size:13px">' + esc(p.subEn) + '</p>') : '<div style="height:12px"></div>') +
       steps_(p.steps, p.cur) +
       '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:12px;border-collapse:separate">' + p.facts + '</table>' +
       (p.photos ? '<p style="margin:12px 0 0;font-size:13px;text-align:center">' + p.photos + '</p>' : '') +
@@ -96,7 +96,7 @@ var Mail = (function () {
     var c = ctx_(o);
     var html = page_(o, {
       titleAr: (o.equip || 'المصعد') + ' ينتظر عرضكم', titleEn: 'The elevator awaits your quotation',
-      subAr: 'لنُعيد المصعد لكامل جاهزيته معاً.', subEn: 'Let’s get the elevator back to full service together.',
+      subAr: '', subEn: '',
       steps: [['فنيكم عاين', 'Inspected'], ['عرضكم', 'Your quote'], ['نعتمد ونبدأ', 'We approve']], cur: 1,
       facts: c.facts, photos: c.photos,
       askAr: 'حسب توصية فنيكم، نأمل إرسال العرض بالرد على هذا البريد.', askEn: 'Per your technician’s recommendation, please reply to this email with your quotation.',
