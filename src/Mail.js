@@ -1,85 +1,141 @@
 /**
- * Mail.js — أعوان: البريد الصادر بهوية نوازي (كحلي وبيج).
- *  - طلب عرض سعر لشركة المصاعد بعد مراجعة المهندس للتشخيص. الرد يصل لبريد المهندس (replyTo + نسخة).
- * يحتاج إذن الإرسال مرة واحدة: شغّل authorizeAwan من محرر السكربت بحساب الصيانة.
+ * Mail.js — أعوان: البريد الصادر بهوية نوازي (كحلي وبيج)، عربي يميناً وإنجليزي يساراً.
+ *  - طلب عرض سعر لشركة المصاعد بعد مراجعة المهندس (تفاصيل العطل فقط؛ التشخيص من فنيهم).
+ *  - إشعار السداد، واعتماد الإصلاح قبل السداد.
+ * الرد يصل لبريد المهندس (replyTo + نسخة). إذن الإرسال مرة واحدة: شغّل authorizeAwan من محرر السكربت.
  */
 var Mail = (function () {
-  var NAVY = '#1F3A5F', BEIGE = '#EFE7D6', SAND = '#F6F3ED', GOLD = '#B39B6E', INK = '#4A5A70';
+  var NAVY = '#1F3A5F', BEIGE = '#EFE7D6', SAND = '#F6F3ED', GOLD = '#B39B6E', INK = '#4A5A70', KHAKI = '#7A6844', DEEP = '#5C4E33';
   var FONT = "'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif";
+  var BRAND_AR = 'نوازي للفندقة والاستثمار', BRAND_EN = 'Nawazi For Hotels & Investment';
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function when_(d) { return d ? Utilities.formatDate(new Date(d), 'Asia/Riyadh', 'yyyy-MM-dd HH:mm') : ''; }
+  /** الترجمة الإنجليزية لبند من القوائم المعتمدة (الملاحظة مثلاً) */
+  function en_(ar) {
+    var l = Db.find('Lists', function (x) { return x.ar === ar && x.en && x.status === 'active'; });
+    return l ? String(l.en) : '';
+  }
 
-  function lastReport_(o) {
+  /** عمودان: عربي يميناً وإنجليزي يساراً */
+  function bi_(ar, en, styleAr, styleEn) {
+    return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>' +
+      '<td dir="rtl" align="right" valign="top" style="width:50%;padding-left:10px;text-align:right;' + (styleAr || '') + '">' + ar + '</td>' +
+      '<td dir="ltr" align="left" valign="top" style="width:50%;padding-right:10px;text-align:left;' + (styleEn || styleAr || '') + '">' + en + '</td></tr></table>';
+  }
+
+  /** خطوات التعاون الثلاث: done = ما أُنجز، on = الخطوة الحالية */
+  function steps_(list, cur) {
+    return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:4px 0 18px"><tr>' + list.map(function (s, i) {
+      var on = i === cur, done = i < cur;
+      var bg = on ? GOLD : done ? NAVY : BEIGE, fg = on || done ? '#ffffff' : DEEP;
+      return '<td style="width:33%;padding:0 3px"><div style="background:' + bg + ';color:' + fg + ';border-radius:10px;padding:10px 6px;text-align:center;font-size:13px;line-height:1.5' + (on ? ';font-weight:bold' : '') + '">' +
+        (i + 1) + (done ? ' ✓' : '') + '<br>' + esc(s[0]) + '<br><span style="font-size:11px;opacity:.85" dir="ltr">' + esc(s[1]) + '</span></div></td>';
+    }).join('') + '</tr></table>';
+  }
+
+  function factRow_(ar, en, val, valEn) {
+    if (!val) return '';
+    return '<tr><td style="padding:9px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:30%" dir="rtl" align="right">' + esc(ar) + '</td>' +
+      '<td' + (/^[\x00-\x7F]+$/.test(String(val)) ? ' dir="ltr"' : '') + ' style="padding:9px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + NAVY + ';font-weight:bold;font-size:14px;text-align:center">' + esc(val) +
+      (valEn && valEn !== val ? '<div style="font-weight:normal;font-size:12px;color:' + INK + '" dir="ltr">' + esc(valEn) + '</div>' : '') + '</td>' +
+      '<td style="padding:9px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:30%" dir="ltr" align="left">' + esc(en) + '</td></tr>';
+  }
+
+  /** الإطار الكامل (تصميم «مسار التعاون») */
+  function page_(o, p) {
+    return '<div dir="rtl" style="background:' + SAND + ';padding:24px 10px;font-family:' + FONT + '">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
+      '<tr><td style="padding:22px 24px 4px">' + bi_('<b style="font-size:17px;color:' + NAVY + '">' + BRAND_AR + '</b>', '<b style="font-size:14px;color:' + NAVY + '">' + BRAND_EN + '</b>') +
+      '<div style="text-align:center;margin-top:10px"><span style="font-size:12px;background:' + BEIGE + ';color:' + DEEP + ';border-radius:20px;padding:4px 14px" dir="ltr">' + esc(o.wo_id) + '</span></div></td></tr>' +
+      '<tr><td style="padding:10px 24px 22px;color:' + NAVY + ';line-height:1.8">' +
+      bi_('<div style="font-size:21px;font-weight:bold;color:' + NAVY + '">' + esc(p.titleAr) + '</div>', '<div style="font-size:18px;font-weight:bold;color:' + NAVY + '">' + esc(p.titleEn) + '</div>') +
+      bi_('<p style="margin:2px 0 14px;color:' + INK + ';font-size:14px">' + esc(p.subAr) + '</p>', '<p style="margin:2px 0 14px;color:' + INK + ';font-size:13px">' + esc(p.subEn) + '</p>') +
+      steps_(p.steps, p.cur) +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:12px;border-collapse:separate">' + p.facts + '</table>' +
+      (p.photos ? '<p style="margin:12px 0 0;font-size:13px;text-align:center">' + p.photos + '</p>' : '') +
+      '<div style="margin-top:16px;background:' + BEIGE + ';border-radius:10px;padding:12px 14px">' + bi_('<span style="font-size:14px">' + esc(p.askAr) + '</span>', '<span style="font-size:13px">' + esc(p.askEn) + '</span>') + '</div>' +
+      '<div style="margin-top:18px">' + bi_('<span style="font-size:13px;color:' + INK + '">مع التقدير،<br><b style="color:' + NAVY + '">' + esc(p.by) + '</b> · مهندس الصيانة · ' + esc(p.hotel) + '</span>',
+        '<span style="font-size:12px;color:' + INK + '">Regards,<br><b style="color:' + NAVY + '">' + esc(p.by) + '</b> · Maintenance Engineer</span>') + '</div>' +
+      '</td></tr><tr><td style="background:' + NAVY + ';padding:10px 24px">' +
+      bi_('<span style="font-size:11px;color:#E6DAC0">' + BRAND_AR + '</span>', '<span style="font-size:11px;color:#E6DAC0">Awan · Partners in achievement</span>') +
+      '</td></tr></table></div>';
+  }
+
+  /** الحقائق المشتركة: الفندق، المصعد ورقمه، العطل كما بُلِّغ، الحالة، البلاغ، المعاينة والفحص */
+  function ctx_(o) {
+    var h = Db.get('Hotels', o.hotel_id) || {};
+    var el = Db.find('Elevators', function (e) { return e.hotel_id === o.hotel_id && e.name === o.equip; }) || {};
     var reps = o.report;
     if (typeof reps === 'string') { try { reps = JSON.parse(reps); } catch (e) { reps = []; } }
     if (reps && !Array.isArray(reps)) reps = [reps];
-    return (reps || []).filter(function (r) { return r && r.outcome === 'diag'; }).slice(-1)[0] || {};
+    var last = (reps || []).filter(function (r) { return r && r.outcome === 'diag'; }).slice(-1)[0] || {};
+    var working = last.working || '';
+    var sym = o.symptom || '';
+    var facts = factRow_('الفندق', 'Hotel', h.name) +
+      factRow_('المصعد', 'Elevator', o.equip) +
+      factRow_('رقم المصعد', 'Elevator No.', el.serial ? String(el.serial) : '') +
+      factRow_('العطل المُبلّغ', 'Reported fault', sym + (o.description && o.description !== sym ? ' · ' + o.description : ''), en_(sym)) +
+      factRow_('الحالة', 'Status', working === 'لا' ? 'متوقف' : working === 'نعم' ? 'يعمل' : '', working === 'لا' ? 'Stopped' : working === 'نعم' ? 'Working' : '') +
+      factRow_('وقت البلاغ', 'Reported at', when_(o.created_at)) +
+      factRow_('المعاينة والفحص', 'Inspected at', when_(last.at || o.submitted_at || o.arrived_at));
+    var photos = Orders.csv(o.photos).map(function (id, i) { return '<a style="color:' + NAVY + '" href="https://drive.google.com/file/d/' + esc(id) + '/view">صورة ' + (i + 1) + ' · Photo ' + (i + 1) + '</a>'; }).join(' &nbsp; ');
+    return { h: h, facts: facts, photos: photos };
   }
 
-  function row_(k, v) {
-    if (!v || (Array.isArray(v) && !v.length)) return '';
-    return '<tr><td style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + INK + ';width:34%;vertical-align:top">' + esc(k) + '</td>' +
-      '<td style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + NAVY + ';font-weight:bold">' + esc(Array.isArray(v) ? v.join('، ') : v) + '</td></tr>';
-  }
-
-  /** {to, cc, subject, html, text} لطلب عرض السعر */
-  function rfq(o, me) {
+  function to_(o) {
     var con = Db.get('Contractors', o.con_id) || {};
-    var h = Db.get('Hotels', o.hotel_id) || {};
-    var to = Orders.csv(con.emails);
-    if (!to.length) throw new Error('لا يوجد بريد لـ ' + (con.name || 'المتعهد') + '. أضفه من المتعهدون والعقود ← بيانات التواصل.');
-    if (!me || !me.email) throw new Error('أضف بريدك في المستخدمين ليصلك رد عرض السعر.');
-    var r = lastReport_(o);
-    var photos = Orders.csv(o.photos);
-    var subject = 'طلب عرض سعر | ' + o.wo_id + ' | ' + (h.name || '') + ' | ' + (o.equip || '');
-    var html = '<div dir="rtl" style="background:' + SAND + ';padding:24px 12px;font-family:' + FONT + '">' +
-      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
-      '<tr><td style="background:' + NAVY + ';padding:22px 26px;color:#ffffff">' +
-      '<div style="font-size:22px;font-weight:bold">نوازي للفنادق والاستثمار</div>' +
-      '<div style="font-size:13px;color:' + BEIGE + ';direction:ltr;text-align:right">Nawazi For Hotels &amp; Investment</div></td></tr>' +
-      '<tr><td style="height:4px;background:' + GOLD + '"></td></tr>' +
-      '<tr><td style="padding:24px 26px;color:' + NAVY + ';font-size:15px;line-height:1.8">' +
-      '<div style="font-size:19px;font-weight:bold;margin-bottom:6px">طلب عرض سعر</div>' +
-      '<p style="margin:0 0 14px">السادة / ' + esc(con.name || '') + '<br>السلام عليكم ورحمة الله وبركاته،<br>نأمل تزويدنا بعرض سعر للقطعة الموصى باستبدالها حسب تشخيص فنيكم أدناه.</p>' +
-      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:10px;border-collapse:separate;font-size:14px">' +
-      row_('رقم العملية', o.wo_id) + row_('الفندق', h.name) + row_('المصعد', o.equip) +
-      row_('الملاحظة', r.sym || o.symptom) + row_('الجزء المعطّل', r.part) + row_('السبب', r.cause) +
-      row_('القطعة الموصى باستبدالها', r.rec) + row_('ملاحظة الفني', r.note) + '</table>' +
-      (photos.length ? '<p style="margin:14px 0 0;font-size:14px">الصور: ' + photos.map(function (id, i) { return '<a style="color:' + NAVY + '" href="https://drive.google.com/file/d/' + esc(id) + '/view">صورة ' + (i + 1) + '</a>'; }).join(' · ') + '</p>' : '') +
-      '<div style="margin:18px 0 0;padding:12px 14px;background:' + BEIGE + ';border-radius:10px;font-size:14px">نرجو الرد على هذه الرسالة بعرض السعر، مع ذكر رقم العملية <b dir="ltr">' + esc(o.wo_id) + '</b>.</div>' +
-      '<p style="margin:18px 0 0;font-size:14px">مع التحية،<br><b>' + esc(me.name || '') + '</b><br>مهندس الصيانة · ' + esc(h.name || '') + '</p>' +
-      '</td></tr><tr><td style="padding:12px 26px;background:' + SAND + ';color:' + INK + ';font-size:12px">أُرسلت من منصة أعوان للمتعهدين · نوازي للفنادق والاستثمار</td></tr></table></div>';
-    var text = 'طلب عرض سعر\nرقم العملية: ' + o.wo_id + '\nالفندق: ' + (h.name || '') + '\nالمصعد: ' + (o.equip || '') +
-      '\nالقطعة الموصى باستبدالها: ' + (r.rec || []).join('، ') + '\nنرجو الرد بعرض السعر مع ذكر رقم العملية.\n' + (me.name || '');
-    return { to: to.join(','), cc: me.email, subject: subject, html: html, text: text };
+    return { con: con, list: Orders.csv(con.emails) };
   }
 
-  /** إشعار لإدارة المتعهد: تم السداد، أو الإصلاح قبل السداد */
+  /** طلب عرض السعر */
+  function rfq(o, me) {
+    var t = to_(o);
+    if (!t.list.length) throw new Error('لا يوجد بريد لـ ' + (t.con.name || 'المتعهد') + '. أضفه من المتعهدون والعقود ← بيانات التواصل.');
+    if (!me || !me.email) throw new Error('أضف بريدك في المستخدمين ليصلك رد عرض السعر.');
+    var c = ctx_(o);
+    var html = page_(o, {
+      titleAr: (o.equip || 'المصعد') + ' ينتظر عرضكم', titleEn: 'The elevator awaits your quotation',
+      subAr: 'لنُعيد المصعد لكامل جاهزيته معاً.', subEn: 'Let’s get the elevator back to full service together.',
+      steps: [['فنيكم عاين', 'Inspected'], ['عرضكم', 'Your quote'], ['نعتمد ونبدأ', 'We approve']], cur: 1,
+      facts: c.facts, photos: c.photos,
+      askAr: 'حسب توصية فنيكم، نأمل إرسال العرض بالرد على هذا البريد.', askEn: 'Per your technician’s recommendation, please reply to this email with your quotation.',
+      by: me.name || '', hotel: c.h.name || ''
+    });
+    var subject = 'طلب عرض سعر · Quotation request | ' + o.wo_id + ' | ' + (c.h.name || '') + ' | ' + (o.equip || '');
+    var text = 'طلب عرض سعر / Quotation request\n' + o.wo_id + ' · ' + (c.h.name || '') + ' · ' + (o.equip || '') + '\nالعطل: ' + (o.symptom || '') +
+      '\nحسب توصية فنيكم، نأمل إرسال العرض بالرد على هذا البريد.\nPer your technician’s recommendation, please reply with your quotation.\n' + (me.name || '');
+    return { to: t.list.join(','), cc: me.email, subject: subject, html: html, text: text };
+  }
+
+  /** إشعار لإدارة المتعهد: paid = تم السداد · prepay = الإصلاح قبل السداد */
   function notice(kind, o, me, extra) {
-    var con = Db.get('Contractors', o.con_id) || {}, h = Db.get('Hotels', o.hotel_id) || {};
-    var to = Orders.csv(con.emails);
-    if (!to.length) return null;
-    var paid = kind === 'paid';
-    var title = paid ? 'إشعار سداد' : 'اعتماد الإصلاح قبل السداد';
-    var intro = paid ? 'نفيدكم بإتمام سداد قيمة القطعة حسب عرض سعركم، ويمكن لفريقكم البدء بالتوريد والتركيب.'
-      : 'تم الاتفاق على البدء بالإصلاح قبل استكمال السداد حتى لا يتوقف المصعد، ويُستكمل السداد حسب الإجراءات.';
-    var subject = title + ' | ' + o.wo_id + ' | ' + (h.name || '') + ' | ' + (o.equip || '');
-    var html = '<div dir="rtl" style="background:' + SAND + ';padding:24px 12px;font-family:' + FONT + '">' +
-      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
-      '<tr><td style="background:' + NAVY + ';padding:22px 26px;color:#ffffff"><div style="font-size:22px;font-weight:bold">نوازي للفنادق والاستثمار</div>' +
-      '<div style="font-size:13px;color:' + BEIGE + ';direction:ltr;text-align:right">Nawazi For Hotels &amp; Investment</div></td></tr><tr><td style="height:4px;background:' + GOLD + '"></td></tr>' +
-      '<tr><td style="padding:24px 26px;color:' + NAVY + ';font-size:15px;line-height:1.8"><div style="font-size:19px;font-weight:bold;margin-bottom:6px">' + title + '</div>' +
-      '<p style="margin:0 0 14px">السادة / ' + esc(con.name || '') + '<br>السلام عليكم ورحمة الله وبركاته،<br>' + intro + '</p>' +
-      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:10px;border-collapse:separate;font-size:14px">' +
-      row_('رقم العملية', o.wo_id) + row_('الفندق', h.name) + row_('المصعد', o.equip) + row_('عرض السعر', (o.quote_no ? o.quote_no + ' · ' : '') + (o.quote ? o.quote + ' ريال' : '')) +
-      (paid ? row_('رقم الإيصال', extra) : row_('موعد الإصلاح', extra)) + '</table>' +
-      '<p style="margin:18px 0 0;font-size:14px">يسجّل فنيكم الإصلاح في أعوان بعد التركيب.<br>مع التحية،<br><b>' + esc(me.name || '') + '</b><br>مهندس الصيانة · ' + esc(h.name || '') + '</p>' +
-      '</td></tr><tr><td style="padding:12px 26px;background:' + SAND + ';color:' + INK + ';font-size:12px">أُرسلت من منصة أعوان للمتعهدين · نوازي للفنادق والاستثمار</td></tr></table></div>';
-    return { to: to.join(','), cc: me.email || '', subject: subject, html: html, text: title + '\n' + o.wo_id + '\n' + intro };
+    var t = to_(o);
+    if (!t.list.length) return null;
+    var c = ctx_(o), paid = kind === 'paid';
+    var facts = c.facts + factRow_('عرض السعر', 'Quotation', (o.quote_no ? o.quote_no + ' · ' : '') + (o.quote ? o.quote + ' ريال' : ''), o.quote ? (o.quote_no ? o.quote_no + ' · ' : '') + o.quote + ' SAR' : '') +
+      (paid ? factRow_('رقم الإيصال', 'Receipt No.', extra) : factRow_('موعد الإصلاح', 'Repair date', extra));
+    var html = page_(o, paid ? {
+      titleAr: 'تم السداد، ننتظر التركيب', titleEn: 'Payment completed — ready for installation',
+      subAr: 'شكراً لعرضكم. الخطوة الآن لدى فريقكم.', subEn: 'Thank you for your quotation. The next step is with your team.',
+      steps: [['عرضكم', 'Your quote'], ['اعتمدنا وسددنا', 'Approved & paid'], ['فريقكم يركّب', 'You install']], cur: 2,
+      facts: facts, photos: '',
+      askAr: 'وفّروا القطعة وركّبوها، ثم يسجّل فنيكم الإصلاح في أعوان.', askEn: 'Please supply and install the part; your technician then logs the repair in Awan.',
+      by: me.name || '', hotel: c.h.name || ''
+    } : {
+      titleAr: 'ابدؤوا الإصلاح، والسداد يُستكمل', titleEn: 'Please proceed — payment to follow',
+      subAr: 'اتفقنا على البدء قبل استكمال السداد حتى لا يتوقف المصعد.', subEn: 'We agreed to start before payment is completed, to keep the elevator running.',
+      steps: [['عرضكم', 'Your quote'], ['اعتمدنا البدء', 'Start approved'], ['فريقكم يركّب', 'You install']], cur: 2,
+      facts: facts, photos: '',
+      askAr: 'وفّروا القطعة وركّبوها في الموعد، ثم يسجّل فنيكم الإصلاح في أعوان.', askEn: 'Please supply and install the part on the agreed date; your technician then logs the repair in Awan.',
+      by: me.name || '', hotel: c.h.name || ''
+    });
+    var title = paid ? 'إشعار سداد · Payment notice' : 'اعتماد الإصلاح قبل السداد · Repair approved before payment';
+    return { to: t.list.join(','), cc: me.email || '', subject: title + ' | ' + o.wo_id + ' | ' + (c.h.name || '') + ' | ' + (o.equip || ''), html: html, text: title + '\n' + o.wo_id };
   }
 
   function send(m, replyTo) {
-    MailApp.sendEmail({ to: m.to, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: 'نوازي للفنادق والاستثمار', subject: m.subject, htmlBody: m.html, body: m.text });
+    MailApp.sendEmail({ to: m.to, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: BRAND_AR, subject: m.subject, htmlBody: m.html, body: m.text });
   }
 
   return { rfq: rfq, notice: notice, send: send };

@@ -123,6 +123,7 @@ const ctx = {
       const x = new Date(new Date(d).getTime() + 3 * 3600e3).toISOString();
       if (fmt === 'yyyy-MM-dd') return x.slice(0, 10);
       if (fmt === 'yyyy-MM') return x.slice(0, 7);
+      if (fmt === 'yyyy-MM-dd HH:mm') return x.slice(0, 10) + ' ' + x.slice(11, 16);
       return x;
     }
   },
@@ -386,7 +387,7 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
   const eu = run(`Db.find('Users', u => u.username === 'eng.ahmed').user_id`);
   throws(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'x@y')`, 'غير صحيح');
   run(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'eng@warf.sa')`);
-  const pv = run(`apiEngRfq('${engTok}', '${EL1}', true)`); eq(pv.to, 'sales@lift.sa,ops@lift.sa'); if (!pv.html.includes('نوازي') || !pv.html.includes('قفل باب الدور')) throw new Error('محتوى البريد');
+  const pv = run(`apiEngRfq('${engTok}', '${EL1}', true)`); eq(pv.to, 'sales@lift.sa,ops@lift.sa'); if (!pv.html.includes('نوازي للفندقة') || pv.html.includes('قفل باب الدور') || !pv.html.includes('Nawazi')) throw new Error('محتوى البريد');
   const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${EL1}')`); eq(sentMail.length, n0 + 1); eq(sentMail[n0].to.replyTo, 'eng@warf.sa');
   eq(Number(run(`Db.get('WorkOrders', '${EL1}').rfq_count`)), 1);
   throws(`apiEngAct('${engTok}', '${EL1}', 'quote', { amount: '' })`, 'مبلغ');
