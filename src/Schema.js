@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 13;
+var SCHEMA_VERSION = 14;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -79,7 +79,9 @@ var SCHEMA = [
     ['created_at', 'وقت الرفع'], ['assigned_at', 'وقت الإسناد'], ['arrived_at', 'وقت الوصول'],
     ['rescued_at', 'وقت الإنقاذ'], ['submitted_at', 'وقت التسليم'], ['decided_at', 'وقت القرار'],
     ['paid_at', 'وقت السداد'], ['part_arrived_at', 'وقت وصول القطعة'], ['closed_at', 'وقت الإغلاق'],
-    ['down_from', 'بداية التوقف'], ['down_to', 'نهاية التوقف']] },
+    ['down_from', 'بداية التوقف'], ['down_to', 'نهاية التوقف'],
+    ['rfq_at', 'آخر طلب عرض سعر بالبريد'], ['rfq_count', 'مرات طلب العرض'], ['quote_no', 'رقم عرض السعر'], ['quote_at', 'وقت وصول العرض'],
+    ['pay_pending', 'أُذن بالإصلاح قبل السداد والسداد معلّق'], ['repair_date', 'موعد الإصلاح المتفق عليه']] },
 
   { name: 'WOLog', cols: [
     ['log_id', 'المعرّف'], ['wo_id', 'العملية'], ['at', 'الوقت'], ['actor', 'الفاعل'],
@@ -137,8 +139,9 @@ var SCHEMA = [
 var STATUS = {
   assigned: 'مُسند',
   in_progress: 'قيد التنفيذ',
+  quote: 'بانتظار عرض السعر',
   decision: 'بانتظار قرار المهندس',
-  pay: 'بانتظار السداد',
+  pay: 'بانتظار الاعتماد والسداد',
   parts: 'معلّق بانتظار قطعة',
   matching: 'بانتظار المطابقة',
   closed: 'مغلق',

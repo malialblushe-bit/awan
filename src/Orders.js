@@ -5,7 +5,7 @@
  */
 
 var Orders = (function () {
-  var OPEN = ['assigned', 'in_progress', 'decision', 'pay', 'parts', 'matching'];
+  var OPEN = ['assigned', 'in_progress', 'quote', 'decision', 'pay', 'parts', 'matching'];
   var STOP_SYMS = ['متوقف', 'توقف بين الأدوار'];
 
   function now_() { return new Date(); }
@@ -112,7 +112,7 @@ var Orders = (function () {
   // ───────── إجراءات المتعهد ─────────
   var OUTCOMES = {
     ac: ['ok', 'fix', 'comp', 'diag', 'report'],
-    el: ['fix', 'visit', 'diag', 'report', 'pm']
+    el: ['fix', 'ok', 'visit', 'diag', 'report', 'pm']
   };
   var PM_EL_N = 38;   // بنود نموذج الصيانة الدورية للمصاعد (1–38)
 
@@ -140,12 +140,14 @@ var Orders = (function () {
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var pm = oc === 'pm' ? pmParse_(d) : null;
+    if (oc === 'ok' && !(d.checked || []).length) throw new Error('سجّل ما فحصته حتى لو كان سليماً.');
+    if (o.type === 'el' && oc === 'diag' && !(d.rec || []).length) throw new Error('اختر القطعة الموصى باستبدالها.');
     if ((oc === 'comp' || oc === 'diag') && (o.decision === 'con' || o.decision === 'own')) throw new Error('هذه العملية معتمدة للتركيب. سجّل الإصلاح.');
 
     var t = now_();
     var con = Db.get('Contractors', s.id);
     var report = {
-      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [], gas: d.gas || '', pb: d.pb || '', pa: d.pa || '',
+      outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [], checked: d.checked || [], rec: d.rec || [], gas: d.gas || '', pb: d.pb || '', pa: d.pa || '',
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime()
     };
@@ -164,6 +166,10 @@ var Orders = (function () {
 
     var to;
     if (oc === 'visit') { to = 'in_progress'; patch.visits = (Number(o.visits) || 0) + 1; }
+    else if (oc === 'diag' && o.type === 'el') {
+      // المصاعد: لا سعر من الفني؛ يراجع المهندس ثم يطلب عرض السعر من إدارة المتعهد بالبريد
+      to = 'quote'; patch.quote = ''; patch.quote_no = ''; patch.quote_at = ''; patch.rfq_at = ''; patch.rfq_count = 0; patch.decision = ''; patch.decision_note = ''; patch.submitted_at = t; patch.visits = (Number(o.visits) || 0) + 1;
+    }
     else if (oc === 'comp' || oc === 'diag') { to = 'decision'; patch.quote = d.quote || ''; patch.decision = ''; patch.decision_note = ''; patch.submitted_at = t; patch.visits = (Number(o.visits) || 0) + 1; }
     else { to = 'matching'; patch.submitted_at = t; patch.visits = (Number(o.visits) || 0) + 1; }
     patch.status = to;
@@ -254,8 +260,17 @@ var Orders = (function () {
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(o.hotel_id) === -1) throw new Error('هذه العملية ليست ضمن فنادقك.');
     var t = now_(), patch = {}, to = o.status, note = '';
 
-    if (action === 'decide') {
-      if (o.status !== 'decision') throw new Error('العملية ليست بانتظار قرارك.');
+    if (action === 'rfq') {
+      if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
+      patch.rfq_at = t; patch.rfq_count = (Number(o.rfq_count) || 0) + 1; note = 'طلب عرض سعر بالبريد';
+    } else if (action === 'quote') {
+      if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
+      var amt = Number(String(d.amount || '').replace(/[,،\s]/g, ''));
+      if (!(amt > 0)) throw new Error('اكتب مبلغ عرض السعر بالريال.');
+      patch.quote = amt; patch.quote_no = String(d.no || '').trim(); patch.quote_at = t; to = 'decision'; note = 'وصل عرض السعر ' + amt;
+    } else if (action === 'decide') {
+      if (o.status === 'quote' && ['recheck', 'reject'].indexOf(d.decision) === -1) throw new Error('سجّل عرض السعر أولاً، أو اختر فحصاً مغايراً أو رفضاً.');
+      if (o.status !== 'decision' && o.status !== 'quote') throw new Error('العملية ليست بانتظار قرارك.');
       patch.decision = d.decision; patch.decided_at = t;
       if (d.decision === 'con') to = 'pay';
       else if (d.decision === 'own') to = 'parts';
@@ -264,8 +279,14 @@ var Orders = (function () {
       else throw new Error('اختر القرار.');
       note = d.note || d.reason || '';
     } else if (action === 'paid') {
+      // السداد: يفتح الإصلاح، أو يُسجَّل لاحقاً لعملية أُذن بإصلاحها قبل السداد (ولو بعد إغلاقها)
+      if (o.status === 'pay') { to = 'in_progress'; }
+      else if (!truthy(o.pay_pending)) throw new Error('العملية ليست بانتظار السداد.');
+      patch.paid_at = t; patch.receipt = d.receipt || ''; patch.pay_pending = false;
+    } else if (action === 'prepay') {
+      // اتفاق تشغيلي: الإصلاح قبل السداد حتى لا يتوقف المصعد، والسداد يبقى معلّقاً
       if (o.status !== 'pay') throw new Error('العملية ليست بانتظار السداد.');
-      to = 'in_progress'; patch.paid_at = t; patch.receipt = d.receipt || '';
+      to = 'in_progress'; patch.pay_pending = true; patch.repair_date = String(d.date || '').trim(); note = 'إصلاح قبل السداد' + (patch.repair_date ? ' · ' + patch.repair_date : '');
     } else if (action === 'part') {
       if (o.status !== 'parts') throw new Error('العملية ليست بانتظار قطعة.');
       to = 'in_progress'; patch.part_arrived_at = t;
@@ -343,10 +364,11 @@ var Orders = (function () {
     var c = R.cons[o.con_id] || {};
     var room = R.rooms[o.hotel_id + '|' + o.floor_id + '|' + String(o.room)] || R.rooms[o.hotel_id + '|' + String(o.room)];
     var st = o.status;
-    if (forCon && (st === 'decision' || st === 'pay')) st = 'review';
+    if (forCon && (st === 'decision' || st === 'pay' || st === 'quote')) st = 'review';
     var note = '';
     if (o.status === 'in_progress') {
       if (o.decision === 'con' && o.paid_at) note = 'اعتُمد: وفّر القطعة وركّبها، ثم سجّل الإصلاح.';
+      else if (o.decision === 'con' && truthy(o.pay_pending)) note = 'اعتُمد الإصلاح قبل السداد: وفّر القطعة وركّبها' + (o.repair_date ? ' · الموعد ' + o.repair_date : '') + '، ثم سجّل الإصلاح.';
       else if (o.decision === 'own' && o.part_arrived_at) note = 'وصلت القطعة من فريقنا، جاهزة للتركيب.';
       else if (o.decision === 'recheck') note = 'فحص مغاير: ' + (o.decision_note || '');
     }
@@ -366,7 +388,9 @@ var Orders = (function () {
       follow_of: o.follow_of || '', resp: respOf_(o, contractOf_(R, o)),
       created: ms(o.created_at), assigned: ms(o.assigned_at), arrived: ms(o.arrived_at), rescued: ms(o.rescued_at),
       submitted: ms(o.submitted_at), decided: ms(o.decided_at), paid: forCon ? null : ms(o.paid_at),
-      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), down_from: ms(o.down_from), down_to: ms(o.down_to)
+      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), down_from: ms(o.down_from), down_to: ms(o.down_to),
+      pay_pending: forCon ? false : truthy(o.pay_pending), repair_date: String(o.repair_date || ''),
+      rfq: forCon ? null : ms(o.rfq_at), rfq_count: forCon ? 0 : (Number(o.rfq_count) || 0), quote_no: forCon ? '' : String(o.quote_no || ''), quote_at: forCon ? null : ms(o.quote_at)
     };
   }
 

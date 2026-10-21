@@ -54,6 +54,7 @@ var Kpi = (function () {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,
       trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0, pm: 0,
+      repN: 0, okN: 0, qSum: 0, qN: 0, spend: 0, spendN: 0, okBy: {},
       acts: {}, parts: {}, causes: {}, syms: {}, locs: {}
     };
     mine.forEach(function (o) {
@@ -61,7 +62,7 @@ var Kpi = (function () {
       if (o.source !== 'contractor' && o.arrived_at && o.assigned_at) {
         d.respSum += Math.max(0, (ms(o.arrived_at) - ms(o.assigned_at)) / 60000); d.respN++;
       }
-      var reviewed = o.submitted_at && o.status !== 'matching' && o.status !== 'decision';
+      var reviewed = o.submitted_at && o.status !== 'matching' && o.status !== 'decision' && o.status !== 'quote';
       if (reviewed || Number(o.reopens) > 0) {
         d.infoN++;
         if (!(Number(o.reopens) > 0) && o.decision !== 'recheck' && o.status !== 'rejected') d.infoOk++;
@@ -87,6 +88,17 @@ var Kpi = (function () {
         d.trapped++;
         if (o.rescued_at) { d.rescueSum += Math.max(0, (ms(o.rescued_at) - ms(o.created_at)) / 60000); d.rescueN++; }
       }
+      // موثوقية البلاغات (مؤشر داخلي لا يُحسب على المتعهد): ما رُفع ثم وُجد سليماً
+      if (o.status === 'closed' && (o.source === 'requester' || o.source === 'engineer') && o.kind !== 'periodic' && o.kind !== 'report') {
+        d.repN++;
+        var rl = o.report; if (typeof rl === 'string') { try { rl = JSON.parse(rl); } catch (e) { rl = null; } }
+        if (rl && !Array.isArray(rl)) rl = [rl];
+        var lastR = (rl || []).filter(function (r) { return r && r.outcome !== 'visit'; }).slice(-1)[0];
+        if (lastR && lastR.outcome === 'ok') { d.okN++; bump_(d.okBy, o.requester || (o.source === 'engineer' ? 'المهندس' : '')); }
+      }
+      // زمن عرض السعر (من طلبه بالبريد إلى وصوله) والقطع المعتمدة بقيمتها
+      if (o.rfq_at && o.quote_at) { d.qSum += Math.max(0, (ms(o.quote_at) - ms(o.rfq_at)) / 36e5); d.qN++; }
+      if (o.decision === 'con' && Number(o.quote) > 0 && o.status !== 'rejected') { d.spend += Number(o.quote); d.spendN++; }
       if (o.type === 'el' && o.down_from && o.down_to) { d.downMin += Math.max(0, (ms(o.down_to) - ms(o.down_from)) / 60000); d.downN++; }
       // أنماط الأعطال من آخر تقرير
       var reps = o.report;
@@ -112,6 +124,7 @@ var Kpi = (function () {
       if (sym || o.symptom) bump_(d.syms, canon(o.type, 'sym', sym || o.symptom));
       bump_(d.locs, o.type === 'el' ? o.equip : (o.room ? String(o.room) : ''));
     });
+    d.qSum = Math.round(d.qSum); d.okBy = top_(d.okBy, 5);
     d.respSum = Math.round(d.respSum); d.rescueSum = Math.round(d.rescueSum); d.downMin = Math.round(d.downMin);
     d.parts = top_(d.parts, 8); d.causes = top_(d.causes, 8); d.syms = top_(d.syms, 8); d.locs = top_(d.locs, 8);
     return d;

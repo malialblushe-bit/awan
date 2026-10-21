@@ -373,8 +373,25 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
   run(`apiConAct('${elTok}', 'rescue', '${EL1}', {})`);
   eq(!!run(`Db.get('WorkOrders', '${EL1}').rescued_at`), true);
   throws(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'fix' })`, 'يعمل الآن');
-  run(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', working: 'نعم', quote: '900' })`);
+  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', working: 'نعم' })`, 'القطعة الموصى');
+  run(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', rec: ['قفل باب الدور'], working: 'نعم', quote: '900' })`);
   eq(!!run(`Db.get('WorkOrders', '${EL1}').down_to`), true);
+  eq(run(`Db.get('WorkOrders', '${EL1}').status`), 'quote'); eq(String(run(`Db.get('WorkOrders', '${EL1}').quote`)), '');
+  eq(run(`apiConBoot('${elTok}')`).jobs.find(x => x.id === EL1).status, 'review');
+  throws(`apiEngAct('${engTok}', '${EL1}', 'decide', { decision: 'own' })`, 'عرض السعر أولاً');
+  throws(`apiEngRfq('${engTok}', '${EL1}', true)`, 'لا يوجد بريد');
+  const elc = run(`Db.find('Contractors', c => c.type === 'el').con_id`);
+  run(`apiAdmSaveConInfo('${adminTok}', '${elc}', { emails: 'sales@lift.sa, ops@lift.sa' })`);
+  throws(`apiEngRfq('${engTok}', '${EL1}', true)`, 'أضف بريدك');
+  const eu = run(`Db.find('Users', u => u.username === 'eng.ahmed').user_id`);
+  throws(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'x@y')`, 'غير صحيح');
+  run(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'eng@warf.sa')`);
+  const pv = run(`apiEngRfq('${engTok}', '${EL1}', true)`); eq(pv.to, 'sales@lift.sa,ops@lift.sa'); if (!pv.html.includes('نوازي') || !pv.html.includes('قفل باب الدور')) throw new Error('محتوى البريد');
+  const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${EL1}')`); eq(sentMail.length, n0 + 1); eq(sentMail[n0].to.replyTo, 'eng@warf.sa');
+  eq(Number(run(`Db.get('WorkOrders', '${EL1}').rfq_count`)), 1);
+  throws(`apiEngAct('${engTok}', '${EL1}', 'quote', { amount: '' })`, 'مبلغ');
+  run(`apiEngAct('${engTok}', '${EL1}', 'quote', { amount: '1,850', no: 'Q-77' })`);
+  eq(run(`Db.get('WorkOrders', '${EL1}').status`), 'decision'); eq(Number(run(`Db.get('WorkOrders', '${EL1}').quote`)), 1850);
   run(`apiEngAct('${engTok}', '${EL1}', 'decide', { decision: 'own' })`);
   eq(run(`Db.get('WorkOrders', '${EL1}').status`), 'parts');
   run(`apiEngAct('${engTok}', '${EL1}', 'part', {})`);
@@ -383,11 +400,11 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
 });
 
 t('المهندس: فحص مغاير برسالة، ورفض بسبب من القائمة', () => {
-  run(`apiConAct('${elTok}', 'new', null, { outcome: 'diag', equip: 'مصعد الخدمة', sym: 'صوت أو اهتزاز', working: 'نعم' })`);
-  const o = run(`apiEngBoot('${engTok}')`).orders.find(x => x.status === 'decision');
+  run(`apiConAct('${elTok}', 'new', null, { outcome: 'diag', equip: 'مصعد الخدمة', sym: 'صوت أو اهتزاز', rec: ['بكرة باب'], working: 'نعم' })`);
+  const o = run(`apiEngBoot('${engTok}')`).orders.find(x => x.status === 'quote');
   throws(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck' })`, 'ملاحظتك');
   run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck', note: 'افحص الحبال' })`);
-  run(`apiConAct('${elTok}', 'submit', '${o.id}', { outcome: 'diag', working: 'نعم' })`);
+  run(`apiConAct('${elTok}', 'submit', '${o.id}', { outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
   run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'reject', reason: 'سبب غير مقنع' })`);
   eq(run(`Db.get('WorkOrders', '${o.id}').status`), 'rejected');
 });
@@ -750,6 +767,38 @@ t('التقييم الدوري: يصدره المختص لفترة يختاره�
   eq(run(`apiConBoot('${acTok}')`).evals.length, 1);
   const pc = run(`Db.find('Contractors', c => c.type === 'pc').con_id`);
   const pp = run(`apiEvalPreview('${mgrTok}', '${pc}', '${from}', '${today}')`); eq(pp.X.flags, 2); eq(pp.X.open, 0);
+});
+
+t('سليم: يسجّل المتعهد ما فحصه، ويُحسب داخلياً في موثوقية البلاغات لا على المتعهد', () => {
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
+  throws(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'ok', working: 'نعم' })`, 'ما فحصته');
+  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'ok', working: 'نعم', checked: ['الماكينة', 'الحبال'], note: 'لا صوت عند التشغيل' })`);
+  run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'good' })`);
+  const rows = run(`Kpi.rows(function(){return true}, 2)`).filter(r => r.hotel === HID);
+  const ok = rows.reduce((a, r) => a + (r.d.okN || 0), 0), rep = rows.reduce((a, r) => a + (r.d.repN || 0), 0);
+  if (!(ok >= 1 && rep >= ok)) throw new Error('okN ' + ok + ' repN ' + rep);
+  if (!rows.some(r => r.d.okBy && r.d.okBy['نورة'])) throw new Error('okBy');
+});
+
+t('المصاعد بعد العرض: بانتظار الاعتماد والسداد، والإصلاح قبل السداد ثم تسجيل السداد بعد الإغلاق، وإشعار إدارتهم بالبريد', () => {
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'نورة' })`).id;
+  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'diag', part: 'حساس الباب', rec: ['حساس باب'], working: 'نعم' })`);
+  run(`apiEngRfq('${engTok}', '${id}')`);
+  run(`apiEngAct('${engTok}', '${id}', 'quote', { amount: 1200, no: 'Q-90' })`);
+  run(`apiEngAct('${engTok}', '${id}', 'decide', { decision: 'con' })`);
+  eq(run(`Db.get('WorkOrders', '${id}').status`), 'pay');
+  const n0 = sentMail.length;
+  const r = run(`apiEngAct('${engTok}', '${id}', 'prepay', { date: '2026-10-25' })`);
+  eq(r.mailed, 'sales@lift.sa,ops@lift.sa'); eq(sentMail.length, n0 + 1); if (!sentMail[n0].to.subject.includes('قبل السداد')) throw new Error('subject');
+  const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.status, 'in_progress'); eq(o.pay_pending, true);
+  const j = run(`apiConBoot('${elTok}')`).jobs.find(x => x.id === id); if (!j.note.includes('قبل السداد')) throw new Error(j.note);
+  eq(run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === id).pay_pending, true);
+  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'fix', part: 'حساس الباب', cause: ['تآكل طبيعي'], working: 'نعم', follow: 'لا' })`);
+  run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'good' })`);
+  run(`apiEngAct('${engTok}', '${id}', 'paid', { receipt: 'R-5' })`);
+  const o2 = run(`Db.get('WorkOrders', '${id}')`); eq(o2.status, 'closed'); eq(o2.pay_pending, false); eq(!!o2.paid_at, true);
+  if (!sentMail[sentMail.length - 1].to.subject.includes('إشعار سداد')) throw new Error('paid mail');
+  throws(`apiEngAct('${engTok}', '${id}', 'paid', {})`, 'ليست بانتظار السداد');
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

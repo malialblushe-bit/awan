@@ -319,7 +319,7 @@ function engBoot_(s) {
   var today = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd');
   var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
   return {
-    me: { name: me.name, role: s.role, lang: me.lang || 'ar' },
+    me: { name: me.name, role: s.role, lang: me.lang || 'ar', email: me.email || '' },
     hotels: myHotels.map(function (id) {
       var h = R.hotels[id] || {};
       var cons = {};
@@ -351,8 +351,17 @@ function apiEngAct(token, woId, action, d) {
   return Db.withLock(function () {
     var to = Orders.engAct(s, woId, action, d);
     Kpi.touch([woId]);
+    var mailed = '';
+    if (action === 'paid' || action === 'prepay') {
+      // إشعار إدارة المتعهد بالبريد (لا يمنع الإجراء إن تعذّر)
+      try {
+        var o = Db.get('WorkOrders', woId), me = Db.get('Users', s.id) || {};
+        var m = Mail.notice(action, o, me, action === 'paid' ? (d || {}).receipt : (d || {}).date);
+        if (m) { Mail.send(m, me.email); mailed = m.to; } else mailed = 'none';
+      } catch (e) { mailed = 'fail'; }
+    }
     Db.reset();
-    return { to: to, boot: engBoot_(s) };
+    return { to: to, mailed: mailed, boot: engBoot_(s) };
   });
 }
 
@@ -366,6 +375,23 @@ function apiEngBulkClose(token, ids, sat) {
     Kpi.touch(ids);
     Db.reset();
     return { n: n, boot: engBoot_(s) };
+  });
+}
+
+/** طلب عرض سعر بالبريد بهوية نوازي، بعد مراجعة المهندس للتشخيص. preview=true للمعاينة فقط */
+function apiEngRfq(token, woId, preview) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  var me = Db.get('Users', s.id) || {};
+  var o = Db.get('WorkOrders', woId);
+  if (!o) throw new Error('العملية غير موجودة.');
+  if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
+  var m = Mail.rfq(o, me);
+  if (preview) return { to: m.to, cc: m.cc, subject: m.subject, html: m.html };
+  return Db.withLock(function () {
+    Mail.send(m, me.email);
+    Orders.engAct(s, woId, 'rfq', {});
+    Db.reset();
+    return { to: m.to, boot: engBoot_(s) };
   });
 }
 
@@ -571,7 +597,7 @@ function admBoot_() {
       };
     }),
     users: Db.all('Users').map(function (u) {
-      return { id: u.user_id, name: u.name, role: u.role, username: u.username, hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
+      return { id: u.user_id, name: u.name, role: u.role, username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
         pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null };
     }),
     pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
@@ -846,8 +872,18 @@ function apiAdmResetPin(token, conId) {
 function apiAdmAddUser(token, d) {
   return adm_(token, function () {
     if (!String(d.name || '').trim()) throw new Error('اكتب الاسم.');
-    var r = Auth.createUser(d.name, d.role, d.username, d.email, (d.hotel_ids || []).join(','));
+    var r = Auth.createUser(d.name, d.role, d.username, emails_(d.email)[0] || '', (d.hotel_ids || []).join(','));
     return { password: r.password };
+  });
+}
+
+function apiAdmSaveUserEmail(token, userId, email) {
+  return adm_(token, function () {
+    if (!Db.get('Users', userId)) throw new Error('المستخدم غير موجود.');
+    var e = emails_(email);
+    if (e.length > 1) throw new Error('بريد واحد للمستخدم.');
+    Db.update('Users', userId, { email: e[0] || '' });
+    return {};
   });
 }
 
