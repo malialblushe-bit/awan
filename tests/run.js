@@ -954,5 +954,13 @@ t('البحث بالفهرس: الوصول لعملية بمعرّفها يقر�
   run(`apiAdmKpiRebuild('${adminTok}')`);
 });
 
+t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
+  fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
+    const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');
+    const re = /<script[^>]*>([\s\S]*?)<\/script>/g; let m, i = 0;
+    while ((m = re.exec(html))) { i++; try { new vm.Script(m[1]); } catch (e) { throw new Error(f + ' كتلة ' + i + ': ' + e.message); } }
+  });
+});
+
 console.log(`\n${pass} نجح · ${fail} فشل`);
 process.exit(fail ? 1 : 0);
