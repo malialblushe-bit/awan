@@ -880,6 +880,51 @@ t('البريد الرسمي عنواناً بديلاً، وزمن الاستل
   const cl = ks.rows.reduce((a, r) => a + ((r.d && r.d.clN) || 0), 0); if (cl < 1) throw new Error('claim kpi');
 });
 
+t('شاحنات المياه: باركود بالرقم السري والموقع إلزامي، الأحجام من العقد، مطابقة مدير الفندق أو المناوب، والكشف للمعتمد', () => {
+  const NID = run(`Db.all('Hotels').find(h => h.code === 'NAWAZI').hotel_id`);
+  throws(`apiAdmSaveContract('${adminTok}', { name: 'مياه زمزم', type: 'wt', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', prices: {} })`, 'حجم');
+  const wtPin = run(`apiAdmSaveContract('${adminTok}', { name: 'مياه زمزم', type: 'wt', hotel_ids: ['${HID}', '${NID}'], start: '${yesterday}', end: '${nextYear}', prices: { '19 م³': '350', '32': 520, 'x': 5 } })`).pin;
+  const conId = run(`Db.all('Contractors').find(c => c.type === 'wt').con_id`);
+  eq(run(`apiWtBoot('WARIF2')`).sizes.join(','), '19,32');
+  run(`CacheService.getScriptCache().remove('F_con_${HID}')`); run(`CacheService.getScriptCache().remove('F_con_${NID}')`);
+  const near = { lat: 21.4230, lng: 39.8265, acc: 20 }, far = { lat: 21.4425, lng: 39.8262, acc: 20 };
+  throws(`apiWtLogin('NAWAZI', '${wtPin}', ${JSON.stringify(near)})`, 'لم يُحدَّد موقع');
+  throws(`apiWtLogin('WARIF2', '${wtPin}', null)`, 'الموقع مطلوب');
+  throws(`apiWtLogin('WARIF2', '${acPin}', ${JSON.stringify(near)})`, 'المياه');
+  const tk = run(`apiWtLogin('WARIF2', '${wtPin}', ${JSON.stringify(near)})`).token;
+  throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: '', size: 19 }, ${JSON.stringify(near)})`, 'السائق');
+  throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 10 }, ${JSON.stringify(near)})`, 'حجم');
+  throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19 }, ${JSON.stringify(far)})`, 'خارج');
+  const a = run(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A1', photos: ['data:image/jpeg;base64,AAAA'] }, ${JSON.stringify(near)})`);
+  eq(a.dup, null);
+  throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A1' }, ${JSON.stringify(near)})`, 'مسجّل');
+  const b = run(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'فهد', size: 32, receipt: 'A2' }, ${JSON.stringify(near)})`);
+  eq(b.dup, 0);
+  const cb = run(`apiPinWebLogin('${wtPin}')`).boot;
+  eq(cb.water.length, 2); eq(cb.water.some(x => 'price' in x), false);
+  const gm = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
+  const gb = run(`apiEngBoot('${gm}')`).water;
+  eq(gb.canMatch, true); eq(gb.loads.length, 2); eq(gb.loads.find(x => x.id === b.id).dup, true);
+  eq(run(`apiEngBoot('${engTok}')`).water.canMatch, false);
+  throws(`apiWtMatch('${engTok}', ['${a.id}'], true)`, 'صلاحية');
+  throws(`apiWtMatch('${gm}', ['${b.id}'], false, '')`, 'سبب');
+  run(`apiWtMatch('${gm}', ['${a.id}'], true)`);
+  run(`apiWtMatch('${gm}', ['${b.id}'], false, 'نقلة مكررة')`);
+  eq(run(`Db.get('WaterLoads', '${b.id}').status`), 'rejected');
+  // المدير المناوب
+  const pw = run(`apiAdmAddUser('${adminTok}', { name: 'المناوب', role: 'duty', username: 'duty.warif', hotel_ids: ['${HID}'] })`).password;
+  run(`Auth.changePassword(apiStaffLogin('duty.warif', '${pw}').token, 'Duty2026xx')`);
+  const du = run(`apiStaffLogin('duty.warif', 'Duty2026xx')`).token;
+  const tk2 = run(`apiWtLogin('WARIF2', '${wtPin}', ${JSON.stringify(near)})`).token;
+  const c = run(`apiWtSubmit('${tk2}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A2' }, ${JSON.stringify(near)})`);
+  eq(run(`apiWtMatch('${du}', ['${c.id}'], true)`).n, 1);
+  throws(`apiEngAct('${du}', '${run(`Db.all('WorkOrders')[0].wo_id`)}', 'close', {})`, 'صلاحية');
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  const st = run(`apiWtStatement('${gm}', '${conId}', 'all', '${today}', '${today}')`);
+  eq(st.count, 2); eq(st.vol, 38); eq(st.total, 700); eq(st.rejected, 1); eq(st.pending, 0); eq(st.lines[0].size, 19);
+  throws(`apiWtStatement('${cb.me ? 'x' : ''}', '${conId}', 'all', '${today}', '${today}')`, '');
+});
+
 t('البحث بالفهرس: الوصول لعملية بمعرّفها يقرأ صفاً واحداً، والأرشفة الليلية تبقي الجدول النشط صغيراً دون فقد شيء', () => {
   const any = run(`Db.all('WorkOrders')[3].wo_id`);
   run(`Db.reset()`);

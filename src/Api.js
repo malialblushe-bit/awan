@@ -244,6 +244,7 @@ function conBoot_(s) {
     sugg: sugg,
     pest: con.type === 'pc' ? Ops.pestBoot(Object.keys(hotels)) : null,
     waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
+    water: con.type === 'wt' ? Water.conList(con.con_id) : null,
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
@@ -302,8 +303,8 @@ function apiChangePassword(token, pw) { return Auth.changePassword(token, pw); }
 function apiLogout(token) { Auth.logout(token); return true; }
 
 /** أدوار المتابعة (اطلاع فقط + ملاحظة): الإدارة لكل الفنادق، ومدير الفندق ومدير التشغيل لفنادقهم */
-var STAFF_ROLES = ['admin', 'engineer', 'management', 'gm', 'om'];
-var VIEW_ROLES = ['management', 'gm', 'om'];
+var STAFF_ROLES = ['admin', 'engineer', 'management', 'gm', 'om', 'duty'];
+var VIEW_ROLES = ['management', 'gm', 'om', 'duty'];
 function scopeHotels_(s, R) {
   if (s.role === 'admin' || s.role === 'management') return Object.keys(R.hotels);
   return Orders.csv((Db.get('Users', s.id) || {}).hotel_ids);
@@ -339,6 +340,7 @@ function engBoot_(s) {
     syms: { ac: listsFor_('ac').sym.map(function (x) { return x.ar; }), el: listsFor_('el').sym.map(function (x) { return x.ar; }) },
     cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
     notes: notesFor_(s, myHotels, 'maint'),
+    water: Water.staffBoot(s, myHotels),
     evals: Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
@@ -593,7 +595,7 @@ function admBoot_() {
         id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi',
         lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
         geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
-        tg: !!h.tg_chat, tg_code: h.tg_code || '',
+        tg: !!h.tg_chat, tg_code: h.tg_code || '', wt: !!Orders.activeContract(h.hotel_id, 'wt'),
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
         totals: {
           floors: layout.length,
@@ -846,7 +848,9 @@ function pricesOf_(contract) {
 /** أسعار عقد قائم (عقد التكييف) */
 function apiAdmSaveContractPrices(token, contractId, prices) {
   return adm_(token, function () {
-    if (!Db.get('Contracts', contractId)) throw new Error('العقد غير موجود.');
+    var c = Db.get('Contracts', contractId);
+    if (!c) throw new Error('العقد غير موجود.');
+    if (c.type === 'wt') { prices = wtPrices_(prices); if (!Object.keys(prices).length) throw new Error('اكتب حجم نقلة واحد على الأقل بسعره.'); }
     Db.update('Contracts', contractId, { prices: cleanPrices_(prices) });
     return {};
   });
@@ -870,7 +874,9 @@ function apiAdmSaveConInfo(token, conId, d) {
 
 function apiAdmSaveContract(token, d) {
   return adm_(token, function () {
-    if (['ac', 'el', 'sf', 'wa', 'pc'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
+    if (['ac', 'el', 'sf', 'wa', 'pc', 'wt'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
+    if (d.type === 'wt' && !Object.keys(wtPrices_(d.prices)).length) throw new Error('اكتب حجم نقلة واحد على الأقل بسعره.');
+    if (d.type === 'wt') d.prices = wtPrices_(d.prices);
     if (d.type === 'wa' && !(Number(d.wa_per_week) > 0)) throw new Error('اكتب عدد مرات الرفع في الأسبوع.');
     if (!d.hotel_ids || !d.hotel_ids.length) throw new Error('اختر فندقاً واحداً على الأقل.');
     if (!d.start || !d.end || d.end < d.start) throw new Error('حدّد تاريخ البداية والنهاية.');
@@ -1164,4 +1170,47 @@ function apiEvalIssue(token, conId, from, to, decision, note) {
     Db.reset();
     return { id: r.id, boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
   });
+}
+
+// ───────── شاحنات المياه ─────────
+/** أسعار شاحنات المياه: مفتاح الحجم رقم بالمتر المكعب */
+function wtPrices_(p) {
+  var out = {};
+  Object.keys(p || {}).forEach(function (k) {
+    var sz = Number(String(k).replace(/[^\d.]/g, '')), v = price_(p[k]);
+    if (!(sz > 0)) return;
+    if (v === '') return;
+    out[String(sz)] = v;
+  });
+  return out;
+}
+function apiWtBoot(code) { ensureSchemaVersion_(); return Water.boot(Orders.hotelByCode(code)); }
+function apiWtLogin(code, pin, geo) {
+  return Db.withLock(function () {
+    ensureSchemaVersion_();
+    var w = Water.login(code, pin, geo);
+    return { token: w.token, name: w.name, boot: Water.boot(Orders.hotelByCode(code)) };
+  });
+}
+function apiWtSubmit(token, code, d, geo) {
+  var s = Auth.session(token);
+  return Db.withLock(function () {
+    d = d || {};
+    d.photos = savePhotos_(d.photos, 'WT');
+    var r = Water.submit(s, code, d, geo);
+    Db.reset();
+    return { id: r.id, dup: r.dup, boot: Water.boot(Orders.hotelByCode(code)) };
+  });
+}
+function apiWtMatch(token, ids, ok, reason) {
+  var s = Auth.need(token, Water.MATCH_ROLES);
+  return Db.withLock(function () {
+    var n = Water.match(s, ids, !!ok, reason, scopeHotels_(s, Orders.refs()));
+    Db.reset();
+    return { n: n, boot: engBoot_(s) };
+  });
+}
+function apiWtStatement(token, conId, hotelId, from, to) {
+  var s = Auth.need(token, STAFF_ROLES);
+  return Water.statement(scopeHotels_(s, Orders.refs()), conId, hotelId, from, to);
 }

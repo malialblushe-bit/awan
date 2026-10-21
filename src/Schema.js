@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 16;
+var SCHEMA_VERSION = 17;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -37,7 +37,7 @@ var SCHEMA = [
     ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات'], ['tower', 'البرج']] },
 
   { name: 'Users', cols: [
-    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
+    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · duty (المدير المناوب) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
@@ -109,6 +109,12 @@ var SCHEMA = [
     ['washed', 'نُظّف وغُسل المكان؟ نعم · لا'], ['rating', 'مستوى النظافة من 5'], ['note', 'ملاحظة'], ['photos', 'الصور'],
     ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
 
+  { name: 'WaterLoads', cols: [
+    ['load_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'متعهد المياه'], ['at', 'وقت التفريغ (من الخادم)'], ['driver', 'السائق'],
+    ['size', 'الحجم (م³)'], ['receipt_no', 'رقم السند'], ['photos', 'صورة السند'], ['note', 'ملاحظة'],
+    ['status', 'pending · approved · rejected'], ['dup', 'مكرر محتمل (نقلة خلال 20 دقيقة)'], ['match_by', 'طابقها'], ['match_role', 'دوره'],
+    ['match_at', 'وقت المطابقة'], ['reason', 'سبب الرفض'], ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
+
   { name: 'PestLogs', cols: [
     ['log_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['zones', 'المناطق (معرّفات الغرف والمرافق)'],
     ['kind', 'spray = رش · inspect = فحص · trap = فحص مصيدة'], ['pests', 'الآفات المستهدفة'], ['material', 'المادة'],
@@ -157,7 +163,7 @@ var STATUS = {
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
   Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
-  WasteVisits: 'WV', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV'
+  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV'
 };
 
 function tableDef(name) {

@@ -289,7 +289,7 @@ var EV={f:{},
 
 // ── التقارير في واجهة فريق التشغيل
 (function(){var wr=W.render;W.render=function(){wr();if(!S.tok||!W.b||W.must)return;
-  if(W.tab==='reports'){var wrap=document.querySelector('#app .wrap');if(wrap){var role=W.b.me.role,iss=role==='admin'||role==='engineer';var cons=(W.b.cons||[]).filter(function(c){return role==='admin'||['ac','el','sf'].indexOf(c.type)!==-1});wrap.innerHTML=EV.panel(W.b,cons,iss,'W')}}
+  if(W.tab==='reports'){var wrap=document.querySelector('#app .wrap');if(wrap){var role=W.b.me.role,iss=role==='admin'||role==='engineer';var cons=(W.b.cons||[]).filter(function(c){return c.type!=='wt'&&(role==='admin'||['ac','el','sf'].indexOf(c.type)!==-1)});wrap.innerHTML=EV.panel(W.b,cons,iss,'W')}}
   var nav=document.querySelector('#app .topnav');if(nav&&!nav.querySelector('[data-rep]')){var bt=document.createElement('button');bt.setAttribute('data-rep','1');bt.textContent='التقارير';if(W.tab==='reports'){bt.className='on';[].forEach.call(nav.querySelectorAll('button'),function(x){if(x!==bt)x.className=''})}bt.onclick=function(){W.tab='reports';EV.f={};render()};nav.appendChild(bt)}}})();
 render();
 </script>
