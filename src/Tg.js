@@ -35,7 +35,7 @@ var Tg = (function () {
     else if (['decision', 'quote', 'pay', 'parts'].indexOf(o.status) !== -1) st = '⏸ بانتظار قرار المهندس';
     else if (o.arrived_at) st = '🛠 في الموقع منذ ' + hm_(o.arrived_at) + (o.claimed_by ? ' · ' + esc_(o.claimed_by) : '');
     else if (o.claimed_by) st = '✅ استلمه ' + esc_(o.claimed_by) + ' · ' + hm_(o.claimed_at);
-    else st = '⏳ بانتظار الاستلام';
+    else st = '⏳ بانتظار الاستلام</b>\n<i>اضغط «أستلمه» مرة واحدة، ويظهر اسمك هنا خلال دقيقة.</i><b>';
     var resp = v.resp != null ? (v.resp === 0 ? 'فوري' : v.resp + ' د') : '';
     return '🔔 <b>طلب تكييف</b> · <code>' + o.wo_id + '</code>\n' +
       '📍 ' + esc_(v.loc) + '\n' +
