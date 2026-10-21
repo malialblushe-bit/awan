@@ -155,6 +155,7 @@ function apiReqSubmit(code, d) {
     }, String(d.name).trim());
     var con = r.order.con_id ? Db.get('Contractors', r.order.con_id) : null;
     Kpi.touch([r.order.wo_id]);
+    Tg.post(r.order.wo_id);
     return {
       id: r.order.wo_id,
       con: con ? con.name : '',
@@ -174,7 +175,9 @@ function apiConLogin(code, pin, geo) {
       throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
     }
     if (Orders.truthy(h.geo_con)) { try { Ops.geoCheck(h, geo); } catch (e) { Auth.logout(r.token); throw e; } }
-    Kpi.touch(Orders.arrive(r.con.con_id, h.hotel_id));
+    var arr = Orders.arrive(r.con.con_id, h.hotel_id);
+    Kpi.touch(arr);
+    Tg.refresh(arr);
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
 }
@@ -280,6 +283,7 @@ function apiConAct(token, action, woId, d) {
     else if (action === 'rescue') Orders.rescue(s, woId);
     else throw new Error('إجراء غير معروف.');
     Kpi.touch([woId || res.id]);
+    if (woId) Tg.refresh([woId]);
     Db.reset();
     return { result: res, boot: conBoot_(s) };
   });
@@ -351,6 +355,7 @@ function apiEngAct(token, woId, action, d) {
   return Db.withLock(function () {
     var to = Orders.engAct(s, woId, action, d);
     Kpi.touch([woId]);
+    if (action === 'assign') Tg.post(woId); else Tg.refresh([woId]);
     var mailed = '';
     if (action === 'paid' || action === 'prepay') {
       // إشعار إدارة المتعهد بالبريد (لا يمنع الإجراء إن تعذّر)
@@ -373,6 +378,7 @@ function apiEngBulkClose(token, ids, sat) {
     var n = 0;
     ids.forEach(function (id) { Orders.engAct(s, id, 'close', { sat: sat }); n++; });
     Kpi.touch(ids);
+    Tg.refresh(ids);
     Db.reset();
     return { n: n, boot: engBoot_(s) };
   });
@@ -401,6 +407,7 @@ function apiEngCreate(token, d) {
     d.photos = savePhotos_(d.photos, 'ENG');
     var id = Orders.engCreate(s, d);
     Kpi.touch([id]);
+    Tg.post(id);
     Db.reset();
     return { id: id, boot: engBoot_(s) };
   });
@@ -571,6 +578,7 @@ function admBoot_() {
         id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi',
         lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
         geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
+        tg: !!h.tg_chat, tg_code: h.tg_code || '',
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
         totals: {
           floors: layout.length,
@@ -604,7 +612,8 @@ function admBoot_() {
     lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
       .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
       .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), price: l.price === '' || l.price == null ? '' : Number(l.price), status: l.status, by: l.created_by || '' }; }),
-    thresholds: Kpi.thresholds()
+    thresholds: Kpi.thresholds(),
+    tgBot: Tg.bot()
   };
 }
 
@@ -902,6 +911,17 @@ function apiAdmSaveHotelOps(token, hotelId, d) {
     return {};
   });
 }
+
+/** تيليجرام: مفتاح البوت (يُحفظ في خصائص السكربت) ورمز ربط مجموعة الفندق */
+function apiAdmTgSetup(token, botToken) { return adm_(token, function () { return { bot: Tg.setup(botToken) }; }); }
+function apiAdmTgCode(token, hotelId) {
+  return adm_(token, function () {
+    if (!Tg.on()) throw new Error('اربط البوت أولاً بمفتاحه.');
+    if (!Db.get('Hotels', hotelId)) throw new Error('الفندق غير موجود.');
+    return { code: Tg.newCode(hotelId) };
+  });
+}
+function apiAdmTgUnlink(token, hotelId) { return adm_(token, function () { Db.update('Hotels', hotelId, { tg_chat: '', tg_code: '' }); return {}; }); }
 
 // ───────── اعتماد البنود ─────────
 var LIST_KEYS = ['sym', 'part', 'cause', 'action', 'parts', 'leave', 'reject', 'pest', 'material', 'ftype'];

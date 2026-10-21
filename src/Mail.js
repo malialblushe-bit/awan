@@ -143,5 +143,7 @@ var Mail = (function () {
 
 /** يُشغَّل مرة واحدة من محرر السكربت بحساب الصيانة لمنح إذن إرسال البريد */
 function authorizeAwan() {
-  return 'المتبقي من البريد اليوم: ' + MailApp.getRemainingDailyQuota();
+  // يطلب كل الأذونات مرة واحدة: البريد، والاتصال الخارجي (تيليجرام)، والمشغّلات
+  UrlFetchApp.getRequest('https://api.telegram.org');
+  return 'المتبقي من البريد اليوم: ' + MailApp.getRemainingDailyQuota() + ' · المشغّلات: ' + ScriptApp.getProjectTriggers().length;
 }

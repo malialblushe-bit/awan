@@ -389,6 +389,7 @@ var Orders = (function () {
       created: ms(o.created_at), assigned: ms(o.assigned_at), arrived: ms(o.arrived_at), rescued: ms(o.rescued_at),
       submitted: ms(o.submitted_at), decided: ms(o.decided_at), paid: forCon ? null : ms(o.paid_at),
       part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), down_from: ms(o.down_from), down_to: ms(o.down_to),
+      claimed_by: o.claimed_by || '', claimed_at: ms(o.claimed_at), tg: !!o.tg_msg,
       pay_pending: forCon ? false : truthy(o.pay_pending), repair_date: String(o.repair_date || ''),
       rfq: forCon ? null : ms(o.rfq_at), rfq_count: forCon ? 0 : (Number(o.rfq_count) || 0), quote_no: forCon ? '' : String(o.quote_no || ''), quote_at: forCon ? null : ms(o.quote_at)
     };

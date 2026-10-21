@@ -92,6 +92,7 @@ const projectFolder = rootFolder.createFolder('Project');
 const masterSs = new Spreadsheet('أعوان — البيانات');
 const props = {};
 const sentMail = [];
+const triggers = [], tgCalls = [], tgReply = { getMe: () => ({ ok: true, result: { username: 'AwanBot' } }), getUpdates: () => ({ ok: true, result: tgQueue.splice(0) }) }, tgQueue = [];
 const cache = {};
 
 const ctx = {
@@ -130,7 +131,8 @@ const ctx = {
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
-  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) }
+  ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => triggers, deleteTrigger: () => {}, newTrigger: (fn) => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }), onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) },
+  UrlFetchApp: { getRequest: () => ({}), fetch: (url, o) => { const m = url.split('/').pop(), p = JSON.parse(o.payload || '{}'); tgCalls.push({ m, p }); const r = tgReply[m] ? tgReply[m](p) : { ok: true, result: { message_id: 500 + tgCalls.length } }; return { getContentText: () => JSON.stringify(r) }; } }
 };
 vm.createContext(ctx);
 
@@ -800,6 +802,41 @@ t('المصاعد بعد العرض: بانتظار الاعتماد والسد�
   const o2 = run(`Db.get('WorkOrders', '${id}')`); eq(o2.status, 'closed'); eq(o2.pay_pending, false); eq(!!o2.paid_at, true);
   if (!sentMail[sentMail.length - 1].to.subject.includes('إشعار سداد')) throw new Error('paid mail');
   throws(`apiEngAct('${engTok}', '${id}', 'paid', {})`, 'ليست بانتظار السداد');
+});
+
+t('تيليجرام: طلب التكييف يُنشر في مجموعة الفندق، وأول من يضغط «أستلمه» يستلمه، والتنبيه عند عدم الاستلام', () => {
+  throws(`apiAdmTgCode('${adminTok}', '${HID}')`, 'البوت');
+  throws(`apiAdmTgSetup('${adminTok}', 'abc')`, 'غير صحيح');
+  eq(run(`apiAdmTgSetup('${adminTok}', '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ')`).bot, 'AwanBot');
+  eq(triggers.filter(t => t.getHandlerFunction() === 'tgPoll').length, 1);
+  const code = run(`apiAdmTgCode('${adminTok}', '${HID}')`).code;
+  tgQueue.push({ update_id: 1, message: { chat: { id: -100777 }, text: '/link ' + code } });
+  run(`tgPoll()`);
+  eq(String(run(`Db.get('Hotels', '${HID}').tg_chat`)), '-100777');
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  const n0 = tgCalls.length;
+  const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '714', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  const sent = tgCalls.slice(n0).find(c => c.m === 'sendMessage');
+  eq(sent.p.chat_id, '-100777'); if (!sent.p.text.includes(id) || !sent.p.text.includes('بانتظار الاستلام')) throw new Error(sent.p.text);
+  eq(sent.p.reply_markup.inline_keyboard[0][0].callback_data, 'c|' + id);
+  tgQueue.push({ update_id: 2, callback_query: { id: 'q1', data: 'c|' + id, from: { id: 9, first_name: 'أحمد', last_name: 'علي' } } });
+  tgQueue.push({ update_id: 3, callback_query: { id: 'q2', data: 'c|' + id, from: { id: 10, first_name: 'خالد' } } });
+  run(`tgPoll()`);
+  const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.claimed_by, 'أحمد علي');
+  const late = tgCalls.filter(c => c.m === 'answerCallbackQuery' && c.p.callback_query_id === 'q2')[0]; if (!late.p.text.includes('أحمد علي')) throw new Error('second claim');
+  const ed = tgCalls.filter(c => c.m === 'editMessageText').slice(-1)[0]; if (!ed.p.text.includes('استلمه أحمد علي') || ed.p.reply_markup.inline_keyboard.length) throw new Error(ed.p.text);
+  eq(run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === id).claimed_by, 'أحمد علي');
+  // تنبيه لطلب لم يُستلم
+  const id2 = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '713', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  run(`Db.update('WorkOrders', '${id2}', { created_at: new Date(Date.now() - 15 * 60000) })`);
+  const n1 = tgCalls.length; run(`tgPoll()`); run(`tgPoll()`);
+  eq(tgCalls.slice(n1).filter(c => c.m === 'sendMessage' && c.p.text.includes('لم يُستلم')).length, 1);
+  // الحالة تتحدّث مع الإجراءات
+  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-714-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  { const e = tgCalls.filter(c => c.m === 'editMessageText').slice(-1)[0]; if (!e.p.text.includes('مطابقة')) throw new Error('refresh ' + e.p.text + ' ' + run(`Db.get('WorkOrders', '${id}').status`)); }
+  // المصاعد لا تُنشر
+  const n2 = tgCalls.length; run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'متوقف', name: 'سالم' })`);
+  eq(tgCalls.slice(n2).filter(c => c.m === 'sendMessage').length, 0);
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);
