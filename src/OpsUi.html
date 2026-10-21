@@ -33,7 +33,18 @@ var THEMES={
  warf:{name:'وارف',desc:'زيتي وبيج بلمسات ذهبية',navy:'#4A5A2C',navy2:'#5E6F38',gold:'#B8954A',goldD:'#5E6F38',goldL:'#E9D9AE',goldDD:'#3D4A22',tan:'#EEE7D4',sand:'#F9F7F0',bg:'#F7F5EE',mist:'#EEEBDF',line:'#E4DFD0'}};
 function themeVars(k){var t=THEMES[k]||THEMES.nawazi;return ['navy','navy2','gold','goldD','goldL','goldDD','tan','sand','bg','mist','line'].map(function(x){return '--'+x+':'+t[x]+';'}).join('')}
 var curTheme='';function applyTheme(k){k=THEMES[k]?k:'shared';if(k===curTheme)return;curTheme=k;var t=THEMES[k],r=document.documentElement.style;['navy','navy2','gold','goldD','goldL','goldDD','tan','sand','bg','mist','line'].forEach(function(x){r.setProperty('--'+x,t[x])});var m=document.querySelector('meta[name=theme-color]');if(m)m.content=t.navy}
-function themeNow(){if(S.mode==='req')return R.b&&R.b.hotel.brand;if(S.mode==='con')return C.b&&C.b.hotel&&C.b.hotel.brand;if(S.mode==='wa')return WA.b&&WA.b.hotel.brand;return 'shared'}
+/** الصفحات المشتركة تأخذ هوية الفندق حين يكون فندق واحد هو المعروض، وإلا كحلي وبيج */
+function themeNow(){var one=function(hs){return hs&&hs.length===1?hs[0].brand:''};
+ if(S.mode==='req')return R.b&&R.b.hotel.brand;
+ if(S.mode==='wa')return WA.b&&WA.b.hotel.brand;
+ if(S.mode==='con'){if(!C.b)return '';if(C.b.hotel&&C.b.hotel.brand)return C.b.hotel.brand;var hs=C.b.hotels||[],x=C.ph?hs.filter(function(h){return h.id===C.ph})[0]:null;return (x&&C.b.me.type==='pc'&&x.brand)||one(hs)||'shared'}
+ if(S.mode==='sup'){if(!SV.b||!S.tok)return 'shared';return SV.hotel().brand||'shared'}
+ if(S.tok&&W.b&&!W.must){
+  if(W.tab==='adm'&&A.dr&&A.dr.hid&&A.dh())return A.dh().brand||'nawazi';
+  if(W.tab==='perf'&&P.d&&P.h&&P.h!=='all'){var p=(P.d.hotels||[]).filter(function(h){return h.id===P.h})[0];if(p)return p.brand}
+  if(W.tab==='perf'&&P.d)return one(P.d.hotels)||'shared';
+  return one(W.b.hotels)||'shared'}
+ return 'shared'}
 TYPE.wa='نفايات';TYPE.pc='مكافحة الآفات';
 function callq(fn){var args=[].slice.call(arguments,1);busy(true);return new Promise(function(res,rej){google.script.run.withSuccessHandler(function(r){busy(false);res(r)}).withFailureHandler(function(e){busy(false);rej(new Error((e&&e.message)||String(e)))})[fn].apply(null,args)})}
 /** الموقع من المتصفح: {lat,lng,acc} */

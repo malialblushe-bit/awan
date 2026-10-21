@@ -214,7 +214,7 @@ function conBoot_(s) {
       var h = R.hotels[hid];
       if (h) {
         var all = elevatorsOf_(hid), inC = Orders.csv(c.elevator_ids).filter(function (e) { return all.indexOf(e) !== -1; });
-        hotels[hid] = { id: hid, name: h.name, resp: Number(c.resp_normal) || null, floors: floorsOf_(hid), elevators: all, mine: inC.length ? inC : all, pm: Number(c.pm_per_month) || 0 };
+        hotels[hid] = { id: hid, name: h.name, brand: h.brand || 'nawazi', resp: Number(c.resp_normal) || null, floors: floorsOf_(hid), elevators: all, mine: inC.length ? inC : all, pm: Number(c.pm_per_month) || 0 };
       }
     });
   });
@@ -331,7 +331,7 @@ function engBoot_(s) {
         var c = Orders.activeContract(id, t);
         if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null, prices: pricesOf_(c) };
       });
-      return { id: id, name: h.name, floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
+      return { id: id, name: h.name, brand: h.brand || 'nawazi', floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
     }),
     orders: orders,
     cons: Object.keys(R.cons).map(function (k) { var c = R.cons[k]; return { id: c.con_id, name: c.name, type: c.type }; }),
@@ -487,7 +487,7 @@ function apiKpiBoot(token) {
   var cons = {}, hs = {};
   rows.forEach(function (r) {
     var c = R.cons[r.con]; if (c) cons[r.con] = { id: c.con_id, name: c.name, type: c.type };
-    var h = R.hotels[r.hotel]; if (h) hs[r.hotel] = { id: h.hotel_id, name: h.name };
+    var h = R.hotels[r.hotel]; if (h) hs[r.hotel] = { id: h.hotel_id, name: h.name, brand: h.brand || 'nawazi' };
   });
   return {
     rows: rows, thresholds: Kpi.thresholds(),
@@ -1048,7 +1048,7 @@ function supBoot_(s) {
     me: { name: me.name, role: s.role, lang: me.lang || 'ar' },
     hotels: hs.map(function (id) {
       var h = R.hotels[id] || {};
-      return { id: id, name: h.name, code: h.code, carts: Number(h.wa_carts) || 0, geo: Ops.hasGeo(h), wa: conOf(id, 'wa'), pc: conOf(id, 'pc'),
+      return { id: id, name: h.name, code: h.code, brand: h.brand || 'nawazi', carts: Number(h.wa_carts) || 0, geo: Ops.hasGeo(h), wa: conOf(id, 'wa'), pc: conOf(id, 'pc'),
         floors: Db.all('Floors', function (f) { return f.hotel_id === id; }).sort(sortFloors_).map(function (f) { return { id: f.floor_id, label: floorLabel_(f) }; }) };
     }),
     pest: Ops.pestBoot(hs),
