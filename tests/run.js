@@ -119,7 +119,8 @@ const ctx = {
     base64Encode: (b) => Buffer.from(b.map(x => x & 255)).toString('base64'),
     getUuid: () => require('crypto').randomUUID(),
     base64Decode: (b) => Array.from(Buffer.from(b, 'base64')),
-    newBlob: (bytes, mime, name) => ({ bytes, mime, name }),
+    newBlob: (bytes, mime, name) => ({ bytes, mime, name, getBytes: () => typeof bytes === 'string' ? Array.from(Buffer.from(bytes, 'utf8')) : bytes }),
+    base64EncodeWebSafe: (b) => Buffer.from(b.map(x => x & 255)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
     formatDate: (d, tz, fmt) => {
       const x = new Date(new Date(d).getTime() + 3 * 3600e3).toISOString();
       if (fmt === 'yyyy-MM-dd') return x.slice(0, 10);
@@ -128,6 +129,15 @@ const ctx = {
       return x;
     }
   },
+  Gmail: { Users: { Messages: { send: (m) => {
+    const txt = Buffer.from(m.raw.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+    const head = txt.split('\r\n\r\n')[0], H = {};
+    head.split('\r\n').forEach(l => { const i = l.indexOf(': '); H[l.slice(0, i).toLowerCase()] = l.slice(i + 2).replace(/=\?UTF-8\?B\?([^?]+)\?=/g, (_, b) => Buffer.from(b, 'base64').toString('utf8')); });
+    const parts = txt.split(/--awan[0-9a-f]+/).filter(x => /Content-Type: text\/html/.test(x));
+    const html = parts.length ? Buffer.from(parts[0].split('\r\n\r\n')[1].replace(/\s/g, ''), 'base64').toString('utf8') : '';
+    sentMail.push({ to: { to: H.to, cc: H.cc, replyTo: H['reply-to'], subject: H.subject, from: (H.from.match(/<([^>]+)>/) || [])[1], html }, gmail: true });
+    return { id: 'm' + sentMail.length };
+  } } } },
   GmailApp: { getAliases: () => ['maint@nawazi.sa'], sendEmail: (to, subj, body, o) => { sentMail.push({ to: Object.assign({ to: to, subject: subj }, o), gmail: true }); } },
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
@@ -841,8 +851,10 @@ t('تيليجرام: طلب التكييف يُنشر في مجموعة الفن
 });
 
 t('البريد الرسمي عنواناً بديلاً، وزمن الاستلام، ولا معلومات مالية لدى المتعهد', () => {
-  throws(`apiAdmMailFrom('${adminTok}', 'x@other.sa')`, 'غير مضاف');
+  throws(`apiAdmMailFrom('${adminTok}', 'x@')`, 'غير صحيح');
+  const t0 = sentMail.length;
   eq(run(`apiAdmMailFrom('${adminTok}', 'Maint@Nawazi.sa')`).from, 'maint@nawazi.sa');
+  eq(sentMail[t0].to.to, 'maint@nawazi.sa'); if (!sentMail[t0].to.subject.includes('تجريبية')) throw new Error('test mail');
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
   run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
   const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${id}')`);

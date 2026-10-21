@@ -134,26 +134,40 @@ var Mail = (function () {
     return { to: t.list.join(','), cc: me.email || '', subject: title + ' | ' + o.wo_id + ' | ' + (c.h.name || '') + ' | ' + (o.equip || ''), html: html, text: title + '\n' + o.wo_id };
   }
 
-  function send(m, replyTo) {
-    var from = String(Db.setting('mail_from') || '').trim();
-    if (from) {
-      // البريد الرسمي (Zoho) عنواناً بديلاً في Gmail حساب الصيانة
-      GmailApp.sendEmail(m.to, m.subject, m.text, { from: from, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: BRAND_AR, htmlBody: m.html });
-      return;
-    }
-    MailApp.sendEmail({ to: m.to, cc: m.cc || '', replyTo: replyTo || m.cc || '', name: BRAND_AR, subject: m.subject, htmlBody: m.html, body: m.text });
+  // ── الإرسال عبر Gmail API بإذن «الإرسال فقط» (gmail.send): لا قراءة ولا حذف لبريد الحساب
+  function b64_(s) { return Utilities.base64Encode(Utilities.newBlob(String(s)).getBytes()); }
+  function hdr_(s) { return '=?UTF-8?B?' + b64_(s) + '?='; }
+  function wrap_(s) { return s.replace(/.{1,76}/g, '$&\r\n'); }
+  /** رسالة MIME: نص + HTML، وكل الترويسات UTF-8 */
+  function mime_(m, from, replyTo) {
+    var bd = 'awan' + Utilities.getUuid().replace(/-/g, '');
+    var h = ['From: ' + hdr_(BRAND_AR) + ' <' + from + '>', 'To: ' + m.to];
+    if (m.cc) h.push('Cc: ' + m.cc);
+    if (replyTo) h.push('Reply-To: ' + replyTo);
+    h.push('Subject: ' + hdr_(m.subject), 'MIME-Version: 1.0', 'Content-Type: multipart/alternative; boundary="' + bd + '"');
+    return h.join('\r\n') + '\r\n\r\n' +
+      '--' + bd + '\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' + wrap_(b64_(m.text || '')) +
+      '--' + bd + '\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' + wrap_(b64_(m.html || '')) +
+      '--' + bd + '--';
+  }
+  function fromAddr_() {
+    var f = String(Db.setting('mail_from') || '').trim();
+    return f || Session.getEffectiveUser().getEmail();
   }
 
-  /** يتحقق أن العنوان مضاف في Gmail («إرسال البريد بصفة») قبل اعتماده مرسلاً */
+  function send(m, replyTo) {
+    var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, fromAddr_(), replyTo || m.cc || '')).getBytes());
+    Gmail.Users.Messages.send({ raw: raw }, 'me');
+  }
+
+  /** المرسل الرسمي (عنوان بديل في Gmail). يرسل رسالة تجريبية إليه للتأكد؛ إن لم يكن مضافاً يصل من حساب الصيانة */
   function setFrom(addr) {
     addr = String(addr || '').trim().toLowerCase();
-    if (addr) {
-      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(addr)) throw new Error('البريد غير صحيح: ' + addr);
-      var al = GmailApp.getAliases().map(function (x) { return String(x).toLowerCase(); });
-      if (al.indexOf(addr) === -1) throw new Error('العنوان غير مضاف في Gmail حساب الصيانة. أضفه أولاً من الإعدادات ← الحسابات ← «إرسال البريد بصفة» وأكّده.');
-    }
+    if (addr && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(addr)) throw new Error('البريد غير صحيح: ' + addr);
     var row = Db.find('Settings', function (r) { return r.key === 'mail_from'; });
     if (row) Db.update('Settings', 'mail_from', { value: addr }); else Db.insert('Settings', { key: 'mail_from', value: addr, note: 'المرسل الرسمي (عنوان بديل في Gmail)' });
+    if (addr) send({ to: addr, subject: 'أعوان · رسالة تجريبية · Test message', text: 'إن وصلت هذه الرسالة من ' + addr + ' فالإرسال من البريد الرسمي يعمل.',
+      html: '<div dir="rtl" style="font-family:Tahoma,Arial;font-size:15px;color:' + NAVY + '">إن وصلت هذه الرسالة <b>من ' + esc(addr) + '</b> فالإرسال من البريد الرسمي يعمل.<br>إن وصلت من حساب الصيانة، فالعنوان غير مؤكد في Gmail («إرسال البريد بصفة»).</div>' }, '');
     return addr;
   }
 
@@ -162,8 +176,7 @@ var Mail = (function () {
 
 /** يُشغَّل مرة واحدة من محرر السكربت بحساب الصيانة لمنح إذن إرسال البريد */
 function authorizeAwan() {
-  // يطلب كل الأذونات مرة واحدة: البريد، والاتصال الخارجي (تيليجرام)، والمشغّلات
+  // يطلب الأذونات مرة واحدة: إرسال البريد فقط (Gmail API)، والاتصال الخارجي (تيليجرام)، والمشغّلات
   UrlFetchApp.getRequest('https://api.telegram.org');
-  GmailApp.getAliases();
-  return 'المتبقي من البريد اليوم: ' + MailApp.getRemainingDailyQuota() + ' · المشغّلات: ' + ScriptApp.getProjectTriggers().length;
+  return 'البريد: ' + Session.getEffectiveUser().getEmail() + ' · المشغّلات: ' + ScriptApp.getProjectTriggers().length + ' · ' + (Gmail.Users ? 'Gmail API مفعّلة' : '');
 }
