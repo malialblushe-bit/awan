@@ -477,6 +477,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  job:function(){return C.b.jobs.filter(function(j){return j.id===C.jobId})[0]||C.b.archive.filter(function(j){return j.id===C.jobId})[0]},
  render:function(){
   if(!S.tok&&load(tokKey())&&!C.tried){C.tried=true;C.init();return}
+  if(S.tok&&!C.b)return $('#app').innerHTML=hdr('');
   if(!S.tok||!C.b){if(!S.code){S.mode='';C.b=null;return W.render()}return C.pinView()}
   var b=C.b,h='';
   var heads={home:[ (TYPE[b.me.type]?'متعهد '+TYPE[b.me.type]:'') ,b.me.name],job:[C.jobId||'عملية جديدة',''],new:['عملية جديدة','اختر النوع'],arch:['الأرشيف','الطلبات المغلقة'],perf:['أدائي',b.me.name],sent:['تم',b.me.name]};

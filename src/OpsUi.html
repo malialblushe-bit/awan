@@ -145,7 +145,8 @@ var SV={tab:'pest',h:null,zf:'all',sel:{},multi:false,f:{},
  hotel:function(){var id=SV.hid();return SV.b.hotels.filter(function(x){return x.id===id})[0]||{}},
  render:function(){
   if(!S.tok&&load(tokKey())&&!SV.tried){SV.tried=true;SV.init();return $('#app').innerHTML=hdr('الإشراف')}
-  if(!S.tok||!SV.b){S.mode='';return W.render()}
+  if(!S.tok){S.mode='';return W.render()}
+  if(!SV.b)return $('#app').innerHTML=hdr('الإشراف');
   var b=SV.b,role=SV.mgr()?'مدير الإشراف':'مشرف ميداني';
   var right='<div style="text-align:left"><p style="margin:0;font-size:14px;font-weight:700">'+esc(b.me.name)+'</p><p style="margin:0;font-size:12px;color:var(--goldL)">'+role+'</p></div><button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="SV.logout()">خروج</button>';
   var tabs=[['pest','المكافحة'],['waste','النفايات']].concat(SV.mgr()?[['notes','الملاحظات'],['reports','التقارير']]:[]);if(SV.tab==='plan'){SV.tab='pest';SV.pv='plan'}
