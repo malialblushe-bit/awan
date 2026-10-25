@@ -993,6 +993,15 @@ t('الممرات: لكل دور غرف ممر تلقائي يظهر في خري
   run(`ensureCorridors_('${HID}')`); eq(run(`Db.all('Rooms', r => r.floor_id === '${f7.id}' && /^ممر/.test(String(r.number))).length`), 1);
 });
 
+t('غرف النزلاء: مرات في الشهر عند الإتاحة، لا تأخر قبل الإتاحة، وبلاغ الإتاحة يدخل التقييم', () => {
+  run(`Ops.saveSchedule(Auth.session('${adminTok}'), '${HID}', { 'غرف النزلاء': { pm: 2 }, 'الممرات': 7 })`);
+  const st = run(`Ops.pestState('${HID}')`); const z = st.find(f => /الدور 7/.test(f.label)).zones.find(x => x.name === '710');
+  eq(z.quota, 2); eq(z.every, 0); eq(z.overdue, false); eq(z.monthN, 0);
+  const c = st.find(f => /الدور 7/.test(f.label)).zones.find(x => x.name === 'ممر الدور 7'); eq(c.every, 7); eq(c.quota, 0);
+  throws(`Ops.saveSchedule(Auth.session('${adminTok}'), '${HID}', { 'غرف النزلاء': { pm: 40 } })`, 'الشهر');
+  eq(run(`Db.find('PestSchedule', r => r.key === '${HID}|غرف النزلاء').per_month`), 2);
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');

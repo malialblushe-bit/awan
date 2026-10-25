@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 20;
+var SCHEMA_VERSION = 21;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -134,7 +134,8 @@ var SCHEMA = [
     ['removed_at', 'موعد الرفع'], ['status', 'active · removed'], ['by_name', 'وضعها']] },
 
   { name: 'PestSchedule', cols: [
-    ['key', 'الفندق|نوع المرفق'], ['hotel_id', 'الفندق'], ['ftype', 'نوع المرفق'], ['every_days', 'الرش كل (يوم)']] },
+    ['key', 'الفندق|نوع المرفق'], ['hotel_id', 'الفندق'], ['ftype', 'نوع المرفق'], ['every_days', 'الرش كل (يوم)'],
+    ['per_month', 'مرات في الشهر عند الإتاحة (غرف النزلاء): الرش عند «متاحة للرش» والتعثر بنهاية الشهر']] },
 
   { name: 'Evaluations', cols: [
     ['eval_id', 'المعرّف'], ['con_id', 'المتعهد'], ['type', 'النوع'], ['hotel_ids', 'الفنادق'], ['from', 'من'], ['to', 'إلى'],
