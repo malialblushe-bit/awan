@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 18;
+var SCHEMA_VERSION = 19;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -125,7 +125,8 @@ var SCHEMA = [
   { name: 'PestFlags', cols: [
     ['flag_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['zone', 'المنطقة (غرفة أو مرفق)'], ['kind', 'ready = متاحة للرش · infest = بلاغ إصابة'],
     ['pests', 'الآفة'], ['note', 'ملاحظة'], ['photos', 'الصور'], ['by_id', 'المبلّغ'], ['by_name', 'اسمه'], ['created_at', 'وقت البلاغ'],
-    ['status', 'open · done · cancelled'], ['done_at', 'وقت الإنجاز'], ['done_log', 'سجل المعالجة']] },
+    ['status', 'open · done · cancelled'], ['done_at', 'وقت الإنجاز'], ['done_log', 'سجل المعالجة'],
+    ['source', 'sup = الإشراف · req = باركود الطلبات · staff = مدير الفندق أو مشرف النظام']] },
 
   { name: 'Traps', cols: [
     ['trap_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['zone', 'المنطقة'], ['label', 'رقم المصيدة'], ['kind', 'النوع'],

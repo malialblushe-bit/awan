@@ -968,6 +968,23 @@ t('الخدمات المساندة: الفريق يطّلع على النفاي�
   const v = r.boot.waste.find(x => x.id === id); eq(v.status, 'rejected'); eq(v.reason, 'لم تحضر الشاحنة فعلياً');
 });
 
+t('بلاغ المكافحة: من باركود الطلبات للجميع، ومن مدير الفندق ومشرف النظام، ويظهر للمتعهد والإشراف', () => {
+  const b = run(`apiReqBoot('WARIF2')`); eq(b.has.pc, true); if (!b.pests.length) throw new Error('pests');
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  throws(`apiReqPest('WARIF2', { floor_id: '${fl}', room: '799', pests: ['صراصير'], name: 'سعاد' })`, 'من القائمة');
+  throws(`apiReqPest('WARIF2', { floor_id: '${fl}', room: '705', pests: [], name: 'سعاد' })`, 'الآفة');
+  throws(`apiReqPest('WARIF2', { floor_id: '${fl}', room: '705', pests: ['صراصير'], name: '' })`, 'اسمك');
+  run(`apiReqPest('WARIF2', { floor_id: '${fl}', room: '705', pests: ['صراصير'], name: 'سعاد', note: 'في الحمام' })`);
+  run(`Db.reset()`); const all = run(`Db.all('PestFlags')`); const sb = run(`supBoot_(Auth.session('${supTok}'))`).pest.flags.find(f => f.zoneName === '705' && f.status === 'open'); if (!sb) throw new Error(JSON.stringify(all.slice(-2)));
+  eq(sb.src, 'req'); eq(sb.by, 'سعاد');
+  const gm = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
+  const z = run(`Db.find('Rooms', r => r.hotel_id === '${HID}' && String(r.number) === '706').room_id`);
+  eq(run(`apiSvcBoot('${gm}')`).canFlag, true);
+  throws(`apiSvcPestFlag('${engTok}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`, 'صلاحية');
+  const r = run(`apiSvcPestFlag('${gm}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`);
+  const f2 = r.boot.pest.flags.find(f => f.zone === z && f.status === 'open'); eq(f2.src, 'staff'); eq(f2.kind, 'infest');
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');

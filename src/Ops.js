@@ -183,7 +183,7 @@ var Ops = (function () {
     Db.all('Rooms').forEach(function (r) { zones[r.room_id] = String(r.number); });
     return Db.all('PestFlags', function (f) { return hotelIds.indexOf(f.hotel_id) !== -1 && (f.status === 'open' || ms(f.created_at) >= sinceMs); }).map(function (f) {
       return { id: f.flag_id, hotel_id: f.hotel_id, zone: f.zone, zoneName: zones[f.zone] || '', kind: f.kind, pests: csv(f.pests), note: f.note || '',
-        by: f.by_name, created: ms(f.created_at), status: f.status, done: ms(f.done_at) };
+        by: f.by_name, src: f.source || 'sup', created: ms(f.created_at), status: f.status, done: ms(f.done_at) };
     }).sort(function (a, b) { return b.created - a.created; });
   }
 
@@ -217,13 +217,29 @@ var Ops = (function () {
     if (!zones[0]) throw new Error('اختر المنطقة.');
     if (d.kind === 'infest' && !(d.pests || []).length) throw new Error('اختر الآفة.');
     var me = Db.get('Users', s.id) || {};
+    var src = Auth.isSup(s.role) ? 'sup' : 'staff';
+    if (src === 'staff' && d.kind !== 'infest') throw new Error('اختر الآفة.');
     var recs = zones.map(function (z) {
       zoneOf_(d.hotel_id, z);
       return { hotel_id: d.hotel_id, zone: z, kind: d.kind, pests: (d.pests || []).join(','), note: String(d.note || '').trim(), photos: (d.photos || []).join(','),
-        by_id: s.id, by_name: me.name || '', created_at: new Date(), status: 'open' };
+        by_id: s.id, by_name: me.name || '', created_at: new Date(), status: 'open', source: src };
     });
     Db.insertMany('PestFlags', recs);
     return recs.length;
+  }
+
+  /** بلاغ إصابة من باركود الطلبات (فريق العمل بلا دخول): الدور + الغرفة أو المرفق بالاسم */
+  function reqFlag(h, d) {
+    var name = String(d.name || '').trim();
+    if (name.length < 2) throw new Error('اكتب اسمك.');
+    if (!(d.pests || []).length) throw new Error('اختر الآفة.');
+    var room = String(d.room || '').trim();
+    var z = Db.find('Rooms', function (r) { return r.hotel_id === h.hotel_id && r.floor_id === d.floor_id && String(r.number).trim() === room; });
+    if (!z) throw new Error('اختر الغرفة أو المرفق من القائمة.');
+    if (!Orders.activeContract(h.hotel_id, 'pc')) throw new Error('لا يوجد عقد مكافحة ساري لهذا الفندق.');
+    var rec = Db.insert('PestFlags', { hotel_id: h.hotel_id, zone: z.room_id, kind: 'infest', pests: d.pests.join(','), note: String(d.note || '').trim(),
+      photos: (d.photos || []).join(','), by_id: '', by_name: name, created_at: new Date(), status: 'open', source: 'req' });
+    return { id: rec.flag_id, zone: String(z.number) };
   }
 
   function cancelFlag(s, flagId) {
@@ -456,7 +472,7 @@ var Ops = (function () {
   return {
     geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
     waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
-    pestBoot: pestBoot, pestState: pestState, flag: flag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
+    pestBoot: pestBoot, pestState: pestState, flag: flag, reqFlag: reqFlag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS
   };
 })();

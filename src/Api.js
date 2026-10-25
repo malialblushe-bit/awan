@@ -131,7 +131,8 @@ function apiReqBoot(code) {
     hotel: { code: h.code, name: h.name, towers: towersOf_(h), brand: h.brand || 'nawazi' },
     floors: floorsOf_(h.hotel_id),
     elevators: elevatorsOf_(h.hotel_id),
-    has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el') },
+    has: { ac: !!Orders.activeContract(h.hotel_id, 'ac'), el: !!Orders.activeContract(h.hotel_id, 'el'), pc: !!Orders.activeContract(h.hotel_id, 'pc') },
+    pests: listsFor_('pc').pest,
     syms: { ac: listsFor_('ac').sym, el: listsFor_('el').sym },
     // الطلبات المفتوحة (موقعها فقط) لتنبيه الرافع إن كان نفس الموقع مرفوعاً
     open: Db.all('WorkOrders', function (o) { return o.hotel_id === h.hotel_id && Orders.OPEN.indexOf(o.status) !== -1; }).map(function (o) {
@@ -139,6 +140,21 @@ function apiReqBoot(code) {
     }),
     i18n: i18nPairs_()
   };
+}
+
+/** باركود الطلبات: بلاغ مكافحة يظهر مباشرة على خريطة المتعهد والإشراف */
+function apiReqPest(code, d) {
+  return Db.withLock(function () {
+    d = d || {};
+    var h = Orders.hotelByCode(code);
+    d.photos = savePhotos_(d.photos, 'PF');
+    return Ops.reqFlag(h, d);
+  });
+}
+/** مشرف النظام ومدير الفندق والمناوب: «طلب مكافحة» من الخدمات المساندة */
+function apiSvcPestFlag(token, d) {
+  var s = Auth.need(token, ['admin', 'gm', 'duty']);
+  return Db.withLock(function () { d = d || {}; d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF'); var n = Ops.flag(s, d); Db.reset(); return { n: n, boot: supBoot_(s) }; });
 }
 
 function apiReqSubmit(code, d) {
@@ -1076,6 +1092,7 @@ function supBoot_(s) {
     waste: Ops.waVisits(hs, Date.now() - 35 * 864e5),
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
+    canFlag: ['admin', 'gm', 'duty'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
     lists: { pest: L.pest, material: L.material, ftype: L.ftype },
