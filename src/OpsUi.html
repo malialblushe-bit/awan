@@ -122,8 +122,12 @@ var Z={
  cls:function(z){if(z.flags.indexOf('infest')!==-1)return 'inf';if(z.flags.indexOf('ready')!==-1)return 'ready';if(z.overdue)return 'due';if(z.every&&z.last)return 'ok';return ''},
  legend:function(){return '<div class="zleg"><span><i style="background:#FBEFEC;border-color:#A4483A"></i>بلاغ إصابة</span><span><i style="background:var(--tan);border-color:var(--gold)"></i>متاحة للرش</span><span><i style="background:#FFF4E5;border-color:#E0A458"></i>مستحقة الرش</span><span><i style="background:#E3EFEA;border-color:#9CC4B5"></i>ضمن الموعد</span><span><i style="background:var(--bg);border-color:#D5DBE3"></i>غير مجدولة</span><span><i style="background:#fff;border-color:#9AA6B5;border-style:dashed"></i>مرفق</span></div>'},
  filt:function(z,f){if(f==='due')return z.overdue;if(f==='flag')return z.flags.length>0;if(f==='fac')return z.fac;return true},
+ /** فرز حسب البرج: يظهر حين يكون للفندق أكثر من برج */
+ tw:'',
+ tchips:function(st){var ts=[];st.floors.forEach(function(f){if(ts.indexOf(f.tower)===-1)ts.push(f.tower)});if(ts.length<2)return '';if(Z.tw&&ts.indexOf(Z.tw==='-'?'':Z.tw)===-1)Z.tw='';
+  return '<div class="chips">'+[['','كل الأبراج']].concat(ts.map(function(t){return [t||'-',t||'مشترك']})).map(function(x){return '<button class="chip'+(Z.tw===x[0]?' on':'')+'" style="min-height:36px" data-t="'+esc(x[0])+'" onclick="Z.tw=this.dataset.t;render()">'+esc(x[1])+'</button>'}).join('')+'</div>'},
  map:function(st,sel,onTap,f){var h='<div class="zmap">',any=false;
-  st.floors.forEach(function(fl){var zs=fl.zones.filter(function(z){return Z.filt(z,f)});if(!zs.length)return;any=true;
+  st.floors.forEach(function(fl){if(Z.tw&&fl.tower!==(Z.tw==='-'?'':Z.tw))return;var zs=fl.zones.filter(function(z){return Z.filt(z,f)});if(!zs.length)return;any=true;
    h+='<div class="zfl"><h4>'+esc(fl.label)+' <span class="small muted" style="font-weight:600">· '+zs.length+'</span></h4><div class="zgrid">'+zs.map(function(z){return '<button class="zc '+Z.cls(z)+(z.fac?' fac':'')+((sel||{})[z.id]?' sel':'')+'" data-nt="1" onclick="'+onTap+'(\''+z.id+'\')">'+esc(z.name)+(z.traps?'<small>مصيدة '+z.traps+'</small>':'')+'</button>'}).join('')+'</div></div>'});
   if(!any)h+='<div class="card muted" style="text-align:center">لا مناطق بهذا التصفية.</div>';
   return h+'</div>'},
@@ -159,7 +163,7 @@ var SV={tab:'pest',h:null,zf:'all',sel:{},multi:false,f:{},
   if(SV.pv==='log')return h+(lg.length?lg.map(SV.logCard).join(''):'<div class="card muted" style="text-align:center">لا معالجات مسجلة بعد.</div>')+'</div>';
   h+='<div class="row" style="flex-wrap:wrap;gap:8px">'+Z.filters(SV.zf,'SV.setF')+(SV.ro?'':'<button class="btn '+(SV.multi?'btn-p':'btn-o')+' sm" onclick="SV.multi=!SV.multi;SV.sel={};render()">'+(SV.multi?'إنهاء التحديد':'تحديد عدة مناطق')+'</button>')+'</div>'+Z.legend();
   if(SV.multi)h+='<div class="alert a-sand">اضغط المناطق المتاحة للرش (مثل الغرف بعد خروج النزلاء)، ثم أرسلها مرة واحدة.</div>';
-  h+=Z.map(st,SV.sel,'SV.tap',SV.zf);
+  h+=Z.tchips(st)+Z.map(st,SV.sel,'SV.tap',SV.zf);
   var fl=b.pest.flags.filter(function(f){return f.hotel_id===hid}).slice(0,15);
   if(fl.length)h+='<div class="card stack" style="gap:8px"><h3 style="font-size:15px">آخر البلاغات</h3>'+fl.map(SV.flagRow).join('')+'</div>';
 
@@ -266,7 +270,7 @@ C.pestHome=function(){var b=C.b,hid=C.pestHid(),st=b.pest.hotels[hid];C.zsel=C.z
  h+='<div class="grid g2"><div class="tile"><p class="k">بلاغات إصابة</p><p class="v" style="color:#8E3A2E">'+c.inf+'</p></div><div class="tile"><p class="k">متاحة للرش الآن</p><p class="v" style="color:var(--goldD)">'+c.ready+'</p></div><div class="tile"><p class="k">مستحقة الرش</p><p class="v" style="color:#B26A12">'+c.due+'</p></div><div class="tile"><p class="k">مصائد مستحقة الفحص</p><p class="v">'+st.traps.filter(function(t){return t.late}).length+' / '+st.traps.length+'</p></div></div>';
  var open=b.pest.flags.filter(function(f){return f.hotel_id===hid&&f.status==='open'});
  if(open.length)h+='<div class="card stack" style="gap:8px"><h3 style="font-size:15px">طلبات المكافحة ('+open.length+')</h3>'+open.map(function(f){return '<button class="row" style="border:0;border-top:1px solid var(--mist);background:none;padding:8px 0;font:inherit;text-align:start;width:100%" onclick="C.ztap(\''+f.zone+'\')"><span><b style="color:'+(f.kind==='infest'?'#8E3A2E':'var(--goldD)')+'">'+(f.kind==='infest'?'إصابة':'متاحة للرش')+'</b> · '+esc(f.zoneName)+(f.pests.length?' · '+esc(f.pests.join('، ')):'')+(f.note?'<br><span class="small">'+esc(f.note)+'</span>':'')+'</span><span class="small muted">'+ago(f.created)+'</span></button>'}).join('')+'</div>';
- h+=Z.filters(C.zf,'C.setZf')+Z.legend()+Z.map(st,C.zsel,'C.ztap',C.zf);
+ h+=Z.filters(C.zf,'C.setZf')+Z.legend()+Z.tchips(st)+Z.map(st,C.zsel,'C.ztap',C.zf);
  h+=C.trapsCard(st,hid);
  var logs=b.pest.logs.filter(function(l){return l.hotel_id===hid&&l.kind!=='trap'}).slice(0,10);
  if(logs.length)h+='<div class="card stack" style="gap:6px"><h3 style="font-size:15px">آخر المعالجات</h3>'+logs.map(function(l){return '<div style="border-top:1px solid var(--mist);padding-top:6px"><b>'+(l.kind==='spray'?'رش':'فحص')+'</b> · '+esc(l.zones.join('، '))+'<br><span class="small muted">'+dmy(l.at)+' '+hm(l.at)+' · '+esc(l.by)+(l.material?' · '+esc(l.material):'')+' · '+esc(b.pest.finds[l.finding]||'')+(l.flags?' · أنجز '+l.flags+' بلاغ':'')+'</span></div>'}).join('')+'</div>';

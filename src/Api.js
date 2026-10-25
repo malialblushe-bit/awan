@@ -118,6 +118,7 @@ function ensureSchemaVersion_() {
   ensureTables_(Db.ss());
   Db.reset();
   seedMissingLists_();
+  Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
   var row = Db.find('Settings', function (r) { return r.key === 'schema_version'; });
   if (row) Db.update('Settings', 'schema_version', { value: SCHEMA_VERSION });
   else Db.insert('Settings', { key: 'schema_version', value: SCHEMA_VERSION, note: 'إصدار هيكل الجداول' });
@@ -738,8 +739,22 @@ function apiAdmSaveFloors(token, hotelId, rows) {
       });
     });
     Db.insertMany('Rooms', recs);
+    ensureCorridors_(hotelId);
     return { added: recs.length, floors: newFloors };
   });
+}
+
+/** لكل دور غرف ممر تلقائي («ممر الدور 11») بنوع «الممرات»، ليظهر في خريطة المكافحة وطلبات التكييف */
+function ensureCorridors_(hotelId) {
+  var floors = Db.all('Floors', function (f) { return f.hotel_id === hotelId && f.kind === 'rooms'; });
+  if (!floors.length) return 0;
+  var has = {};
+  Db.all('Rooms', function (r) { return r.hotel_id === hotelId && r.kind === 'facility' && /^ممر/.test(String(r.number)); }).forEach(function (r) { has[r.floor_id] = true; });
+  var recs = floors.filter(function (f) { return !has[f.floor_id]; }).map(function (f) {
+    return { hotel_id: hotelId, floor_id: f.floor_id, number: 'ممر ' + f.name, ac_units: '', kind: 'facility', ftype: 'الممرات' };
+  });
+  if (recs.length) Db.insertMany('Rooms', recs);
+  return recs.length;
 }
 
 /** دور خدمي (الاستقبال، الميزانين، المطعم، المواقف…) ومرافقه */

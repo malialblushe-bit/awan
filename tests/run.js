@@ -309,7 +309,7 @@ t('الغرف بحرف: A301–A305 و B-01–B-03، ورقم بحرف صغير 
   eq(h.totals.rooms, 8);
   const f3 = h.floors.find(x => x.name === 'الدور 3');
   eq(f3.from, 'A301'); eq(f3.to, 'A305');
-  eq(run(`Db.all('Rooms', r => r.hotel_id === '${nid}').map(r => r.number).sort().join(',')`), 'A301,A302,A303,A304,A305,B-01,B-02,B-03');
+  eq(run(`Db.all('Rooms', r => r.hotel_id === '${nid}' && r.kind === 'room').map(r => r.number).sort().join(',')`), 'A301,A302,A303,A304,A305,B-01,B-02,B-03');
   throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 4', from: 'A401', to: 'B405', ac: 1 }])`, 'نطاق الغرف');
   throws(`apiAdmSaveFloors('${adminTok}', '${nid}', [{ name: 'الدور 9', from: 'A303', to: 'A303', ac: 1 }])`, 'دور آخر');
   eq(run(`Orders.normRoom(' a 302 ')`), 'A302'); eq(run(`Orders.normRoom('اللوبي')`), 'اللوبي');
@@ -983,6 +983,14 @@ t('بلاغ المكافحة: من باركود الطلبات للجميع، و
   throws(`apiSvcPestFlag('${engTok}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`, 'صلاحية');
   const r = run(`apiSvcPestFlag('${gm}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`);
   const f2 = r.boot.pest.flags.find(f => f.zone === z && f.status === 'open'); eq(f2.src, 'staff'); eq(f2.kind, 'infest');
+});
+
+t('الممرات: لكل دور غرف ممر تلقائي يظهر في خريطة المكافحة بنوع الممرات، والأدوار بأبراجها', () => {
+  const st = run(`Ops.pestState('${HID}')`);
+  const f7 = st.find(f => /الدور 7/.test(f.label)); const c = f7.zones.find(z => z.name === 'ممر الدور 7');
+  if (!c) throw new Error('no corridor'); eq(c.fac, true); eq(c.ftype, 'الممرات'); eq(typeof f7.tower, 'string');
+  const n = run(`Db.all('Rooms', r => r.floor_id === '${f7.id}' && /^ممر/.test(String(r.number))).length`); eq(n, 1);
+  run(`ensureCorridors_('${HID}')`); eq(run(`Db.all('Rooms', r => r.floor_id === '${f7.id}' && /^ممر/.test(String(r.number))).length`), 1);
 });
 
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {

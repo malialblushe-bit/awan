@@ -157,7 +157,7 @@ var Ops = (function () {
     return floors.map(function (f) {
       var label = (f.tower ? towerName_(f.tower) + ' · ' : '') + f.name;
       return {
-        id: f.floor_id, label: label,
+        id: f.floor_id, label: label, tower: String(f.tower || ''),
         zones: rooms.filter(function (r) { return r.floor_id === f.floor_id; }).map(function (r) {
           var fac = isFacility_(r, f), ft = r.ftype || (fac ? '' : GUEST), every = sch[ft] || 0, l = last[r.room_id] || null;
           return { id: r.room_id, name: String(r.number), fac: fac, ftype: ft, every: every, last: l,
