@@ -55,6 +55,7 @@ var Water = (function () {
     var size = Number(d.size);
     if (sizes_(c).indexOf(size) === -1) throw new Error('اختر حجم النقلة.');
     var receipt = String(d.receipt || '').trim();
+    if (!receipt) throw new Error('اكتب رقم السند.');
     var mine = Db.all('WaterLoads', function (v) { return v.con_id === con.con_id; });
     if (receipt) {
       var same = mine.filter(function (v) { return String(v.receipt_no).trim() === receipt && v.status !== 'rejected'; })[0];

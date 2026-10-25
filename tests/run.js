@@ -895,6 +895,7 @@ t('شاحنات المياه: باركود بالرقم السري والموق�
   throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: '', size: 19 }, ${JSON.stringify(near)})`, 'السائق');
   throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 10 }, ${JSON.stringify(near)})`, 'حجم');
   throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19 }, ${JSON.stringify(far)})`, 'خارج');
+  throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19, receipt: ' ' }, ${JSON.stringify(near)})`, 'السند');
   const a = run(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A1', photos: ['data:image/jpeg;base64,AAAA'] }, ${JSON.stringify(near)})`);
   eq(a.dup, null);
   throws(`apiWtSubmit('${tk}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A1' }, ${JSON.stringify(near)})`, 'مسجّل');

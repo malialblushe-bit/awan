@@ -191,7 +191,7 @@ var Ops = (function () {
     var zones = {};
     Db.all('Rooms').forEach(function (r) { zones[r.room_id] = String(r.number); });
     return Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && ms(l.at) >= sinceMs; }).map(function (l) {
-      return { id: l.log_id, hotel_id: l.hotel_id, kind: l.kind, zones: csv(l.zones).map(function (z) { return zones[z] || z; }), pests: csv(l.pests), material: l.material || '',
+      return { id: l.log_id, hotel_id: l.hotel_id, kind: l.kind, zoneIds: csv(l.zones), zones: csv(l.zones).map(function (z) { return zones[z] || z; }), pests: csv(l.pests), material: l.material || '',
         finding: l.finding || '', note: l.note || '', by: l.by_name, at: ms(l.at), trap: l.trap_id || '', flags: csv(l.flags_closed).length };
     }).sort(function (a, b) { return b.at - a.at; });
   }
