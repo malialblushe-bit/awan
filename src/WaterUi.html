@@ -106,8 +106,8 @@ var SVC={roles:['admin','gm','om','duty','management'],
 
 // المتعهد: نقلاته بحالتها (بلا أسعار)
 (function(){var home=C.homeView,perf=C.perfView,foot=C.footer;
- C.homeView=function(){if(C.b.me.type!=='wt')return home();var L=C.b.water||[];
-  return '<div class="stack"><h2 style="font-size:17px">نقلاتي (35 يوماً)</h2><p class="small muted" style="margin:0">التسجيل من باركود شاحنات المياه في الفندق عند التفريغ.</p>'+(L.length?L.map(function(x){return WT.row(x,false)}).join(''):'<div class="card muted" style="text-align:center">لا نقلات بعد.</div>')+'</div>'};
+ C.homeView=function(){if(C.b.me.type!=='wt')return home();var L=C.hfil(C.b.water||[]);
+  return '<div class="stack">'+C.hchips()+'<h2 style="font-size:17px">نقلاتي (35 يوماً)</h2><p class="small muted" style="margin:0">التسجيل من باركود شاحنات المياه في الفندق عند التفريغ.</p>'+(L.length?L.map(function(x){return WT.row(x,false)}).join(''):'<div class="card muted" style="text-align:center">لا نقلات بعد.</div>')+'</div>'};
  C.perfView=function(){return C.b.me.type==='wt'?C.homeView():perf()};
  C.footer=function(){return C.b&&C.b.me.type==='wt'?'':foot()}})();
 render();
