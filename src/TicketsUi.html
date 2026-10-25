@@ -1,0 +1,83 @@
+<script>
+// ═════════ «تواصل»: تذاكر المتعهدين وتقييمهم لمؤسستنا ═════════
+(function(){var D={"تواصل":"Contact","تواصل معنا":"Contact us","اقتراح":"Suggestion","رأي":"Opinion","شكوى":"Complaint","الطلبات والإسناد":"Requests and assignment","الوصول والتنسيق في الفندق":"Access and coordination at the hotel","تعاون فريق العمل":"Team cooperation","نظام أعوان":"Awan system","أخرى":"Other","جديدة":"New","بانتظار رد الإدارة":"Awaiting management reply","مغلقة":"Closed","أُعيدت للإدارة":"Returned to management","الموضوع":"Topic","التفاصيل":"Details","الفندق (اختياري)":"Hotel (optional)","رقم العملية (اختياري)":"Order no. (optional)","اسمك":"Your name","إرسال":"Send","أُرسلت، وسيصلك الرد هنا.":"Sent; the reply will reach you here.","تذاكري":"My tickets","لا تذاكر بعد.":"No tickets yet.","إفادة المالك":"Owner's input","الرد":"Reply","الإجراء المتخذ":"Action taken","الشكوى":"Complaint","مقبولة":"Accepted","غير مقبولة":"Not accepted","هل أنت راضٍ عن الرد؟":"Are you satisfied with the reply?","راضٍ":"Satisfied","غير راضٍ":"Not satisfied","تقييمك":"Your rating","إفادتك":"Your input","إرسال الإفادة":"Send input","الرد المتكامل والإغلاق":"Full reply and close","الرد على المتعهد":"Reply to the contractor","إغلاق التذكرة":"Close ticket","متأخرة عن الإفادة":"Input overdue","متأخرة عن الإغلاق":"Closing overdue","المفتوحة":"Open","تذاكر المتعهدين":"Contractor tickets","قيّم تعاوننا":"Rate our cooperation","تقييم مؤسستنا":"Rate our organization","شهر {0}":"month {0}","قيّم كل بند من 1 (ضعيف) إلى 5 (ممتاز).":"Rate each item from 1 (poor) to 5 (excellent).","ملاحظة (اختياري)":"Note (optional)","إرسال التقييم":"Send rating","شكراً، وصل تقييمك.":"Thank you, your rating was received.","تقييم المتعهدين لمؤسستنا":"Contractors' rating of our organization","لا تقييمات بعد.":"No ratings yet.","{0} تقييم":"{0} ratings","وضوح الطلبات ودقة المعلومات":"Clarity of requests and accuracy of information","سرعة القرار والمطابقة":"Speed of decisions and matching","تسهيل الوصول والتنسيق في الموقع":"Access and on-site coordination","تعاون فريق العمل واحترامه":"Team cooperation and respect","الوفاء بالالتزامات":"Meeting commitments","جودة التواصل والرد":"Quality of communication","سهولة نظام أعوان":"Ease of the Awan system","المالك يفيد خلال يوم عمل، والرد والإغلاق خلال يومي عمل.":"The owner gives input within one working day; reply and closing within two working days.","رجوع":"Back","مطلوب منك تقييم تعاوننا لشهر {0}":"Please rate our cooperation for month {0}","المهندس":"Engineer","مدير الإشراف":"Supervision manager","مدير الفندق":"Hotel manager"};Object.keys(D).forEach(function(k){if(!DICT.hasOwnProperty(k))DICT[k]=D[k]})})();
+
+var TK={f:{},flt:'open',
+ ST:{new:['جديدة','st-review'],noted:['بانتظار رد الإدارة','st-assigned'],closed:['مغلقة','st-closed'],reopened:['أُعيدت للإدارة','st-late']},
+ OWN:{engineer:'المهندس',supmgr:'مدير الإشراف',gm:'مدير الفندق'},
+ role:function(){return S.mode==='sup'?'supmgr':(W.b&&W.b.me.role)},
+ canClose:function(t){var r=TK.role();return r==='admin'||r==='management'||(t.owner==='gm'&&(r==='gm'||r==='om'))},
+ canNote:function(t){return TK.role()===t.owner||TK.canClose(t)},
+ needsMe:function(t){if(t.status==='closed')return false;return TK.canClose(t)||(TK.role()===t.owner&&t.status==='new')},
+ card:function(t,staff){var st=TK.ST[t.status]||['',''];
+  var h='<div class="card stack" style="gap:6px;padding:12px 14px'+(t.type==='complaint'?';border-color:#E7B9AF':'')+'"><div class="row" style="flex-wrap:wrap;gap:6px"><span><b style="color:'+(t.type==='complaint'?'#8E3A2E':'var(--navy)')+'">'+t.typeL+'</b> · '+esc(t.topic)+'</span><span><span class="pill '+st[1]+'">'+st[0]+'</span>'+(t.respLate?' <span class="pill st-late">متأخرة عن الإفادة</span>':t.closeLate?' <span class="pill st-late">متأخرة عن الإغلاق</span>':'')+'</span></div>';
+  h+='<span class="small muted">'+(staff?'<span data-nt="1">'+esc(t.con)+'</span> · ':'')+(t.hotel?esc(t.hotel)+' · ':'')+(t.wo?'<span dir="ltr">'+esc(t.wo)+'</span> · ':'')+dmyY(t.created)+' '+hm(t.created)+' · <span dir="ltr">'+esc(t.id)+'</span>'+(staff?' · '+TK.OWN[t.owner]:'')+'</span>';
+  h+='<p style="margin:0" data-nt="1">'+esc(t.text)+'</p>'+(t.photos.length?'<div class="photos">'+t.photos.map(thumb).join('')+'</div>':'');
+  if(t.note&&staff)h+='<div class="alert a-sand" style="margin:0"><b>إفادة المالك</b> · <span data-nt="1">'+esc(t.noteBy)+'</span><br><span data-nt="1" style="white-space:pre-line">'+esc(t.note)+'</span></div>';
+  if(t.reply)h+='<div class="alert a-mint" style="margin:0"><b>الرد</b>'+(t.accepted?' · <b>الشكوى</b> '+t.accepted:'')+'<br><span data-nt="1">'+esc(t.reply)+'</span><br><b>الإجراء المتخذ</b><br><span data-nt="1">'+esc(t.action)+'</span><br><span class="small muted"><span data-nt="1">'+esc(t.closedBy)+'</span> · '+dmyY(t.closedAt)+'</span></div>';
+  if(t.sat)h+='<span class="small"><b>تقييمك</b>: '+(staff?'':'')+esc(t.sat)+(t.satNote?' · <span data-nt="1">'+esc(t.satNote)+'</span>':'')+'</span>';
+  if(staff&&t.status!=='closed'){
+   if(TK.canNote(t)&&!TK.canClose(t))h+='<div class="stack" style="gap:6px"><textarea class="inp" rows="2" placeholder="إفادتك" data-id="'+t.id+'" oninput="TK.f[this.dataset.id+\'n\']=this.value">'+esc(TK.f[t.id+'n']||'')+'</textarea><button class="btn btn-p sm" style="align-self:flex-start" data-id="'+t.id+'" onclick="TK.act(this.dataset.id,\'note\')">إرسال الإفادة</button></div>';
+   if(TK.canClose(t)){var acc=TK.f[t.id+'a']||'';h+='<div class="stack" style="gap:6px;border-top:1px solid var(--line);padding-top:8px"><b>الرد المتكامل والإغلاق</b><textarea class="inp" rows="2" placeholder="الرد على المتعهد" data-id="'+t.id+'" oninput="TK.f[this.dataset.id+\'r\']=this.value">'+esc(TK.f[t.id+'r']||'')+'</textarea><textarea class="inp" rows="2" placeholder="الإجراء المتخذ" data-id="'+t.id+'" oninput="TK.f[this.dataset.id+\'x\']=this.value">'+esc(TK.f[t.id+'x']||'')+'</textarea>'+(t.type==='complaint'?'<div class="chips">'+['مقبولة','غير مقبولة'].map(function(v){return '<button class="chip'+(acc===v?' on':'')+'" data-id="'+t.id+'" data-v="'+v+'" onclick="TK.f[this.dataset.id+\'a\']=TK.f[this.dataset.id+\'a\']===this.dataset.v?\'\':this.dataset.v;render()">'+v+'</button>'}).join('')+'</div>':'')+'<button class="btn btn-p sm" style="align-self:flex-start" data-id="'+t.id+'" onclick="TK.act(this.dataset.id,\'close\')">إغلاق التذكرة</button></div>'}}
+  if(!staff&&t.status==='closed'&&!t.sat)h+='<div class="stack" style="gap:6px"><b>هل أنت راضٍ عن الرد؟</b><div style="display:flex;gap:8px"><button class="btn btn-p sm" data-id="'+t.id+'" onclick="TK.rate(this.dataset.id,\'راضٍ\')">راضٍ</button><button class="btn btn-o sm" data-id="'+t.id+'" onclick="TK.rate(this.dataset.id,\'غير راضٍ\')">غير راضٍ</button></div></div>';
+  return h+'</div>'},
+ act:function(id,a){var d=a==='note'?{note:TK.f[id+'n']}:{reply:TK.f[id+'r'],action:TK.f[id+'x'],accepted:TK.f[id+'a']};
+  call('apiTicketAct',S.tok,id,a,d).then(function(r){if(S.mode==='sup')SV.b=r.boot;else W.b=r.boot;TK.f={};toast(a==='note'?'أُرسلت الإفادة.':'أُغلقت التذكرة وأُرسل الرد للمتعهد.');render()})},
+ rate:function(id,v){call('apiConTicketRate',S.tok,id,v,'').then(function(r){C.b=r.boot;toast(r.r==='reopened'?'أُعيدت للإدارة.':'شكراً لتقييمك.');render()})},
+ staff:function(list){list=list||[];var open=list.filter(function(t){return t.status!=='closed'}),sh=TK.flt==='open'?open:list.filter(function(t){return t.status==='closed'});
+  var h='<div class="stack"><div class="row" style="flex-wrap:wrap"><h2 style="font-size:18px">تذاكر المتعهدين</h2><span class="small muted">المالك يفيد خلال يوم عمل، والرد والإغلاق خلال يومي عمل.</span></div>';
+  h+='<div class="chips">'+[['open','المفتوحة ('+open.length+')'],['closed','مغلقة']].map(function(x){return '<button class="chip'+(TK.flt===x[0]?' on':'')+'" data-k="'+x[0]+'" onclick="TK.flt=this.dataset.k;render()">'+x[1]+'</button>'}).join('')+'</div>';
+  h+=(sh.length?sh.map(function(t){return TK.card(t,true)}).join(''):'<div class="card muted" style="text-align:center">لا تذاكر بعد.</div>');
+  return h+'</div>'},
+ orgView:function(o){if(!o)return '';var h='<div class="stack"><h2 style="font-size:18px">تقييم المتعهدين لمؤسستنا</h2>';
+  if(!o.rows.length)return h+'<div class="card muted" style="text-align:center">لا تقييمات بعد.</div></div>';
+  o.rows.slice(0,12).forEach(function(r){h+='<div class="card stack" style="gap:6px"><div class="row"><b>'+esc(r.hotel)+' · '+P.mlabel(r.month)+'</b><span class="small muted">'+F('{0} تقييم',r.n)+'</span></div><div class="bars">'+o.crit.map(function(c){var v=r.avg[c[0]];return '<div class="bar"><div><span>'+c[1]+'</span><i style="width:'+Math.round(v*20)+'%;background:'+(v>=4?'#245244':v>=3?'var(--gold)':'#A4483A')+'"></i></div><em>'+v+'</em></div>'}).join('')+'</div>'+r.notes.map(function(n){return '<span class="small"><b data-nt="1">'+esc(n.con)+'</b>: <span data-nt="1">'+esc(n.note)+'</span></span>'}).join('<br>')+'</div>'});
+  return h+'</div>'},
+ // ── المتعهد
+ conHome:function(){var b=C.b,o=b.org||{hotels:[]},n=(b.tickets||[]).filter(function(t){return t.status==='closed'&&!t.sat}).length,h='';
+  if(o.hotels.length)h+='<button class="opt" style="border-color:var(--gold);background:var(--sand)" onclick="C.go(\'org\')"><b>'+F('مطلوب منك تقييم تعاوننا لشهر {0}',P.mlabel(o.month))+'</b><span>'+o.hotels.map(function(x){return esc(x.name)}).join('، ')+'</span></button>';
+  h+='<button class="opt" onclick="C.go(\'tk\')"><b>تواصل معنا'+(n?' ('+n+')':'')+'</b><span>اقتراح · رأي · شكوى</span></button>';
+  return h},
+ conView:function(){var b=C.b,f=TK.cf=TK.cf||{type:'',topic:'',hotel:'',wo:'',text:'',by:(function(){try{return localStorage.getItem('aw_tk_by')||''}catch(e){return ''}})(),photos:[]};
+  var h='<div class="stack"><div class="card stack"><h2 style="font-size:17px">تواصل معنا</h2>';
+  h+='<div class="chips">'+Object.keys(b.tk.types).map(function(k){return '<button class="chip'+(f.type===k?' on':'')+'" data-k="'+k+'" onclick="TK.cf.type=this.dataset.k;render()">'+b.tk.types[k]+'</button>'}).join('')+'</div>';
+  h+='<div><span class="lbl">الموضوع</span><div class="chips">'+b.tk.topics.map(function(k){return '<button class="chip'+(f.topic===k?' on':'')+'" data-k="'+esc(k)+'" onclick="TK.cf.topic=this.dataset.k;render()">'+esc(k)+'</button>'}).join('')+'</div></div>';
+  if((b.hotels||[]).length>1)h+='<div><span class="lbl">الفندق (اختياري)</span><div class="chips">'+b.hotels.map(function(x){return '<button class="chip'+(f.hotel===x.id?' on':'')+'" data-k="'+x.id+'" onclick="TK.cf.hotel=TK.cf.hotel===this.dataset.k?\'\':this.dataset.k;render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
+  h+='<div><label class="lbl" for="tkt">التفاصيل</label><textarea id="tkt" class="inp" rows="4" oninput="TK.cf.text=this.value">'+esc(f.text)+'</textarea></div>';
+  h+='<div class="grid g2"><div><label class="lbl" for="tkw">رقم العملية (اختياري)</label><input id="tkw" class="inp" dir="ltr" value="'+esc(f.wo)+'" oninput="TK.cf.wo=this.value"></div><div><label class="lbl" for="tkb">اسمك</label><input id="tkb" class="inp" value="'+esc(f.by)+'" oninput="TK.cf.by=this.value"></div></div>';
+  h+='<button class="photo-btn'+(f.photos.length?' has':'')+'" onclick="'+(f.photos.length?'TK.cf.photos=[];render()':'pickPhotos(function(a){TK.cf.photos=a;render()})')+'">'+(f.photos.length?'صورة مرفقة ✓ (اضغط للإزالة)':'إرفاق صورة (اختياري)')+'</button>';
+  h+='<button class="btn btn-p" onclick="TK.send()"'+(f.type&&f.topic&&String(f.text).trim().length>4?'':' disabled')+'>إرسال</button></div>';
+  var L=C.hfil?C.hfil(b.tickets||[]):(b.tickets||[]);
+  h+='<h2 style="font-size:16px">تذاكري</h2>'+(L.length?L.map(function(t){return TK.card(t,false)}).join(''):'<div class="card muted" style="text-align:center">لا تذاكر بعد.</div>');
+  return h+'</div>'},
+ send:function(){var f=TK.cf;try{localStorage.setItem('aw_tk_by',String(f.by||'').trim())}catch(e){}
+  call('apiConTicket',S.tok,{type:f.type,topic:f.topic,hotel_id:f.hotel,wo_id:f.wo,text:f.text,by:f.by,photos:f.photos}).then(function(r){C.b=r.boot;TK.cf=null;toast('أُرسلت، وسيصلك الرد هنا.');render()})},
+ orgForm:function(){var o=C.b.org,f=TK.of=TK.of||{hotel:(o.hotels[0]||{}).id,sc:{},note:''};if(!o.hotels.length)return '<div class="card muted" style="text-align:center">شكراً، وصل تقييمك.</div>';
+  var h='<div class="stack"><div class="card stack"><h2 style="font-size:17px">'+F('مطلوب منك تقييم تعاوننا لشهر {0}',P.mlabel(o.month))+'</h2><p class="small muted" style="margin:0">قيّم كل بند من 1 (ضعيف) إلى 5 (ممتاز).</p>';
+  if(o.hotels.length>1)h+='<div class="chips">'+o.hotels.map(function(x){return '<button class="chip'+(f.hotel===x.id?' on':'')+'" data-k="'+x.id+'" onclick="TK.of.hotel=this.dataset.k;render()">'+esc(x.name)+'</button>'}).join('')+'</div>';
+  h+=o.crit.map(function(c){return '<div class="stack" style="gap:6px;border-top:1px solid var(--mist);padding-top:8px"><b>'+c[1]+'</b><div class="stars">'+[1,2,3,4,5].map(function(n){return '<button class="'+((f.sc[c[0]]||0)>=n?'on':'')+'" aria-label="'+n+'" data-k="'+c[0]+'" data-n="'+n+'" onclick="TK.of.sc[this.dataset.k]=Number(this.dataset.n);render()">★</button>'}).join('')+'</div></div>'}).join('');
+  var all=o.crit.every(function(c){return f.sc[c[0]]});
+  h+='<div><label class="lbl" for="ofn">ملاحظة (اختياري)</label><textarea id="ofn" class="inp" rows="2" oninput="TK.of.note=this.value">'+esc(f.note)+'</textarea></div><button class="btn btn-p"'+(all?'':' disabled')+' onclick="TK.orgSend()">إرسال التقييم</button></div></div>';
+  return h},
+ orgSend:function(){var f=TK.of;call('apiConOrgEval',S.tok,f.hotel,f.sc,f.note,(TK.cf&&TK.cf.by)||'').then(function(r){C.b=r.boot;TK.of=null;toast('شكراً، وصل تقييمك.');C.go('home')})}
+};
+
+// المتعهد: زرا التواصل والتقييم أعلى الرئيسية، وشاشتاهما
+(function(){var home=C.homeView,rd=C.render,foot=C.footer;
+ C.homeView=function(){var h=home();return '<div class="stack" style="margin-bottom:14px">'+TK.conHome()+'</div>'+h};
+ C.render=function(){if((C.scr==='tk'||C.scr==='org')&&C.b){$('#app').innerHTML=hdr(C.scr==='tk'?'تواصل معنا':'تقييم مؤسستنا','<button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="C.go(\'home\')">رجوع</button>')+'<div class="wrap" style="max-width:760px">'+(C.scr==='tk'?TK.conView():TK.orgForm())+'</div>';tr(document.getElementById('app'));return}return rd()};
+ C.footer=function(){return C.scr==='tk'||C.scr==='org'?'':foot()}})();
+
+// الفريق: تبويب «تواصل» (تذاكر + تقييم المؤسسة)، وتنبيه في لوحة العمليات
+(function(){var wr=W.render;W.render=function(){wr();if(!S.tok||!W.b||W.must||!W.b.tickets)return;
+  if(W.tab==='tk'){var wrap=document.querySelector('#app .wrap');if(wrap){wrap.innerHTML=TK.staff(W.b.tickets)+(W.b.org?'<div style="margin-top:18px">'+TK.orgView(W.b.org)+'</div>':'');tr(wrap)}}
+  var nav=document.querySelector('#app .topnav');if(nav&&!nav.querySelector('[data-tk]')){var n=W.b.tickets.filter(TK.needsMe).length;
+   var bt=document.createElement('button');bt.setAttribute('data-tk','1');bt.textContent=T('تواصل')+(n?' ('+n+')':'');if(W.tab==='tk'){[].forEach.call(nav.querySelectorAll('button'),function(x){x.className=''});bt.className='on'}
+   bt.onclick=function(){W.tab='tk';W.modal=null;render()};var rep=nav.querySelector('[data-rep]');nav.insertBefore(bt,rep||null)}}})();
+(function(){var d=W.dash;W.dash=function(qs,canAct){var h=d(qs,canAct),n=(W.b.tickets||[]).filter(TK.needsMe).length;if(!n)return h;
+  return h.replace(/(<div class="dg dg2[^"]*"><div class="dh"><span>تحتاج متابعة<\/span><b>)(\d+)(<\/b><\/div>)/,function(m,a,c,e){return a+(Number(c)+n)+e+'<button class="dq red" onclick="W.tab=\'tk\';render()"><span class="dl">تذاكر المتعهدين</span><b>'+n+'</b></button>'})}})();
+
+// مدير الإشراف: تبويب «تواصل» في واجهة الإشراف
+SV.tkView=function(){return TK.staff(SV.b.tickets)};
+render();
+</script>

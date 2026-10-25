@@ -1010,6 +1010,30 @@ t('ترقية الهيكل من إصدار سابق لا تعطل فتح الو�
   run(`apiEngBoot('${engTok}')`); run(`apiKpiBoot('${adminTok}')`);
 });
 
+t('تواصل: تذكرة المتعهد ← إفادة المالك ← رد الإدارة بالإجراء ← تقييم المتعهد، والمياه لمدير الفندق، وتقييم المؤسسة الشهري', () => {
+  throws(`apiConTicket('${acTok}', { type: 'complaint', topic: 'الطلبات والإسناد', text: '' })`, 'التفاصيل');
+  const id = run(`apiConTicket('${acTok}', { type: 'complaint', topic: 'الطلبات والإسناد', text: 'الطلبات تصل بلا رقم غرفة أحياناً', hotel_id: '${HID}' })`).id;
+  const eb = run(`apiEngBoot('${engTok}')`).tickets.find(t => t.id === id); eq(eb.owner, 'engineer'); eq(eb.status, 'new');
+  run(`apiTicketAct('${engTok}', '${id}', 'note', { note: 'صحيح، نوجّه الاستقبال' })`);
+  throws(`apiTicketAct('${engTok}', '${id}', 'close', { reply: 'x', action: 'y', accepted: 'مقبولة' })`, 'للإدارة');
+  throws(`apiTicketAct('${adminTok}', '${id}', 'close', { reply: 'نعتذر', accepted: 'مقبولة' })`, 'الإجراء');
+  throws(`apiTicketAct('${adminTok}', '${id}', 'close', { reply: 'نعتذر', action: 'تدريب الاستقبال' })`, 'مقبولة');
+  run(`apiTicketAct('${adminTok}', '${id}', 'close', { reply: 'نعتذر', action: 'تدريب الاستقبال', accepted: 'مقبولة' })`);
+  eq(run(`apiConTicketRate('${acTok}', '${id}', 'غير راضٍ', 'تكرر')`).r, 'reopened');
+  run(`apiTicketAct('${adminTok}', '${id}', 'close', { reply: 'أُضيف حقل إلزامي', action: 'تعديل النموذج', accepted: 'مقبولة' })`);
+  eq(run(`apiConTicketRate('${acTok}', '${id}', 'راضٍ', '')`).r, 'rated');
+  const gm = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
+  eq(run(`apiEngBoot('${gm}')`).tickets.some(t => t.id === id), true);
+  // تقييم المؤسسة للشهر السابق
+  const acCon = run(`Db.find('Contractors', c => c.type === 'ac').con_id`);
+  run(`Db.all('Contracts').filter(c => c.con_id === '${acCon}').forEach(c => Db.update('Contracts', c.contract_id, { start: new Date(Date.now() - 70 * 864e5) }))`);
+  const p = run(`conBoot_(Auth.session('${acTok}')).org`); if (!p.hotels.some(h => h.id === HID)) throw new Error('no pending');
+  throws(`apiConOrgEval('${acTok}', '${HID}', { clarity: 5 }, '')`, 'كل البنود');
+  run(`apiConOrgEval('${acTok}', '${HID}', { clarity: 4, speed: 5, access: 3, team: 5, commit: 4, comm: 5, system: 4 }, 'تعاون ممتاز', 'م. سالم')`);
+  eq(run(`conBoot_(Auth.session('${acTok}')).org`).hotels.some(h => h.id === HID), false);
+  const o = run(`apiEngBoot('${adminTok}')`).org.rows.find(r => r.hotel_id === HID); eq(o.avg.access, 3);
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');

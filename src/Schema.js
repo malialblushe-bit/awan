@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 21;
+var SCHEMA_VERSION = 22;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -116,6 +116,18 @@ var SCHEMA = [
     ['status', 'pending · approved · rejected'], ['dup', 'مكرر محتمل (نقلة خلال 20 دقيقة)'], ['match_by', 'طابقها'], ['match_role', 'دوره'],
     ['match_at', 'وقت المطابقة'], ['reason', 'سبب الرفض'], ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
 
+  { name: 'Tickets', cols: [
+    ['ticket_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق (اختياري)'], ['type', 'suggest = اقتراح · opinion = رأي · complaint = شكوى'],
+    ['topic', 'الموضوع'], ['wo_id', 'العملية (اختياري)'], ['text', 'النص'], ['photos', 'المرفقات'], ['by_name', 'رفعها'], ['created_at', 'وقت الرفع'],
+    ['owner', 'المالك: engineer · supmgr · gm'], ['resp_due', 'موعد الإفادة (يوم عمل)'], ['close_due', 'موعد الإغلاق (يوما عمل)'],
+    ['status', 'new · noted · closed · reopened'], ['owner_note', 'إفادة المالك'], ['owner_by', 'من أفاد'], ['owner_at', 'وقت الإفادة'],
+    ['reply', 'الرد'], ['action', 'الإجراء المتخذ'], ['accepted', 'الشكوى: مقبولة · غير مقبولة'], ['closed_by', 'أغلقها'], ['closed_role', 'دوره'], ['closed_at', 'وقت الإغلاق'],
+    ['sat', 'رضا المتعهد عن الرد: راضٍ · غير راضٍ'], ['sat_note', 'ملاحظته'], ['sat_at', 'وقت التقييم'], ['reopened', 'أُعيدت مرة']] },
+
+  { name: 'OrgEvals', cols: [
+    ['oe_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر المقيَّم yyyy-MM'], ['scores', 'الدرجات (JSON: البند ← 1..5)'],
+    ['note', 'ملاحظة'], ['by_name', 'قيّمها'], ['at', 'الوقت']] },
+
   { name: 'PestLogs', cols: [
     ['log_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['zones', 'المناطق (معرّفات الغرف والمرافق)'],
     ['kind', 'spray = رش · inspect = فحص · trap = فحص مصيدة'], ['pests', 'الآفات المستهدفة'], ['material', 'المادة'],
@@ -166,7 +178,7 @@ var STATUS = {
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
   Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
-  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV'
+  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE'
 };
 
 function tableDef(name) {

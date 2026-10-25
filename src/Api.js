@@ -270,6 +270,7 @@ function conBoot_(s) {
     pest: con.type === 'pc' ? Ops.pestBoot(Object.keys(hotels)) : null,
     waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
     water: con.type === 'wt' ? Water.conList(con.con_id) : null,
+    tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
@@ -366,6 +367,8 @@ function engBoot_(s) {
     cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
     notes: notesFor_(s, myHotels, 'maint'),
     water: Water.staffBoot(s, myHotels),
+    tickets: Tickets.visibleTo(s, myHotels),
+    org: ['admin', 'management', 'gm', 'om', 'duty'].indexOf(s.role) !== -1 ? Tickets.orgResults(myHotels) : null,
     evals: Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
@@ -1115,6 +1118,7 @@ function supBoot_(s) {
     waste: Ops.waVisits(hs, Date.now() - 35 * 864e5),
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
+    tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
     canFlag: ['admin', 'gm', 'duty'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
@@ -1261,4 +1265,26 @@ function apiWtMatch(token, ids, ok, reason) {
 function apiWtStatement(token, conId, hotelId, from, to) {
   var s = Auth.need(token, STAFF_ROLES);
   return Water.statement(scopeHotels_(s, Orders.refs()), conId, hotelId, from, to);
+}
+
+// ───────── «تواصل»: تذاكر المتعهدين وتقييمهم لمؤسستنا ─────────
+function apiConTicket(token, d) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'TK'); var id = Tickets.create(s.id, d, d.by); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+}
+function apiConTicketRate(token, id, sat, note) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { var r = Tickets.rate(s.id, id, sat, note); Db.reset(); return { r: r, boot: conBoot_(s) }; });
+}
+function apiConOrgEval(token, hotelId, scores, note, by) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { Tickets.orgSubmit(s.id, hotelId, scores, note, by); Db.reset(); return { boot: conBoot_(s) }; });
+}
+function apiTicketAct(token, id, action, d) {
+  var s = Auth.need(token, STAFF_ROLES.concat(['supmgr']));
+  return Db.withLock(function () {
+    var hs = s.role === 'supmgr' ? Ops.supHotels(s) : scopeHotels_(s, Orders.refs());
+    Tickets.act(s, id, action, d || {}, hs); Db.reset();
+    return { boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
+  });
 }
