@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 17;
+var SCHEMA_VERSION = 18;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -107,7 +107,8 @@ var SCHEMA = [
     ['visit_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'متعهد النفايات'], ['by_id', 'سجّلها'], ['by_name', 'الاسم'], ['by_role', 'contractor · sup · supmgr'],
     ['at', 'الوقت (من الخادم)'], ['truck', 'حضرت الشاحنة؟ نعم · لا'], ['removed', 'رُحّلت النفايات؟ نعم · لا'], ['left_carts', 'العربات المتبقية'],
     ['washed', 'نُظّف وغُسل المكان؟ نعم · لا'], ['rating', 'مستوى النظافة من 5'], ['note', 'ملاحظة'], ['photos', 'الصور'],
-    ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
+    ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)'],
+    ['status', 'فارغ = معتمدة · rejected = مرفوضة (لم تحدث فعلاً)'], ['rej_by', 'رفضها'], ['rej_at', 'وقت الرفض'], ['rej_reason', 'سبب الرفض']] },
 
   { name: 'WaterLoads', cols: [
     ['load_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'متعهد المياه'], ['at', 'وقت التفريغ (من الخادم)'], ['driver', 'السائق'],

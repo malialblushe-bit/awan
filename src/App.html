@@ -719,10 +719,11 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
    return '<button class="dq'+(W.q===k?' on':'')+(n?'':' z')+(n&&cls?' '+cls:'')+'" onclick="W.q=\''+k+'\';W.sel=null;W.bk=null;render()"><span class="dl">'+(lbl||q[1])+(o?'<small>أقدمها '+o+'</small>':'')+'</span><b>'+n+'</b></button>'};
   var sum=function(ks){return ks.reduce(function(a,k){return a+(Q[k]?Q[k][2].length:0)},0)};
   var mine=['decision','quote','matching','pay'],risk=['late','ca','notes'],tot=sum(mine),rk=sum(risk);
+  var wp=b.water&&b.water.canMatch?b.water.loads.filter(function(x){return x.status==='pending'}).length:0;rk+=wp;
   var trapped=b.orders.filter(function(o){return o.trapped&&!o.rescued&&['closed','rejected'].indexOf(o.status)===-1}).length;
   var h='<div class="dash">';
   h+='<div class="dg dg1"><div class="dh"><span>'+(canAct?'عليك الآن':'بانتظار المهندس')+'</span><b>'+tot+'</b></div>'+it('decision','','g')+it('matching','','g')+it('quote','','g')+it('pay','','g')+'</div>';
-  h+='<div class="dg dg2'+(rk||trapped?' hot':'')+'"><div class="dh"><span>تحتاج متابعة</span><b>'+(rk+trapped)+'</b></div>'+(trapped?'<button class="dq red" onclick="W.q=\'open\';W.sel=null;render()"><span class="dl">احتجاز لم يُسجَّل إنقاذه</span><b>'+trapped+'</b></button>':'')+it('late','متأخرة عن الاستجابة','red')+it('ca','','red')+it('notes','','g')+'</div>';
+  h+='<div class="dg dg2'+(rk||trapped?' hot':'')+'"><div class="dh"><span>تحتاج متابعة</span><b>'+(rk+trapped)+'</b></div>'+(trapped?'<button class="dq red" onclick="W.q=\'open\';W.sel=null;render()"><span class="dl">احتجاز لم يُسجَّل إنقاذه</span><b>'+trapped+'</b></button>':'')+(wp?'<button class="dq red" onclick="W.tab=\'svc\';SVC.sub=\'wt\';SV.b=null;render()"><span class="dl">نقلات مياه بانتظار مطابقتك</span><b>'+wp+'</b></button>':'')+it('late','متأخرة عن الاستجابة','red')+it('ca','','red')+it('notes','','g')+'</div>';
   h+='<div class="dg dg3"><div class="dh"><span>لدى المتعهدين</span><b>'+sum(['open'])+'</b></div>'+it('open','كل المفتوحة')+it('parts','')+it('closed','')+'<p class="dtd"><span>اليوم:</span> <span>قرارات</span> '+b.stats.decidedToday+' · <span>أُغلقت</span> '+b.stats.closedToday+'</p></div>';
   return h+'</div>'},
  opsView:function(){var b=W.b,qs=W.queues(),cur=qs.filter(function(q){return q[0]===W.q})[0]||qs[5],list=cur[2];

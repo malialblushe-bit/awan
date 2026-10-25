@@ -1075,6 +1075,7 @@ function supBoot_(s) {
     pest: Ops.pestBoot(hs),
     waste: Ops.waVisits(hs, Date.now() - 35 * 864e5),
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
+    canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
     lists: { pest: L.pest, material: L.material, ftype: L.ftype },
@@ -1084,6 +1085,13 @@ function supBoot_(s) {
 }
 
 function apiSupBoot(token) { var s = Auth.need(token, SUP_ROLES_); ensureSchemaVersion_(); return supBoot_(s); }
+/** «الخدمات المساندة» للفريق: النفايات والمكافحة اطلاعاً (ورفض الزيارات لمشرف النظام) — تُقرأ عند فتح التبويب فقط */
+var SVC_ROLES_ = ['admin', 'gm', 'om', 'duty', 'management'];
+function apiSvcBoot(token) { var s = Auth.need(token, SVC_ROLES_); return supBoot_(s); }
+function apiWaReject(token, id, reason) {
+  var s = Auth.need(token, ['supmgr', 'admin']);
+  return Db.withLock(function () { Ops.waReject(s, id, reason); Db.reset(); return { boot: supBoot_(s) }; });
+}
 
 /** صفحة الويب: الرقم السري لمتعهد أو مشرف */
 function apiPinWebLogin(pin) {

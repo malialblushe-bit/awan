@@ -954,6 +954,19 @@ t('البحث بالفهرس: الوصول لعملية بمعرّفها يقر�
   run(`apiAdmKpiRebuild('${adminTok}')`);
 });
 
+t('الخدمات المساندة: الفريق يطّلع على النفايات والمكافحة، ومشرف النظام يرفض زيارة لم تحدث فلا تُحسب', () => {
+  const b = run(`apiSvcBoot('${adminTok}')`);
+  eq(b.canReject, true); if (!b.waste.length) throw new Error('no visits'); eq(typeof b.pest.logs, 'object');
+  const gm = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
+  eq(run(`apiSvcBoot('${gm}')`).canReject, false);
+  throws(`apiSvcBoot('${engTok}')`, 'صلاحية');
+  const id = b.waste[0].id;
+  throws(`apiWaReject('${gm}', '${id}', 'x')`, 'صلاحية');
+  throws(`apiWaReject('${adminTok}', '${id}', '')`, 'سبب');
+  const r = run(`apiWaReject('${adminTok}', '${id}', 'لم تحضر الشاحنة فعلياً')`);
+  const v = r.boot.waste.find(x => x.id === id); eq(v.status, 'rejected'); eq(v.reason, 'لم تحضر الشاحنة فعلياً');
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');

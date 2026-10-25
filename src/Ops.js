@@ -116,8 +116,21 @@ var Ops = (function () {
   function waVisits(hotelIds, sinceMs) {
     return Db.all('WasteVisits', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && ms(v.at) >= sinceMs; }).map(function (v) {
       return { id: v.visit_id, hotel_id: v.hotel_id, at: ms(v.at), by: v.by_name, role: v.by_role, truck: v.truck, removed: v.removed,
-        left: Number(v.left_carts) || 0, washed: v.washed, rating: Number(v.rating) || 0, note: v.note || '', photos: csv(v.photos), dist: v.dist === '' ? null : Number(v.dist) };
+        left: Number(v.left_carts) || 0, washed: v.washed, rating: Number(v.rating) || 0, note: v.note || '', photos: csv(v.photos), dist: v.dist === '' ? null : Number(v.dist),
+        status: v.status || '', rejBy: v.rej_by || '', rejAt: ms(v.rej_at) || null, reason: v.rej_reason || '' };
     }).sort(function (a, b) { return b.at - a.at; });
+  }
+
+  /** رفض زيارة مسجلة لم تحدث فعلاً (مدير الإشراف أو مشرف النظام): لا تُحسب في المؤشرات */
+  function waReject(s, id, reason) {
+    if (['supmgr', 'admin'].indexOf(s.role) === -1) throw new Error('رفض الزيارات لمدير الإشراف أو مشرف النظام.');
+    reason = String(reason || '').trim();
+    if (!reason) throw new Error('اكتب سبب الرفض.');
+    var v = Db.get('WasteVisits', id);
+    if (!v || supHotels(s).indexOf(v.hotel_id) === -1) throw new Error('الزيارة ليست ضمن فنادقك.');
+    if (v.status === 'rejected') return 0;
+    Db.update('WasteVisits', id, { status: 'rejected', rej_by: (Db.get('Users', s.id) || {}).name || '', rej_at: new Date(), rej_reason: reason });
+    return 1;
   }
 
   // ───────── مكافحة الآفات ─────────
@@ -332,7 +345,7 @@ var Ops = (function () {
       var exp = 0;
       hotelIds.forEach(function (h) { exp += cdays(h, 'wa_per_week'); });
       exp = Math.round(exp);
-      var vs = Db.all('WasteVisits', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && inR(v.at); });
+      var vs = Db.all('WasteVisits', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && inR(v.at) && v.status !== 'rejected'; });
       var done = vs.filter(function (v) { return yes_(v.truck) && yes_(v.removed); }).length;
       var rated = vs.filter(function (v) { return Number(v.rating) > 0; }), came = vs.filter(function (v) { return yes_(v.truck); });
       V.pickup = exp ? Math.min(100, pct_(done, exp)) : null;
@@ -442,7 +455,7 @@ var Ops = (function () {
 
   return {
     geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
-    waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waContract: waContract,
+    waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
     pestBoot: pestBoot, pestState: pestState, flag: flag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS
   };
