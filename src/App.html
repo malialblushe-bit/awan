@@ -652,7 +652,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
 // ═════════ الموظفون: المهندس والإدارة والمشرف ═════════
 var W={tab:'ops',q:'decision',sel:null,f:{},
  init:function(){var t=load(tokKey());if(!t)return;S.tok=t;W.boot()},
- boot:function(){return call('apiEngBoot',S.tok).then(function(b){bootLang(b.me,b.i18n);W.b=b;if(b.me.role==='admin')return call('apiAdmBoot',S.tok).then(function(a){W.a=a;render()});render()}).catch(function(){})},
+ boot:function(){W.err=null;return call('apiEngBoot',S.tok).then(function(b){bootLang(b.me,b.i18n);W.b=b;if(b.me.role==='admin')return call('apiAdmBoot',S.tok).then(function(a){W.a=a;render()});render()}).catch(function(e){if(!S.tok)return render();W.err=(e&&e.message)||String(e);render()})},
  login:function(){var u=$('#u').value,p=$('#p').value;call('apiStaffLogin',u,p).then(function(r){S.tok=r.token;store(tokKey(),r.token);W.must=r.must;W.role=r.role;if(!r.must)W.boot();else render()})},
  changePw:function(){var a=$('#np').value,b=$('#np2').value;if(a!==b)return toast('كلمتا المرور غير متطابقتين.','err');call('apiChangePassword',S.tok,a).then(function(){W.must=false;toast('تم تغيير كلمة المرور.');W.boot()})},
  logout:function(){call('apiLogout',S.tok);W.b=null;W.a=null;clearTok()},
@@ -660,12 +660,13 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   if(!S.tok&&load(tokKey())&&!W.tried){W.tried=true;W.init();return W.loading()}
   if(!S.tok)return W.loginView();
   if(W.must)return W.mustView();
-  if(!W.b)return W.loading();
+  if(!W.b)return W.err?W.errView():W.loading();
   var isAdmin=W.b.me.role==='admin';
   var nav='<nav class="topnav">'+[['ops','العمليات'],['perf','الأداء']].concat(isAdmin?[['adm','الإدارة']]:[]).map(function(n){return '<button class="'+(W.tab===n[0]?'on':'')+'" onclick="W.tab=\''+n[0]+'\';'+(n[0]==='ops'?'W.boot()':n[0]==='perf'?'P.d=null;render()':'render()')+'">'+n[1]+'</button>'}).join('')+'</nav>';
   var right='<div style="text-align:left"><p style="margin:0;font-size:14px;font-weight:700">'+esc(W.b.me.name)+'</p><p style="margin:0;font-size:12px;color:var(--goldL)">'+({admin:'مشرف النظام',engineer:'مهندس الصيانة',management:'الإدارة',gm:'مدير الفندق',om:'مدير التشغيل',duty:'المدير المناوب'}[W.b.me.role])+'</p></div><button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="W.logout()">خروج</button>';
   $('#app').innerHTML=hdr('',right,nav)+'<div class="wrap">'+(W.tab==='adm'&&isAdmin?A.view():W.tab==='perf'?P.view('staff'):W.opsView())+'</div>'+(W.modal?W.modal():'')+(W.tab==='adm'&&isAdmin&&A.dr?A.drawer():'');
  },
+ errView:function(){$('#app').innerHTML=hdr('')+'<div class="wrap" style="max-width:560px"><div class="alert a-red stack" style="gap:10px"><b>تعذّر فتح الصفحة</b><span class="small" data-nt="1" dir="auto">'+esc(W.err)+'</span><div style="display:flex;gap:8px"><button class="btn btn-p sm" onclick="W.boot()">إعادة المحاولة</button><button class="btn btn-o sm" onclick="W.logout()">خروج</button></div></div></div>'},
  loading:function(){$('#app').innerHTML=hdr('')+'<div class="wrap"></div>'},
  loginView:function(){var con=W.lt==='con';
   var h='<div class="lg"><section class="lg-side"><svg class="lg-deco" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="12" width="30" height="30" rx="9" style="fill:var(--goldL)"></rect><rect x="22" y="12" width="30" height="30" rx="9" fill="none" stroke="#FFFFFF" stroke-width="2"></rect></svg><div class="lg-brand"><svg width="44" height="44" viewBox="0 0 56 56" aria-hidden="true"><rect x="4" y="12" width="30" height="30" rx="9" style="fill:var(--gold)"></rect><rect x="22" y="12" width="30" height="30" rx="9" fill="none" stroke="#FFFFFF" stroke-width="4"></rect></svg><div><b>أعوان</b><span>شركاء في الإنجاز</span></div></div><div class="lg-quote"><p class="lg-q">تجربة النزيل<br>نصنعها معاً.</p><i></i><p class="lg-s">المهندس والمتعهد وفريق العمل… كلٌّ من موقعه.</p></div><p class="lg-foot">منصة المتعهدين للفنادق</p></section>';

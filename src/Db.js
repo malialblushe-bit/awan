@@ -162,10 +162,14 @@ var Db = (function () {
     return false;
   }
 
+  var lockDepth = 0;
+  /** قفل واحد للكتابة؛ متداخل بأمان داخل نفس التنفيذ */
   function withLock(fn) {
+    if (lockDepth > 0) return fn();
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw new Error('النظام مشغول لحظياً، حاول مرة أخرى.');
-    try { return fn(); } finally { lock.releaseLock(); }
+    lockDepth++;
+    try { return fn(); } finally { lockDepth--; lock.releaseLock(); }
   }
 
   function setting(key) {

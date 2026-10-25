@@ -115,6 +115,14 @@ function savePhotos_(list, prefix) {
 
 function ensureSchemaVersion_() {
   if (String(Db.setting('schema_version')) === String(SCHEMA_VERSION)) return;
+  // الترقية مرة واحدة تحت القفل، حتى لا يتزامن فتح الصفحات ومشغّل تيليجرام بعد النشر
+  Db.withLock(function () {
+    Db.reset();
+    if (String(Db.setting('schema_version')) === String(SCHEMA_VERSION)) return;
+    upgradeSchema_();
+  });
+}
+function upgradeSchema_() {
   ensureTables_(Db.ss());
   Db.reset();
   seedMissingLists_();

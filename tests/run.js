@@ -1002,6 +1002,14 @@ t('غرف النزلاء: مرات في الشهر عند الإتاحة، لا 
   eq(run(`Db.find('PestSchedule', r => r.key === '${HID}|غرف النزلاء').per_month`), 2);
 });
 
+t('ترقية الهيكل من إصدار سابق لا تعطل فتح الواجهة (المهندس والإدارة ومدير الفندق)', () => {
+  run(`Db.update('Settings', 'schema_version', { value: 19 }); Db.reset()`);
+  run(`apiEngBoot('${adminTok}')`); run(`apiAdmBoot('${adminTok}')`);
+  eq(String(run(`Db.setting('schema_version')`)), String(run(`SCHEMA_VERSION`)));
+  const gm = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token; run(`apiEngBoot('${gm}')`); run(`apiSvcBoot('${gm}')`); run(`apiKpiBoot('${gm}')`);
+  run(`apiEngBoot('${engTok}')`); run(`apiKpiBoot('${adminTok}')`);
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');
