@@ -26,6 +26,7 @@ var CARDS=[
 ];
  /** صفحات A4 تُفتح في نافذة الطباعة (حفظ PDF من المتصفح): سريع ونص واضح، بلا مكتبات */
 /** أي خطأ في الواجهة يظهر نصه بدل صفحة فارغة، ليسهل الإبلاغ عنه */
+window.addEventListener('unhandledrejection',function(e){var r=e&&e.reason;window.dispatchEvent(new ErrorEvent('error',{message:'Promise: '+((r&&r.message)||String(r))+(r&&r.stack?' | '+String(r.stack).split('\n').slice(0,2).join(' | '):'')}))});
 window.addEventListener('error',function(e){try{var m=(e&&e.message)||'';if(!m)return;var d=document.getElementById('jserr');if(!d){d=document.createElement('div');d.id='jserr';d.style.cssText='position:fixed;bottom:12px;left:12px;right:12px;z-index:99;background:#FBEFEC;color:#8E3A2E;border:1px solid #E7B9AF;border-radius:12px;padding:10px 14px;font-size:13px;direction:ltr;text-align:left';document.body.appendChild(d)}d.textContent='⚠ '+m+(e.lineno?' (line '+e.lineno+')':'')}catch(x){}});
 /** التاريخ بالسنة: 25/10/2026 */
 function dmyY(t){return t?new Date(t).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Asia/Riyadh'}):''}

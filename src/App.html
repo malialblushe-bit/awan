@@ -652,7 +652,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
 // ═════════ الموظفون: المهندس والإدارة والمشرف ═════════
 var W={tab:'ops',q:'decision',sel:null,f:{},
  init:function(){var t=load(tokKey());if(!t)return;S.tok=t;W.boot()},
- boot:function(){W.err=null;return call('apiEngBoot',S.tok).then(function(b){bootLang(b.me,b.i18n);W.b=b;if(b.me.role==='admin')return call('apiAdmBoot',S.tok).then(function(a){W.a=a;render()});render()}).catch(function(e){if(!S.tok)return render();W.err=(e&&e.message)||String(e);render()})},
+ boot:function(){W.err=null;return call('apiEngBoot',S.tok).then(function(b){bootLang(b.me,b.i18n);W.b=b;if(b.me.role==='admin')return call('apiAdmBoot',S.tok).then(function(a){W.a=a;render()});render()}).catch(function(e){if(!S.tok)return render();W.b=null;W.err=((e&&e.message)||String(e))+(e&&e.stack?' | '+String(e.stack).split('\n').slice(0,3).join(' | '):'');render()})},
  login:function(){var u=$('#u').value,p=$('#p').value;call('apiStaffLogin',u,p).then(function(r){S.tok=r.token;store(tokKey(),r.token);W.must=r.must;W.role=r.role;if(!r.must)W.boot();else render()})},
  changePw:function(){var a=$('#np').value,b=$('#np2').value;if(a!==b)return toast('كلمتا المرور غير متطابقتين.','err');call('apiChangePassword',S.tok,a).then(function(){W.must=false;toast('تم تغيير كلمة المرور.');W.boot()})},
  logout:function(){call('apiLogout',S.tok);W.b=null;W.a=null;clearTok()},
