@@ -99,6 +99,20 @@ function elevatorsOf_(hotelId) {
     .map(function (e) { return e.name; });
 }
 
+/** مرفقات التقارير: صورة أو PDF (حتى 3) في مجلد الصور، وتعيد معرّفات Drive */
+function saveFiles_(list, prefix) {
+  if (!list || !list.length) return [];
+  var folder = DriveApp.getFolderById(Db.setting('photos_folder_id'));
+  return list.slice(0, 3).map(function (dataUrl, i) {
+    var m = String(dataUrl).match(/^data:(image\/[\w.+-]+|application\/pdf);base64,(.+)$/);
+    if (!m) throw new Error('صيغة المرفق غير مقبولة: صورة أو PDF.');
+    var ext = m[1] === 'application/pdf' ? '.pdf' : '.jpg';
+    var f = folder.createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], prefix + '-' + Date.now() + '-' + i + ext));
+    try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* قد يمنعها الحساب */ }
+    return f.getId();
+  });
+}
+
 function savePhotos_(list, prefix) {
   if (!list || !list.length) return [];
   var folderId = Db.setting('photos_folder_id');
@@ -273,7 +287,7 @@ function conBoot_(s) {
     tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
-    me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar' },
+    me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar', lead: s.lead_name || '' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : ''), brand: s.web ? '' : (here.brand || 'nawazi') },
     web: !!s.web,
     hotels: Object.keys(hotels).map(function (k) { return hotels[k]; }),
@@ -304,6 +318,7 @@ function apiConAct(token, action, woId, d) {
       if (w && w.con_id === s.id && !w.arrived_at) throw new Error('سجّل وصولك أولاً بمسح باركود أعوان في الفندق، ثم أرسل التقرير.');
     }
     d.photos = savePhotos_(d.photos, woId || 'NEW');
+    d.att = saveFiles_(d.att, 'RPT-' + (woId || 'NEW'));
     var res = { msg: '' };
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
     else if (action === 'new') res = Orders.conNew(s, d);
@@ -644,7 +659,8 @@ function admBoot_() {
           return {
             id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
-            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0
+            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
+            lead: x.lead_name || '', leadPin: !!x.lead_pin_hash
           };
         })
       };
@@ -929,13 +945,27 @@ function apiAdmSaveContract(token, d) {
       conId = c.con_id;
       pin = Auth.setPin(conId);
     }
-    Db.insert('Contracts', {
+    var ctr = Db.insert('Contracts', {
       con_id: conId, type: d.type, hotel_ids: d.hotel_ids.join(','), elevator_ids: (d.elevator_ids || []).join(','),
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
-      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || ''
+      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || '',
+      lead_name: d.type === 'el' ? String(d.lead_name || '').trim() : ''
     });
-    return { pin: pin };
+    var leadPin = (d.type === 'el' && String(d.lead_name || '').trim()) ? Auth.setLeadPin(ctr.contract_id) : null;
+    return { pin: pin, leadPin: leadPin };
+  });
+}
+
+/** قائد فريق المصاعد: الاسم ورقم سري جديد يظهر مرة واحدة */
+function apiAdmLeadPin(token, contractId, name) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c || c.type !== 'el') throw new Error('قائد الفريق لعقود المصاعد.');
+    name = String(name || c.lead_name || '').trim();
+    if (!name) throw new Error('اكتب اسم قائد الفريق.');
+    Db.update('Contracts', contractId, { lead_name: name });
+    return { pin: Auth.setLeadPin(contractId), name: name };
   });
 }
 

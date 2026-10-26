@@ -119,7 +119,7 @@ var Auth = (function () {
     for (var tries = 0; tries < 20; tries++) {
       pin = digits_(6);
       if (pin.charAt(0) === '0' || weakPin_(pin)) continue;
-      var clash = others.some(function (c) { return hash(pin, c.salt) === c.pin_hash; }) || supTaken_(pin, '');
+      var clash = others.some(function (c) { return hash(pin, c.salt) === c.pin_hash; }) || supTaken_(pin, '') || !!leadOf_(pin);
       if (!clash) break;
     }
     var s = salt_();
@@ -136,8 +136,19 @@ var Auth = (function () {
       .some(function (u) { return hash(pin, u.salt) === u.secret_hash; });
   }
   /** الرقم السري محجوز لمتعهد أو مشرف آخر؟ (الرقم وحده يعرّف صاحبه، فلا يتكرر) */
+  function leadOf_(pin) {
+    return Db.find('Contracts', function (c) { return !!c.lead_pin_hash && hash(pin, c.lead_salt) === c.lead_pin_hash; });
+  }
   function pinTaken(pin, exceptUserId) {
-    return supTaken_(pin, exceptUserId || '') || Db.all('Contractors', function (c) { return !!c.pin_hash; }).some(function (c) { return hash(pin, c.salt) === c.pin_hash; });
+    return supTaken_(pin, exceptUserId || '') || !!leadOf_(pin) || Db.all('Contractors', function (c) { return !!c.pin_hash; }).some(function (c) { return hash(pin, c.salt) === c.pin_hash; });
+  }
+  /** رقم سري خاص بقائد فريق المتعهد (من العقد)، فريد بين الجميع */
+  function setLeadPin(contractId) {
+    var pin;
+    for (var tries = 0; tries < 20; tries++) { pin = digits_(6); if (pin.charAt(0) === '0' || weakPin_(pin)) continue; if (!pinTaken(pin, '')) break; }
+    var s = salt_();
+    Db.update('Contracts', contractId, { lead_pin_hash: hash(pin, s), lead_salt: s });
+    return pin;
   }
 
   /** أول دخول (أو بعد إعادة التعيين): اسم الدخول المعرّف + رقم يختاره بنفسه */
@@ -173,6 +184,14 @@ var Auth = (function () {
     pin = String(pin || '').trim();
     var s = supLogin(pin);
     if (s) { clear_('pin_web'); return { kind: 'sup', token: s.token, user: s.user }; }
+    var L = /^\d{6}$/.test(pin) ? leadOf_(pin) : null;
+    if (L) {
+      var lc = Db.get('Contractors', L.con_id);
+      if (lc && lc.active !== false && String(lc.active).toUpperCase() !== 'FALSE') {
+        clear_('pin_web');
+        return { kind: 'con', token: newSession_({ role: 'contractor', id: L.con_id, hotel_id: '', web: true, lead: L.contract_id, lead_name: L.lead_name || '' }), con: lc };
+      }
+    }
     try { var c = conWebLogin(pin); clear_('pin_web'); return { kind: 'con', token: c.token, con: c.con }; }
     catch (e) { fail_('pin_web'); throw new Error('الرقم السري غير صحيح.'); }
   }
@@ -233,7 +252,7 @@ var Auth = (function () {
 
   return {
     hash: hash, validPassword: validPassword, session: session, need: need, logout: logout,
-    conLogin: conLogin, conWebLogin: conWebLogin, setPin: setPin, staffLogin: staffLogin, changePassword: changePassword,
+    conLogin: conLogin, conWebLogin: conWebLogin, setPin: setPin, setLeadPin: setLeadPin, staffLogin: staffLogin, changePassword: changePassword,
     createUser: createUser, resetUser: resetUser,
     isSup: isSup, pinTaken: pinTaken, supSetPin: supSetPin, supLogin: supLogin, pinWebLogin: pinWebLogin
   };

@@ -365,7 +365,7 @@ t('المهندس: قرار "المتعهد يوفّر" ← بانتظار ال�
   eq(o.status, 'decision'); eq(o.quote, '2400');
   run(`apiEngAct('${engTok}', '${AC1}', 'decide', { decision: 'con' })`);
   eq(run(`apiConBoot('${acTok}')`).jobs[0].status, 'review');
-  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix' })`, 'ليست بانتظار تقريرك');
+  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix' })`, 'ليست بانتظار تقريرك');
   run(`apiEngAct('${engTok}', '${AC1}', 'paid', { receipt: 'R-55' })`);
   const j = run(`apiConBoot('${acTok}')`).jobs[0];
   eq(j.status, 'in_progress'); if (!j.note.includes('وفّر القطعة')) throw new Error('رسالة الاعتماد ناقصة');
@@ -374,7 +374,7 @@ t('المهندس: قرار "المتعهد يوفّر" ← بانتظار ال�
 
 t('المتعهد: الإصلاح بعد الاعتماد، والمتابعة تفتح عملية جديدة، والبند الجديد ينتظر الاعتماد', () => {
   throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', photos: ['data:image/jpeg;base64,AA'] })`, 'معتمدة للتركيب');
-  const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix', equip: 'AC-712-A', sym: 'لا يبرد', part: 'الكمبروسر', cause: ['تآكل طبيعي'], parts: ['كمبروسر جديد'], follow: 'نعم', followNote: 'تنظيف خط التصريف', custom: [{ list: 'parts', ar: 'كمبروسر جديد' }] })`);
+  const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-712-A', sym: 'لا يبرد', part: 'الكمبروسر', cause: ['تآكل طبيعي'], parts: ['كمبروسر جديد'], follow: 'نعم', followNote: 'تنظيف خط التصريف', custom: [{ list: 'parts', ar: 'كمبروسر جديد' }] })`);
   eq(r.result.status, 'matching');
   if (!r.result.msg.includes('متابعة')) throw new Error('لم تُفتح المتابعة');
   eq(r.boot.jobs.length, 2);
@@ -387,7 +387,7 @@ t('المهندس: إعادة الفتح بسبب، ثم الإغلاق بعد �
   run(`apiEngAct('${engTok}', '${AC1}', 'reopen', { reason: 'صور غير واضحة' })`);
   const j = run(`apiConBoot('${acTok}')`).jobs.find(x => x.id === AC1);
   eq(j.reject_reason, 'صور غير واضحة');
-  run(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'fix', equip: 'AC-712-A', photos: ['data:image/jpeg;base64,AA'] })`);
+  run(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-712-A', photos: ['data:image/jpeg;base64,AA'] })`);
   throws(`apiEngAct('${engTok}', '${AC1}', 'close', {})`, 'رضاك');
   run(`apiEngAct('${engTok}', '${AC1}', 'close', { sat: 'good' })`);
   const b = run(`apiConBoot('${acTok}')`);
@@ -399,9 +399,9 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
   elTok = run(`apiConLogin('WARIF2', '${elPin}')`).token;
   run(`apiConAct('${elTok}', 'rescue', '${EL1}', {})`);
   eq(!!run(`Db.get('WorkOrders', '${EL1}').rescued_at`), true);
-  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'fix' })`, 'يعمل الآن');
-  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', working: 'نعم' })`, 'القطعة الموصى');
-  run(`apiConAct('${elTok}', 'submit', '${EL1}', { outcome: 'diag', part: 'قفل باب الدور', rec: ['قفل باب الدور'], working: 'نعم', quote: '900' })`);
+  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix' })`, 'يعمل الآن');
+  throws(`apiConAct('${elTok}', 'submit', '${EL1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', part: 'قفل باب الدور', working: 'نعم' })`, 'القطعة الموصى');
+  run(`apiConAct('${elTok}', 'submit', '${EL1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', part: 'قفل باب الدور', rec: ['قفل باب الدور'], working: 'نعم', quote: '900' })`);
   eq(!!run(`Db.get('WorkOrders', '${EL1}').down_to`), true);
   eq(run(`Db.get('WorkOrders', '${EL1}').status`), 'quote'); eq(String(run(`Db.get('WorkOrders', '${EL1}').quote`)), '');
   eq(run(`apiConBoot('${elTok}')`).jobs.find(x => x.id === EL1).status, 'review');
@@ -427,11 +427,11 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
 });
 
 t('المهندس: فحص مغاير برسالة، ورفض بسبب من القائمة', () => {
-  run(`apiConAct('${elTok}', 'new', null, { outcome: 'diag', equip: 'مصعد الخدمة', sym: 'صوت أو اهتزاز', rec: ['بكرة باب'], working: 'نعم' })`);
+  run(`apiConAct('${elTok}', 'new', null, { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', equip: 'مصعد الخدمة', sym: 'صوت أو اهتزاز', rec: ['بكرة باب'], working: 'نعم' })`);
   const o = run(`apiEngBoot('${engTok}')`).orders.find(x => x.status === 'quote');
   throws(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck' })`, 'ملاحظتك');
   run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'recheck', note: 'افحص الحبال' })`);
-  run(`apiConAct('${elTok}', 'submit', '${o.id}', { outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
+  run(`apiConAct('${elTok}', 'submit', '${o.id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
   run(`apiEngAct('${engTok}', '${o.id}', 'decide', { decision: 'reject', reason: 'سبب غير مقنع' })`);
   eq(run(`Db.get('WorkOrders', '${o.id}').status`), 'rejected');
 });
@@ -466,7 +466,7 @@ t('دخول المتعهد من الويب: كل الفنادق، بلا تسج�
   throws(`apiConAct('${r.token}', 'new', null, { outcome: 'report', title: 'x' })`, 'من الفندق فقط');
   const floor = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
   const w = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '705', symptom: 'لا يبرد', name: 'سالم' })`).id;
-  throws(`apiConAct('${r.token}', 'submit', '${w}', { outcome: 'ok' })`, 'سجّل وصولك أولاً');
+  throws(`apiConAct('${r.token}', 'submit', '${w}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok' })`, 'سجّل وصولك أولاً');
   eq(run(`apiConBoot('${r.token}')`).jobs.some(j => j.id === w), true);
 });
 
@@ -563,7 +563,7 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   const o = run(`Db.get('WorkOrders', '${r.id}')`);
   eq(o.symptom, 'صوت طقطقة من الوحدة'); eq(!!o.photos, true);
   throws(`apiEngCreate('${engTok}', { hotel_id: '${HID}', type: 'ac', symptom: 'x' })`, 'الدور');
-  run(`apiConAct('${acTok}', 'submit', '${r.id}', { outcome: 'fix', equip: 'AC-703-A', sym: 'صوت مرتفع', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${r.id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-703-A', sym: 'صوت مرتفع', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], follow: 'لا' })`);
   const rep = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === r.id).reports.slice(-1)[0];
   eq(rep.action.join(), 'تعبئة فريون 60%');
   // الخدمات مسعّرة وتُجمع في الكشف الشهري بعد الإغلاق، والإجراءات العامة القديمة أُوقفت
@@ -588,9 +588,9 @@ t('الصيانة الدورية للمصاعد: زيارة واحدة لكل م
   const h = b.hotels.find(x => x.id === HID);
   eq(h.mine.join(), 'مصعد النزلاء 1');
   const ok = 'x'.repeat(38), withO = 'x'.repeat(4) + 'o' + 'x'.repeat(3) + 'nnn' + 'x'.repeat(27);
-  throws(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': 'xx' })`, 'ناقصة');
-  throws(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': '${ok}' })`, 'يعمل الآن');
-  const r = run(`apiConAct('${elTok}', 'new', null, { outcome: 'pm', units: ['مصعد النزلاء 1', 'مصعد الخدمة'], techs: 'أبوبكر، حسام', 'g|مصعد النزلاء 1': '${withO}', 'w|مصعد النزلاء 1': 'نعم', 'g|مصعد الخدمة': '${ok}', 'w|مصعد الخدمة': 'لا', replaced: '', toreplace: 'فرامل P8' })`);
+  throws(`apiConAct('${elTok}', 'new', null, { att: ['data:image/jpeg;base64,AAAA'], outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': 'xx' })`, 'ناقصة');
+  throws(`apiConAct('${elTok}', 'new', null, { att: ['data:image/jpeg;base64,AAAA'], outcome: 'pm', units: ['مصعد النزلاء 1'], 'g|مصعد النزلاء 1': '${ok}' })`, 'يعمل الآن');
+  const r = run(`apiConAct('${elTok}', 'new', null, { att: ['data:image/jpeg;base64,AAAA'], outcome: 'pm', units: ['مصعد النزلاء 1', 'مصعد الخدمة'], techs: 'أبوبكر، حسام', 'g|مصعد النزلاء 1': '${withO}', 'w|مصعد النزلاء 1': 'نعم', 'g|مصعد الخدمة': '${ok}', 'w|مصعد الخدمة': 'لا', replaced: '', toreplace: 'فرامل P8' })`);
   const id = r.result.id, o = run(`Db.get('WorkOrders', '${id}')`);
   eq(o.kind, 'periodic'); eq(o.status, 'matching'); eq(o.symptom, 'صيانة دورية');
   const fol = run(`Db.all('WorkOrders', x => x.follow_of === '${id}')`);
@@ -629,7 +629,7 @@ t('التكييف: إصلاح مباشر بمبادرة المتعهد بالإ�
   eq(b.lists.action.some(x => x.ar === 'تغيير ريموت'), true);
   eq(String(run(`Db.setting('schema_version')`)), String(run('SCHEMA_VERSION')));
   const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
-  const r = run(`apiConAct('${acTok}', 'new', null, { outcome: 'fix', hotel_id: '${HID}', floor_id: '${fl}', room: '707', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  const r = run(`apiConAct('${acTok}', 'new', null, { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', hotel_id: '${HID}', floor_id: '${fl}', room: '707', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
   const o = run(`Db.get('WorkOrders', '${r.result.id}')`);
   eq(o.kind, 'corrective'); eq(o.status, 'matching'); eq(o.room, '707');
 });
@@ -637,13 +637,13 @@ t('التكييف: إصلاح مباشر بمبادرة المتعهد بالإ�
 t('الإجراء التصحيحي: من المطابقة يعود للمتعهد ويُغلق «فعّالاً» بالإغلاق، والمستقل يرد عليه المتعهد ويتحقق المهندس', () => {
   const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
   const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '709', symptom: 'لا يبرد', name: 'سالم' })`).id;
-  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-709-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-709-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
   throws(`apiEngAct('${engTok}', '${id}', 'ca', {})`, 'سبب');
   run(`apiEngAct('${engTok}', '${id}', 'ca', { reason: 'صور غير واضحة', required: 'أرفق صورة الوحدة بعد العمل' })`);
   let ca = run(`Db.find('CorrectiveActions', c => c.wo_id === '${id}')`);
   eq(ca.status, 'open'); eq(run(`Db.get('WorkOrders', '${id}').status`), 'in_progress');
   const cb = run(`apiConBoot('${acTok}')`).cas; if (!cb.some(c => c.wo_id === id && c.required.includes('صورة'))) throw new Error(JSON.stringify(cb));
-  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-709-A', action: ['تغيير ريموت'], follow: 'لا', note: 'أرفقت الصورة', photos: ['data:image/jpeg;base64,AA'] })`);
+  run(`apiConAct('${acTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-709-A', action: ['تغيير ريموت'], follow: 'لا', note: 'أرفقت الصورة', photos: ['data:image/jpeg;base64,AA'] })`);
   eq(run(`Db.get('CorrectiveActions', '${ca.ca_id}').status`), 'responded');
   run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'ok' })`);
   ca = run(`Db.get('CorrectiveActions', '${ca.ca_id}')`); eq(ca.status, 'closed'); eq(ca.effective, 'نعم');
@@ -691,8 +691,8 @@ t('التسهيلات: تنبيه الرافع بطلب مفتوح لنفس ال
   const b = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '713', symptom: 'لا يبرد', name: 'سالم' })`).id;
   const op = run(`apiReqBoot('WARIF2')`).open;
   if (!op.some(o => o.id === a && o.room === '711' && o.floor_id === fl)) throw new Error(JSON.stringify(op));
-  run(`apiConAct('${acTok}', 'submit', '${a}', { outcome: 'fix', equip: 'AC-711-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], gas: 'R410A', pb: '50', pa: '128', follow: 'لا' })`);
-  run(`apiConAct('${acTok}', 'submit', '${b}', { outcome: 'fix', equip: 'AC-713-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${a}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-711-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تعبئة فريون 60%'], gas: 'R410A', pb: '50', pa: '128', follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${b}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-713-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
   const rep = run(`Db.get('WorkOrders', '${a}').report`); const r0 = (typeof rep === 'string' ? JSON.parse(rep) : rep).slice(-1)[0];
   eq(r0.gas, 'R410A'); eq(String(r0.pa), '128');
   const sg = run(`apiConBoot('${acTok}')`).sugg['لا يبرد']; eq(sg.part[0], 'المروحة'); eq(sg.cause[0], 'اتساخ');
@@ -798,8 +798,8 @@ t('التقييم الدوري: يصدره المختص لفترة يختاره�
 
 t('سليم: يسجّل المتعهد ما فحصه، ويُحسب داخلياً في موثوقية البلاغات لا على المتعهد', () => {
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
-  throws(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'ok', working: 'نعم' })`, 'ما فحصته');
-  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'ok', working: 'نعم', checked: ['الماكينة', 'الحبال'], note: 'لا صوت عند التشغيل' })`);
+  throws(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok', working: 'نعم' })`, 'ما فحصته');
+  run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok', working: 'نعم', checked: ['الماكينة', 'الحبال'], note: 'لا صوت عند التشغيل' })`);
   run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'good' })`);
   const rows = run(`Kpi.rows(function(){return true}, 2)`).filter(r => r.hotel === HID);
   const ok = rows.reduce((a, r) => a + (r.d.okN || 0), 0), rep = rows.reduce((a, r) => a + (r.d.repN || 0), 0);
@@ -809,7 +809,7 @@ t('سليم: يسجّل المتعهد ما فحصه، ويُحسب داخليا
 
 t('المصاعد بعد العرض: بانتظار الاعتماد والسداد، والإصلاح قبل السداد ثم تسجيل السداد بعد الإغلاق، وإشعار إدارتهم بالبريد', () => {
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'نورة' })`).id;
-  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'diag', part: 'حساس الباب', rec: ['حساس باب'], working: 'نعم' })`);
+  run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', part: 'حساس الباب', rec: ['حساس باب'], working: 'نعم' })`);
   run(`apiEngRfq('${engTok}', '${id}')`);
   run(`apiEngAct('${engTok}', '${id}', 'quote', { amount: 1200, no: 'Q-90' })`);
   run(`apiEngAct('${engTok}', '${id}', 'decide', { decision: 'con' })`);
@@ -820,7 +820,7 @@ t('المصاعد بعد العرض: بانتظار الاعتماد والسد�
   const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.status, 'in_progress'); eq(o.pay_pending, true);
   const j = run(`apiConBoot('${elTok}')`).jobs.find(x => x.id === id); if (!j.note.includes('قبل السداد')) throw new Error(j.note);
   eq(run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === id).pay_pending, true);
-  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'fix', part: 'حساس الباب', cause: ['تآكل طبيعي'], working: 'نعم', follow: 'لا' })`);
+  run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', part: 'حساس الباب', cause: ['تآكل طبيعي'], working: 'نعم', follow: 'لا' })`);
   run(`apiEngAct('${engTok}', '${id}', 'close', { sat: 'good' })`);
   run(`apiEngAct('${engTok}', '${id}', 'paid', { receipt: 'R-5' })`);
   const o2 = run(`Db.get('WorkOrders', '${id}')`); eq(o2.status, 'closed'); eq(o2.pay_pending, false); eq(!!o2.paid_at, true);
@@ -857,7 +857,7 @@ t('تيليجرام: طلب التكييف يُنشر في مجموعة الفن
   const n1 = tgCalls.length; run(`tgPoll()`); run(`tgPoll()`);
   eq(tgCalls.slice(n1).filter(c => c.m === 'sendMessage' && c.p.text.includes('لم يُستلم')).length, 1);
   // الحالة تتحدّث مع الإجراءات
-  run(`apiConAct('${acTok}', 'submit', '${id}', { outcome: 'fix', equip: 'AC-714-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-714-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
   { const e = tgCalls.filter(c => c.m === 'editMessageText').slice(-1)[0]; if (!e.p.text.includes('مطابقة')) throw new Error('refresh ' + e.p.text + ' ' + run(`Db.get('WorkOrders', '${id}').status`)); }
   // المصاعد لا تُنشر
   const n2 = tgCalls.length; run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'متوقف', name: 'سالم' })`);
@@ -870,7 +870,7 @@ t('البريد الرسمي عنواناً بديلاً، وزمن الاستل
   eq(run(`apiAdmMailFrom('${adminTok}', 'Maint@Nawazi.sa')`).from, 'maint@nawazi.sa');
   eq(sentMail[t0].to.to, 'maint@nawazi.sa'); if (!sentMail[t0].to.subject.includes('تجريبية')) throw new Error('test mail');
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
-  run(`apiConAct('${elTok}', 'submit', '${id}', { outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
+  run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
   const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${id}')`);
   eq(sentMail[n0].gmail, true); eq(sentMail[n0].to.from, 'maint@nawazi.sa');
   run(`apiAdmMailFrom('${adminTok}', '')`);
@@ -949,7 +949,7 @@ t('البحث بالفهرس: الوصول لعملية بمعرّفها يقر�
   eq(run(`archiveAwan()`), 0);
   // الدورات ما زالت تعمل بعد الأرشفة
   const id2 = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '702', symptom: 'لا يبرد', name: 'جديد' })`).id;
-  run(`apiConAct('${acTok}', 'submit', '${id2}', { outcome: 'fix', equip: 'AC-702-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
+  run(`apiConAct('${acTok}', 'submit', '${id2}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-702-A', sym: 'لا يبرد', part: 'المروحة', cause: ['اتساخ'], action: ['تغيير ريموت'], follow: 'لا' })`);
   run(`apiEngAct('${engTok}', '${id2}', 'close', { sat: 'good' })`);
   eq(run(`Db.get('WorkOrders', '${id2}').status`), 'closed');
   run(`apiAdmKpiRebuild('${adminTok}')`);
@@ -1032,6 +1032,26 @@ t('تواصل: تذكرة المتعهد ← إفادة المالك ← رد ا
   run(`apiConOrgEval('${acTok}', '${HID}', { clarity: 4, speed: 5, access: 3, team: 5, commit: 4, comm: 5, system: 4 }, 'تعاون ممتاز', 'م. سالم')`);
   eq(run(`conBoot_(Auth.session('${acTok}')).org`).hotels.some(h => h.id === HID), false);
   const o = run(`apiEngBoot('${adminTok}')`).org.rows.find(r => r.hotel_id === HID); eq(o.avg.access, 3);
+});
+
+t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد، والقائد برقمه الخاص يستكمل التقرير والمرفق إلزامي', () => {
+  const ctr = run(`Db.all('Contracts').filter(c => c.type === 'el').pop().contract_id`);
+  throws(`apiAdmLeadPin('${adminTok}', '${ctr}', '')`, 'اسم');
+  const lp = run(`apiAdmLeadPin('${adminTok}', '${ctr}', 'م. عدنان')`).pin;
+  eq(run(`Auth.pinTaken('${lp}')`), true);
+  run(`CacheService.getScriptCache().remove('F_con_${HID}')`);
+  const tk = run(`apiConLogin('WARIF2', '${elPin}')`).token;
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'خالد' })`).id;
+  throws(`apiConAct('${tk}', 'submit', '${id}', { outcome: 'lead' })`, 'يعمل');
+  eq(run(`apiConAct('${tk}', 'submit', '${id}', { outcome: 'lead', working: 'نعم', note: 'ضبط القفل' })`).result.status, 'lead');
+  eq(run(`Db.get('WorkOrders', '${id}').status`), 'lead');
+  const L = run(`apiPinWebLogin('${lp}')`); eq(L.kind, 'con'); eq(L.boot.me.lead, 'م. عدنان');
+  eq(L.boot.jobs.some(j => j.id === id && j.status === 'lead'), true);
+  throws(`apiConAct('${L.token}', 'submit', '${id}', { outcome: 'lead', working: 'نعم' })`, 'الفني');
+  throws(`apiConAct('${L.token}', 'submit', '${id}', { outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`, 'التقرير الفني');
+  run(`apiConAct('${L.token}', 'submit', '${id}', { att: ['data:application/pdf;base64,JVBERi0='], outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`);
+  const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.status, 'matching'); if (!o.att) throw new Error('no att');
+  const rep = JSON.parse(o.report).pop(); eq(rep.by, 'م. عدنان (قائد الفريق)');
 });
 
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {

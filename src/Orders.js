@@ -5,7 +5,7 @@
  */
 
 var Orders = (function () {
-  var OPEN = ['assigned', 'in_progress', 'quote', 'decision', 'pay', 'parts', 'matching'];
+  var OPEN = ['assigned', 'in_progress', 'lead', 'quote', 'decision', 'pay', 'parts', 'matching'];
   var STOP_SYMS = ['متوقف', 'توقف بين الأدوار'];
 
   function now_() { return new Date(); }
@@ -112,7 +112,7 @@ var Orders = (function () {
   // ───────── إجراءات المتعهد ─────────
   var OUTCOMES = {
     ac: ['ok', 'fix', 'comp', 'diag', 'report'],
-    el: ['fix', 'ok', 'visit', 'diag', 'report', 'pm']
+    el: ['fix', 'ok', 'visit', 'diag', 'report', 'pm', 'lead']
   };
   var PM_EL_N = 38;   // بنود نموذج الصيانة الدورية للمصاعد (1–38)
 
@@ -134,9 +134,13 @@ var Orders = (function () {
   function conSubmit(s, woId, d) {
     var o = Db.get('WorkOrders', woId);
     if (!o || o.con_id !== s.id) throw new Error('العملية غير موجودة.');
-    if (o.status !== 'assigned' && o.status !== 'in_progress') throw new Error('هذه العملية ليست بانتظار تقريرك الآن.');
+    if (o.status !== 'assigned' && o.status !== 'in_progress' && o.status !== 'lead') throw new Error('هذه العملية ليست بانتظار تقريرك الآن.');
     var oc = d.outcome;
     if ((OUTCOMES[o.type] || []).indexOf(oc) === -1) throw new Error('اختر النتيجة.');
+    if (oc === 'lead' && (s.web || o.status === 'lead')) throw new Error('الإرسال لقائد الفريق من الفني في الموقع.');
+    if (o.status === 'lead' && (oc === 'visit' || oc === 'report')) throw new Error('استكمل التقرير: تم الإصلاح أو يحتاج قطعة أو سليم.');
+    // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
+    if (o.type === 'el' && ['fix', 'ok', 'diag', 'pm'].indexOf(oc) !== -1 && !(d.att || []).length) throw new Error('أرفق التقرير الفني للمتعهد (صورة أو PDF).');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var pm = oc === 'pm' ? pmParse_(d) : null;
@@ -149,7 +153,8 @@ var Orders = (function () {
     var report = {
       outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [], checked: d.checked || [], rec: d.rec || [], gas: d.gas || '', pb: d.pb || '', pa: d.pa || '',
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
-      leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime()
+      leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime(),
+      att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : ''
     };
     if (pm) {
       report.units = pm.units; report.grid = pm.grid; report.working = pm.working;
@@ -165,7 +170,9 @@ var Orders = (function () {
     stopWork_(o, patch, t);
 
     var to;
+    if (d.att && d.att.length) patch.att = csv(o.att).concat(d.att).join(',');
     if (oc === 'visit') { to = 'in_progress'; patch.visits = (Number(o.visits) || 0) + 1; }
+    else if (oc === 'lead') { to = 'lead'; patch.lead_at = t; patch.visits = (Number(o.visits) || 0) + 1; }
     else if (oc === 'diag' && o.type === 'el') {
       // المصاعد: لا سعر من الفني؛ يراجع المهندس ثم يطلب عرض السعر من إدارة المتعهد بالبريد
       to = 'quote'; patch.quote = ''; patch.quote_no = ''; patch.quote_at = ''; patch.rfq_at = ''; patch.rfq_count = 0; patch.decision = ''; patch.decision_note = ''; patch.submitted_at = t; patch.visits = (Number(o.visits) || 0) + 1;
@@ -376,6 +383,7 @@ var Orders = (function () {
     if (!Array.isArray(reports)) reports = [reports];
     return {
       id: o.wo_id, hotel_id: o.hotel_id, hotel: h.name || '', type: o.type, kind: o.kind, source: o.source,
+      att: csv(o.att), leadAt: ms(o.lead_at) || null,
       con_id: o.con_id, con: c.name || '', status: st, priority: o.priority,
       floor_id: o.floor_id, room: String(o.room || ''), equip: o.equip || '', loc: loc(R, o),
       units: room ? csv(room.ac_units) : [], symptom: o.symptom || '', title: o.symptom || (o.kind === 'report' ? 'تقرير فني' : 'طلب صيانة'),
