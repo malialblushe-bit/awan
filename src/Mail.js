@@ -157,7 +157,12 @@ var Mail = (function () {
 
   function send(m, replyTo) {
     var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, fromAddr_(), replyTo || m.cc || '')).getBytes());
-    Gmail.Users.Messages.send({ raw: raw }, 'me');
+    try { Gmail.Users.Messages.send({ raw: raw }, 'me'); }
+    catch (e) {
+      var msg = String(e && e.message || e);
+      if (/auth|permission|scope|not defined|insufficient/i.test(msg)) throw new Error('إرسال البريد غير مفعّل بعد: شغّل الدالة authorizeAwan مرة واحدة من محرر السكربت بحساب الصيانة ووافق على الأذونات، ثم أعد المحاولة.');
+      throw new Error('تعذّر إرسال البريد: ' + msg);
+    }
   }
 
   /** المرسل الرسمي (عنوان بديل في Gmail). يرسل رسالة تجريبية إليه للتأكد؛ إن لم يكن مضافاً يصل من حساب الصيانة */
