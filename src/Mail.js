@@ -165,7 +165,13 @@ var Mail = (function () {
   }
 
   function send(m, replyTo, hotelId, me) {
-    var from = fromAddr_(hotelId, me);
+    var from = fromAddr_(hotelId, me), acct = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+    // الأبوية: الرد إلى المرسل الرسمي (مهندس الفندق)، وGmail حساب الصيانة نسخة دائماً
+    if (from.toLowerCase() !== acct) {
+      var cc = [acct].concat(String(m.cc || '').split(',')).map(function (x) { return x.trim().toLowerCase(); })
+        .filter(function (x, i, a) { return x && x !== from.toLowerCase() && a.indexOf(x) === i; });
+      m = Object.assign({}, m, { cc: cc.join(',') }); replyTo = from;
+    }
     var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, from, replyTo || m.cc || '')).getBytes());
     try { Gmail.Users.Messages.send({ raw: raw }, 'me'); }
     catch (e) {
