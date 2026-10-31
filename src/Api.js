@@ -742,7 +742,9 @@ function apiAdmSaveFloors(token, hotelId, rows) {
       if (!name) throw new Error('السطر ' + (i + 1) + ': اكتب اسم الدور.');
       if (tower && towers.indexOf(tower) === -1) towers.push(tower);
       if (!a || !b || a.pre !== b.pre || !(b.num >= a.num) || b.num - a.num > 199) throw new Error('السطر ' + (i + 1) + ' (' + name + '): نطاق الغرف غير صحيح. اكتب مثل 101 إلى 120، أو A101 إلى A120.');
-      var nums = [];
+      var nums = [], code = name.replace(/\s+/g, '').toUpperCase();
+      // دور برمز مثل B1 أو B2 (البدروم) ونطاق قصير بلا حرف ← الغرف B101… وB201… فلا تتكرر بين الأدوار
+      if (/^[A-Z]{1,3}\d{1,2}$/.test(code) && !a.pre && b.num < 100 && a.width <= 2) { a = { pre: code, num: a.num, width: 2 }; }
       for (var n = a.num; n <= b.num; n++) nums.push(roomName_(a, n));
       return { name: name, tower: tower, nums: nums, ac: ac };
     });

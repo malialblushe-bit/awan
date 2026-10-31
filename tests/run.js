@@ -234,6 +234,13 @@ t('المشرف: إنشاء حساب ثم تغيير كلمة المرور ال�
   eq(run("Db.setting('schema_version')"), run('SCHEMA_VERSION'));
 });
 
+t('البدروم: أدوار B1 وB2 بنطاقات قصيرة ← B101… وB201… بلا تكرار', () => {
+  const hid = run(`apiAdmSaveHotel('${adminTok}', { code: 'bsmt', name: 'فندق البدروم', city: 'مكة' })`).id;
+  run(`apiAdmSaveFloors('${adminTok}', '${hid}', [{ name: 'B1', from: 1, to: 7, ac: 1 }, { name: 'B2', from: 1, to: 8, ac: 1 }])`);
+  const rn = JSON.stringify(run(`Db.all('Rooms', function (r) { return r.hotel_id === '${hid}'; })`));
+  eq(rn.indexOf('B107') !== -1 && rn.indexOf('B208') !== -1, true);
+});
+
 t('المشرف: أدوار بنطاقات مختلفة دفعة واحدة، وأدوار خدمية بمرافقها، وبطاقات المصاعد', () => {
   throws(`apiAdmSaveHotel('${adminTok}', { code: 'وارف', name: 'x' })`, 'بالإنجليزية');
   const hid = run(`apiAdmSaveHotel('${adminTok}', { code: 'warif2', name: 'فندق وارف', city: 'مكة' })`).id;
