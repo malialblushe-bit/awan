@@ -406,6 +406,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, conSubmit: conSubmit, conNew: conNew, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, refs: refs, view: view, normRoom: normRoom
+    engAct: engAct, engCreate: engCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();

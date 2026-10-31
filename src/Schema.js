@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 25;
+var SCHEMA_VERSION = 26;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -57,6 +57,8 @@ var SCHEMA = [
     ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
     ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح'],
     ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])'],
+    ['sla_repair', 'زمن الإصلاح المستهدف (دقيقة عمل فعلي)'], ['sla_rescue', 'المصاعد: زمن الإنقاذ (دقيقة)'], ['sla_pest', 'المكافحة: من الإتاحة أو البلاغ إلى المعالجة (ساعة)'],
+    ['cls_ex', 'تصنيف: ممتاز من'], ['cls_good', 'تصنيف: جيد من'], ['cls_ok', 'تصنيف: مقبول من'],
     ['value', 'قيمة العقد (ريال)'], ['pay_mode', 'طريقة السداد: sched · monthly · stmt'], ['pay_days', 'مهلة السداد (يوم)'], ['pay_plan', 'جدول الدفعات (JSON)']] },
 
   { name: 'Lists', cols: [
@@ -209,11 +211,11 @@ var SEED_SETTINGS = [
 
 /** [type, kpi, full, half, weight] — الاستجابة بالدقائق (الأقل أفضل)، والبقية نسب (الأعلى أفضل) */
 var SEED_THRESHOLDS = [
-  ['ac', 'resp', 30, 40, 30], ['ac', 'ready', 90, 85, 30], ['ac', 'info', 95, 90, 20], ['ac', 'sat', 85, 80, 20],
-  ['el', 'resp', 45, 60, 30], ['el', 'ready', 90, 85, 30], ['el', 'info', 95, 90, 20], ['el', 'sat', 85, 80, 20],
-  ['sf', 'resp', 60, 80, 30], ['sf', 'ready', 90, 85, 30], ['sf', 'info', 95, 90, 20], ['sf', 'sat', 85, 80, 20],
-  ['wa', 'pickup', 95, 85, 50], ['wa', 'clean', 80, 60, 30], ['wa', 'wash', 95, 85, 20],
-  ['pc', 'ontime', 90, 75, 40], ['pc', 'flagresp', 24, 48, 30], ['pc', 'traps', 90, 75, 30]
+  ['ac', 'resp', 0, 0, 30], ['ac', 'ready', 0, 0, 25], ['ac', 'info', 0, 0, 20], ['ac', 'sat', 0, 0, 15], ['ac', 'repair', 0, 0, 10],
+  ['el', 'resp', 0, 0, 20], ['el', 'rescue', 0, 0, 15], ['el', 'ready', 0, 0, 20], ['el', 'pm', 0, 0, 20], ['el', 'info', 0, 0, 15], ['el', 'sat', 0, 0, 10],
+  ['sf', 'resp', 0, 0, 30], ['sf', 'ready', 0, 0, 25], ['sf', 'info', 0, 0, 20], ['sf', 'sat', 0, 0, 15], ['sf', 'repair', 0, 0, 10],
+  ['wa', 'pickup', 0, 0, 50], ['wa', 'clean', 0, 0, 30], ['wa', 'wash', 0, 0, 20],
+  ['pc', 'ontime', 0, 0, 40], ['pc', 'flagresp', 0, 0, 30], ['pc', 'traps', 0, 0, 30]
 ];
 
 /** [type, list, ar, en] */

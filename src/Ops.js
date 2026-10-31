@@ -354,7 +354,7 @@ var Ops = (function () {
   function metrics(con, hotelIds, from, to) {
     var a = new Date(from + 'T00:00:00').getTime(), b = new Date(to + 'T23:59:59').getTime(), days = Math.max(1, Math.round((b - a) / 864e5));
     var inR = function (t) { t = ms(t); return t >= a && t <= b; };
-    var V = {}, X = {};
+    var V = {}, X = {}, N = {};
     // أيام الفترة التي كان فيها عقد ساري لهذا المتعهد في الفندق (لا يُحاسب على ما قبل العقد)
     var cdays = function (h, field) {
       var best = 0, n = 0;
@@ -375,6 +375,7 @@ var Ops = (function () {
       V.pickup = exp ? Math.min(100, pct_(done, exp)) : null;
       V.clean = rated.length ? Math.round(rated.reduce(function (s, v) { return s + Number(v.rating); }, 0) / rated.length * 20) : null;
       V.wash = came.length ? pct_(came.filter(function (v) { return yes_(v.washed); }).length, came.length) : null;
+      N = { pickup: exp, clean: rated.length, wash: came.length };
       X = { visits: vs.length, done: done, expected: exp, missed: Math.max(0, exp - done), noTruck: vs.length - came.length, leftMax: vs.reduce(function (m, v) { return Math.max(m, Number(v.left_carts) || 0); }, 0) };
     } else if (con.type === 'pc') {
       var expS = 0, gotS = 0;
@@ -406,27 +407,34 @@ var Ops = (function () {
         tExp += Math.floor(Math.max(0, e0 - s0) / ((Number(t.every_days) || 7) * 864e5));
       });
       V.ontime = expS ? pct_(gotS, expS) : null;
-      V.flagresp = dn.length ? Math.round(dn.reduce(function (s, f) { return s + (ms(f.done_at) - ms(f.created_at)) / 36e5; }, 0) / dn.length) : null;
+      var slaH = 24; Db.all('Contracts', function (c) { return c.con_id === con.con_id; }).forEach(function (c) { if (Number(c.sla_pest) > 0) slaH = Number(c.sla_pest); });
+      var due = fl.filter(function (f) { return f.status === 'done' || ms(f.created_at) + slaH * 36e5 < Date.now(); });
+      V.flagresp = due.length ? pct_(due.filter(function (f) { return f.status === 'done' && ms(f.done_at) - ms(f.created_at) <= slaH * 36e5; }).length, due.length) : null;
+      N.flagresp = due.length; N.ontime = expS; N.traps = tExp;
+      X.flagAvgH = dn.length ? Math.round(dn.reduce(function (s, f) { return s + (ms(f.done_at) - ms(f.created_at)) / 36e5; }, 0) / dn.length) : ''; X.slaH = slaH;
       V.traps = tExp ? Math.min(100, pct_(tl, tExp)) : null;
-      X = { sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.length - dn.length, trapChecks: tl, trapExpected: tExp, availReq: avR, availMissed: avR - avD };
+      X = { flagAvgH: X.flagAvgH, slaH: X.slaH, sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.length - dn.length, trapChecks: tl, trapExpected: tExp, availReq: avR, availMissed: avR - avD };
     } else {
       var m1 = from.slice(0, 7), m2 = to.slice(0, 7);
-      var z = { respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0, orders: 0, closed: 0, pm: 0, trapped: 0, clSum: 0, clN: 0 };
+      var z = { respSum: 0, respN: 0, respOk: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0, orders: 0, closed: 0, pm: 0, trapped: 0, clSum: 0, clN: 0, repairN: 0, repairOk: 0, rescueN: 0, rescueOk: 0, rescueSum: 0 };
       Db.all('KpiSummary', function (r) { var k = String(r.key).split('|'); return k[0] === con.con_id && hotelIds.indexOf(k[1]) !== -1 && k[2] >= m1 && k[2] <= m2; }).forEach(function (r) {
         var d = r.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
         Object.keys(z).forEach(function (k) { z[k] += Number(d[k]) || 0; });
       });
-      V.resp = z.respN ? Math.round(z.respSum / z.respN) : null;
-      V.ready = z.readyN ? pct_(z.readyOk, z.readyN) : null;
-      V.info = z.infoN ? pct_(z.infoOk, z.infoN) : null;
-      V.sat = z.satN ? Math.round(z.satSum / z.satN) : null;
-      X = { orders: z.orders, closed: z.closed, pm: z.pm, trapped: z.trapped, claim: z.clN ? Math.round(z.clSum / z.clN) + ' د' : '', respN: z.respN, readyN: z.readyN, infoN: z.infoN, satN: z.satN, months: m1 === m2 ? m1 : m1 + ' — ' + m2 };
+      var pmExp = 0;
+      if (con.type === 'el') hotelIds.forEach(function (h) { pmExp += cdays(h, 'pm_per_month') * 7 / 30; });
+      pmExp = Math.round(pmExp);
+      var vv = Kpi.values(z, pmExp), KS = Kpi.KPIS[con.type] || ['resp', 'ready', 'info', 'sat'];
+      KS.forEach(function (k) { V[k] = vv.V[k]; N[k] = vv.N[k]; });
+      X = { respAvg: z.respN ? Math.round(z.respSum / z.respN) + ' د' : '', rescueAvg: z.rescueN ? Math.round(z.rescueSum / z.rescueN) + ' د' : '', pmExp: con.type === 'el' ? pmExp : '', orders: z.orders, closed: z.closed, pm: z.pm, trapped: z.trapped, claim: z.clN ? Math.round(z.clSum / z.clN) + ' د' : '', respN: z.respN, readyN: z.readyN, infoN: z.infoN, satN: z.satN, months: m1 === m2 ? m1 : m1 + ' — ' + m2 };
     }
     var cas = Db.all('CorrectiveActions', function (c) { return c.con_id === con.con_id && hotelIds.indexOf(c.hotel_id) !== -1 && inR(c.created_at); });
     X.ca = cas.length; X.caOpen = cas.filter(function (c) { return c.status !== 'closed'; }).length;
     X.caNot = cas.filter(function (c) { return Number(c.rounds) > 0; }).length;
-    var th = Kpi.thresholds()[con.type] || {};
-    return { V: V, X: X, score: score_(V, th), th: th, days: days };
+    var th = Kpi.thresholds()[con.type] || {}, sc = Kpi.score(con.type, V, N, th), cl = Kpi.clsOf(con.con_id);
+    var c2 = { cls_ex: cl.ex, cls_good: cl.good, cls_ok: cl.ok }, C = {};
+    Object.keys(V).forEach(function (k) { C[k] = Kpi.cls(V[k], c2); });
+    return { V: V, N: N, X: X, score: sc.score, small: sc.small, used: sc.used, cls: Kpi.cls(sc.score, c2), C: C, bands: cl, th: th, days: days };
   }
 
   /** كشف المكافحة أو النفايات لمتعهد في فترة: الملخص من metrics والتفاصيل من السجل */
@@ -486,7 +494,7 @@ var Ops = (function () {
     var sc = evalScope_(s, conId), m = metrics(sc.con, sc.hotels, from, to);
     var me = Db.get('Users', s.id) || {};
     var rec = Db.insert('Evaluations', { con_id: conId, type: sc.con.type, hotel_ids: sc.hotels.join(','), from: "'" + from, to: "'" + to,
-      data: { V: m.V, X: m.X, th: m.th, days: m.days }, score: m.score == null ? '' : m.score, decision: decision, note: String(note || '').trim(),
+      data: { V: m.V, N: m.N, X: m.X, th: m.th, days: m.days, cls: m.cls, C: m.C, bands: m.bands, small: m.small }, score: m.score == null ? '' : m.score, decision: decision, note: String(note || '').trim(),
       by: me.name || '', created_at: new Date() });
     return { id: rec.eval_id };
   }

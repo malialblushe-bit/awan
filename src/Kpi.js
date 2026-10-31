@@ -48,19 +48,22 @@ var Kpi = (function () {
   }
 
   function compute_(conId, hotelId, month, hotelOrders, canon) {
-    var ms = Orders.ms, win = windowDays_() * 864e5;
+    var ms = Orders.ms, win = windowDays_() * 864e5, R = Orders.refs();
     var mine = hotelOrders.filter(function (o) { return o.con_id === conId && month_(o.created_at) === month; });
     var d = {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,
-      trapped: 0, rescueSum: 0, rescueN: 0, downMin: 0, downN: 0, pm: 0,
+      trapped: 0, rescueSum: 0, rescueN: 0, rescueOk: 0, downMin: 0, downN: 0, pm: 0, respOk: 0, repairN: 0, repairOk: 0,
       repN: 0, okN: 0, qSum: 0, qN: 0, spend: 0, spendN: 0, okBy: {}, clSum: 0, clN: 0,
       acts: {}, parts: {}, causes: {}, syms: {}, locs: {}
     };
     mine.forEach(function (o) {
       // الاستجابة: الطلبات التي أُسندت له ووصل إليها (لا ما فتحه بنفسه)
+      var C = Orders.contractOf(R, o) || {};
       if (o.source !== 'contractor' && o.arrived_at && o.assigned_at) {
-        d.respSum += Math.max(0, (ms(o.arrived_at) - ms(o.assigned_at)) / 60000); d.respN++;
+        var rm = Math.max(0, (ms(o.arrived_at) - ms(o.assigned_at)) / 60000), urg = o.priority === 'urgent' || Orders.truthy(o.trapped);
+        var tg = Number(urg ? C.resp_urgent : C.resp_normal) || 0;
+        d.respSum += rm; d.respN++; if (!tg || rm <= tg) d.respOk++;
       }
       var reviewed = o.submitted_at && o.status !== 'matching' && o.status !== 'decision' && o.status !== 'quote';
       if (reviewed || Number(o.reopens) > 0) {
@@ -81,12 +84,14 @@ var Kpi = (function () {
             });
           }
           if (!(Number(o.reopens) > 0) && !repeat) d.readyOk++;
+          var sr = Number(C.sla_repair) || 0;
+          if (sr && Number(o.work_minutes) > 0) { d.repairN++; if (Number(o.work_minutes) <= sr) d.repairOk++; }
         }
         if (SAT[o.sat] !== undefined) { d.satSum += SAT[o.sat]; d.satN++; }
       }
       if (Orders.truthy(o.trapped)) {
         d.trapped++;
-        if (o.rescued_at) { d.rescueSum += Math.max(0, (ms(o.rescued_at) - ms(o.created_at)) / 60000); d.rescueN++; }
+        if (o.rescued_at) { var rs = Math.max(0, (ms(o.rescued_at) - ms(o.created_at)) / 60000); d.rescueSum += rs; d.rescueN++; if (rs <= (Number(C.sla_rescue) || 30)) d.rescueOk++; }
       }
       // موثوقية البلاغات (مؤشر داخلي لا يُحسب على المتعهد): ما رُفع ثم وُجد سليماً
       if (o.status === 'closed' && (o.source === 'requester' || o.source === 'engineer') && o.kind !== 'periodic' && o.kind !== 'report') {
@@ -215,5 +220,38 @@ var Kpi = (function () {
     return out;
   }
 
-  return { refresh: refresh, touch: touch, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
+  /** التشكيلة: مؤشرات كل نوع (القيمة من 100، والدرجة = مجموع القيمة × الوزن ÷ مجموع أوزان ما له عينة كافية) */
+  var KPIS = { ac: ['resp', 'ready', 'info', 'sat', 'repair'], sf: ['resp', 'ready', 'info', 'sat', 'repair'], el: ['resp', 'rescue', 'ready', 'pm', 'info', 'sat'],
+    wa: ['pickup', 'clean', 'wash'], pc: ['ontime', 'flagresp', 'traps'] };
+  var MIN_N = 5;
+  function pct(a, b) { return b ? Math.round(1000 * a / b) / 10 : null; }
+  /** قيم المؤشرات وعيّناتها من مجاميع الملخص (التكييف والمصاعد والسلامة). pmExp = الزيارات الدورية المطلوبة */
+  function values(z, pmExp) {
+    var V = { resp: pct(z.respOk, z.respN), ready: pct(z.readyOk, z.readyN), info: pct(z.infoOk, z.infoN), sat: z.satN ? Math.round(10 * z.satSum / z.satN) / 10 : null,
+      repair: pct(z.repairOk, z.repairN), rescue: pct(z.rescueOk, z.rescueN), pm: pmExp ? Math.min(100, pct(z.pm, pmExp)) : null };
+    var N = { resp: z.respN, ready: z.readyN, info: z.infoN, sat: z.satN, repair: z.repairN, rescue: z.rescueN, pm: pmExp || 0 };
+    return { V: V, N: N };
+  }
+  /** الدرجة المركّبة. w: {kpi: {weight}} */
+  function score(type, V, N, w) {
+    var ks = (KPIS[type] || Object.keys(V)).filter(function (k) { return V[k] != null && Number((w[k] || {}).weight) > 0; });
+    var ok = ks.filter(function (k) { return (N[k] || 0) >= MIN_N || k === 'pm' || k === 'rescue'; }), small = false;
+    if (!ok.length) { ok = ks; small = ks.length > 0; }
+    var sw = 0, s = 0;
+    ok.forEach(function (k) { var wt = Number(w[k].weight); sw += wt; s += wt * V[k]; });
+    return { score: sw ? Math.round(10 * s / sw) / 10 : null, used: ok, small: small };
+  }
+  /** التصنيف من عتبات العقد */
+  function cls(v, c) {
+    if (v == null) return '';
+    c = c || {}; var ex = Number(c.cls_ex) || 90, gd = Number(c.cls_good) || 80, okk = Number(c.cls_ok) || 70;
+    return v >= ex ? 'ex' : v >= gd ? 'good' : v >= okk ? 'ok' : 'low';
+  }
+  function clsOf(conId) {
+    var best = null;
+    Db.all('Contracts', function (c) { return c.con_id === conId; }).forEach(function (c) { if (!best || Orders.ms(c.created_at) > Orders.ms(best.created_at)) best = c; });
+    return { ex: Number(best && best.cls_ex) || 90, good: Number(best && best.cls_good) || 80, ok: Number(best && best.cls_ok) || 70 };
+  }
+
+  return { KPIS: KPIS, MIN_N: MIN_N, values: values, score: score, cls: cls, clsOf: clsOf, refresh: refresh, touch: touch, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
 })();

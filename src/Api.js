@@ -141,6 +141,14 @@ function upgradeSchema_() {
   Db.reset();
   seedMissingLists_();
   Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
+  // v26: المؤشر يُقاس من 100 ويُضرب في وزنه؛ أوزان التشكيلة الجديدة لكل نوع، وإعادة حساب الملخص
+  if (Number(Db.setting('schema_version')) < 26) {
+    SEED_THRESHOLDS.forEach(function (r) {
+      if (!Db.updateWhere('Thresholds', function (t) { return t.type === r[0] && t.kpi === r[1]; }, { weight: r[4] })) Db.insert('Thresholds', { type: r[0], kpi: r[1], full: 0, half: 0, weight: r[4] });
+    });
+    Db.all('Thresholds').forEach(function (t) { if (!SEED_THRESHOLDS.some(function (r) { return r[0] === t.type && r[1] === t.kpi; })) Db.updateWhere('Thresholds', function (x) { return x.type === t.type && x.kpi === t.kpi; }, { weight: 0 }); });
+    try { Kpi.rebuild(); } catch (e) { }
+  }
   var row = Db.find('Settings', function (r) { return r.key === 'schema_version'; });
   if (row) Db.update('Settings', 'schema_version', { value: SCHEMA_VERSION });
   else Db.insert('Settings', { key: 'schema_version', value: SCHEMA_VERSION, note: 'إصدار هيكل الجداول' });
@@ -552,7 +560,8 @@ function apiKpiBoot(token) {
     var h = R.hotels[r.hotel]; if (h) hs[r.hotel] = { id: h.hotel_id, name: h.name, brand: h.brand || 'nawazi' };
   });
   return {
-    rows: rows, thresholds: Kpi.thresholds(),
+    rows: rows, thresholds: Kpi.thresholds(), kpis: Kpi.KPIS, minN: Kpi.MIN_N,
+    cls: (function () { var o = {}; Object.keys(cons).forEach(function (k) { o[k] = Kpi.clsOf(k); }); return o; })(),
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
     month: Kpi.month(new Date()), window: Number(Db.setting('repeat_window_days')) || 30,
@@ -672,6 +681,7 @@ function admBoot_() {
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
             resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
             lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x),
+            sla: { resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, sla_repair: x.sla_repair, sla_rescue: x.sla_rescue, sla_pest: x.sla_pest, cls_ex: x.cls_ex, cls_good: x.cls_good, cls_ok: x.cls_ok },
             pay: { value: Number(x.value) || 0, mode: x.pay_mode || '', days: x.pay_days === '' || x.pay_days == null ? 30 : Number(x.pay_days), plan: Pay.planOf(x) }
           };
         })
@@ -928,6 +938,28 @@ function apiAdmSaveContractPrices(token, contractId, prices) {
   });
 }
 
+/** معايير القياس للعقد: أزمنة الخدمة وعتبات التصنيف */
+function apiAdmSaveSla(token, contractId, d) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c) throw new Error('العقد غير موجود.');
+    d = d || {};
+    var num = function (v, lo, hi, msg) { if (v === undefined) return undefined; if (v === '' || v == null) return ''; var n = Number(v); if (isNaN(n) || n < lo || n > hi) throw new Error(msg); return n; };
+    var p = {
+      resp_normal: num(d.resp_normal, 1, 10080, 'زمن الاستجابة العادي بالدقائق.'), resp_urgent: num(d.resp_urgent, 1, 10080, 'زمن الاستجابة الطارئ بالدقائق.'),
+      sla_repair: num(d.sla_repair, 1, 10080, 'زمن الإصلاح بالدقائق.'), sla_rescue: num(d.sla_rescue, 1, 600, 'زمن الإنقاذ بالدقائق.'),
+      sla_pest: num(d.sla_pest, 1, 720, 'زمن المعالجة بالساعات.'),
+      cls_ex: num(d.cls_ex, 1, 100, 'عتبة ممتاز من 1 إلى 100.'), cls_good: num(d.cls_good, 1, 100, 'عتبة جيد من 1 إلى 100.'), cls_ok: num(d.cls_ok, 1, 100, 'عتبة مقبول من 1 إلى 100.')
+    };
+    Object.keys(p).forEach(function (k) { if (p[k] === undefined) delete p[k]; });
+    var ex = p.cls_ex || Number(c.cls_ex) || 90, gd = p.cls_good || Number(c.cls_good) || 80, ok = p.cls_ok || Number(c.cls_ok) || 70;
+    if (!(ex > gd && gd > ok)) throw new Error('العتبات تنازلية: ممتاز > جيد > مقبول.');
+    if (c.type === 'wa' || c.type === 'pc' || c.type === 'wt') { delete p.resp_normal; delete p.resp_urgent; }
+    Db.update('Contracts', contractId, p);
+    return {};
+  });
+}
+
 /** المياه: تسعيرة المواسم للعقد — فترات بزيادة لكل حجم تُضاف في إجمالي الكشف */
 function apiAdmSaveSeason(token, contractId, list) {
   return adm_(token, function () {
@@ -1116,19 +1148,17 @@ function apiAdmListSave(token, d) {
 /** rows: {resp:{full,half,weight}, ready:{…}, info:{…}, sat:{…}} لنوع متعهد واحد */
 function apiAdmSaveThresholds(token, type, rows) {
   return adm_(token, function () {
-    var KPIS = { ac: ['resp', 'ready', 'info', 'sat'], el: ['resp', 'ready', 'info', 'sat'], sf: ['resp', 'ready', 'info', 'sat'], wa: ['pickup', 'clean', 'wash'], pc: ['ontime', 'flagresp', 'traps'] };
+    var KPIS = Kpi.KPIS;
     if (!KPIS[type]) throw new Error('اختر نوع المتعهد.');
     var kpis = KPIS[type], sum = 0;
     kpis.forEach(function (k) {
-      var r = rows[k] || {}, full = Number(r.full), half = Number(r.half), w = Number(r.weight);
-      if (!(full >= 0) || !(half >= 0) || !(w >= 0) || isNaN(full) || isNaN(half) || isNaN(w)) throw new Error('اكتب أرقاماً صحيحة في كل الخانات.');
-      if ((k === 'resp' || k === 'flagresp') && half < full) throw new Error('الاستجابة: حد نصف النقاط يكون أكبر من حد كامل النقاط (الأقل أفضل).');
-      if (k !== 'resp' && k !== 'flagresp' && (half > full || full > 100)) throw new Error('النسب: حد كامل النقاط أكبر من حد النصف، ولا يتجاوز 100.');
+      var w = Number((rows[k] || {}).weight);
+      if (isNaN(w) || w < 0) throw new Error('اكتب وزناً صحيحاً لكل مؤشر.');
       sum += w;
     });
     if (Math.round(sum) !== 100) throw new Error('مجموع الأوزان ' + sum + '، والمطلوب 100.');
     kpis.forEach(function (k) {
-      var r = rows[k], patch = { full: Number(r.full), half: Number(r.half), weight: Number(r.weight) };
+      var r = rows[k], patch = { full: 0, half: 0, weight: Number(r.weight) };
       if (!Db.updateWhere('Thresholds', function (t) { return t.type === type && t.kpi === k; }, patch)) {
         patch.type = type; patch.kpi = k; Db.insert('Thresholds', patch);
       }

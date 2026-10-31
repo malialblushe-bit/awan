@@ -184,7 +184,7 @@ t('الإعداد ينشئ كل الجداول ويحذف الورقة الاف�
 });
 
 t('البذور: الإعدادات والعتبات والقوائم', () => {
-  eq(run("Db.all('Thresholds').length"), 18);
+  eq(run("Db.all('Thresholds').length"), 22);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
   eq(run("Db.all('Lists')[0].item_id"), 'LST-00001');
   if (!run("Db.setting('photos_folder_id')")) throw new Error('مجلد الصور لم يُنشأ');
@@ -193,7 +193,7 @@ t('البذور: الإعدادات والعتبات والقوائم', () => {
 t('الإعداد آمن للتكرار ولا يكرر البذور', () => {
   run('Db.reset(); setupAwan()');
   run('Db.reset()');
-  eq(run("Db.all('Thresholds').length"), 18);
+  eq(run("Db.all('Thresholds').length"), 22);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
 });
 
@@ -502,22 +502,33 @@ t('الأداء: يُحسب مسبقاً في KpiSummary بعد الإغلاق (
 t('الأداء: المهندس يرى فنادقه، والمتعهد يرى أرقامه فقط', () => {
   const e = run(`apiKpiBoot('${engTok}')`);
   if (e.rows.length < 2) throw new Error('صفوف المهندس ناقصة');
-  eq(e.thresholds.ac.resp.full, 30);
+  eq(e.thresholds.ac.resp.weight, 30); eq(e.kpis.el.indexOf('rescue') !== -1, true);
+  if (!e.rows.some(r => r.d && r.d.respN && r.d.respOk <= r.d.respN)) throw new Error('الالتزام بزمن الاستجابة');
   const c = run(`apiKpiBoot('${acTok}')`);
   const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
   eq(c.rows.every(r => r.con === con), true);
   eq(c.cons.length, 1);
 });
 
-t('العتبات: المجموع 100، والاستجابة الأقل أفضل، ثم تُحفظ', () => {
-  const ok = { resp: { full: 25, half: 40, weight: 40 }, ready: { full: 90, half: 80, weight: 30 }, info: { full: 95, half: 90, weight: 15 }, sat: { full: 85, half: 75, weight: 15 } };
-  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, sat: { full: 85, half: 75, weight: 10 } })})`, '100');
-  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, resp: { full: 40, half: 25, weight: 40 } })})`, 'الأقل أفضل');
+t('العتبات: أوزان كل نوع مجموعها 100، والمؤشر من 100 × وزنه، والتصنيف من عتبات العقد', () => {
+  const ok = { resp: { weight: 40 }, ready: { weight: 30 }, info: { weight: 15 }, sat: { weight: 15 }, repair: { weight: 0 } };
+  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, sat: { weight: 10 } })})`, '100');
   run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify(ok)})`);
   const th = run(`apiAdmBoot('${adminTok}')`).thresholds.ac;
-  eq(th.resp.full, 25); eq(th.sat.half, 75); eq(th.ready.weight, 30);
-  eq(run(`Db.all('Thresholds').length`), 18);
-  eq(run(`apiAdmBoot('${adminTok}')`).thresholds.el.resp.full, 45);
+  eq(th.ready.weight, 30); eq(th.repair.weight, 0);
+  eq(run(`Db.all('Thresholds').length`), 22);
+  // الدرجة المركّبة: القيم من 100 × الأوزان ÷ مجموع أوزان ما له عينة كافية
+  const sc = run(`Kpi.score('ac', { resp: 80, ready: 100, info: 90, sat: 50 }, { resp: 10, ready: 10, info: 10, sat: 2 }, { resp: { weight: 40 }, ready: { weight: 30 }, info: { weight: 15 }, sat: { weight: 15 } })`);
+  eq(sc.score, Math.round(10 * (80 * 40 + 100 * 30 + 90 * 15) / 85) / 10); eq(sc.used.indexOf('sat'), -1);
+  eq(run(`Kpi.cls(91, {})`), 'ex'); eq(run(`Kpi.cls(85, {})`), 'good'); eq(run(`Kpi.cls(72, {})`), 'ok'); eq(run(`Kpi.cls(60, {})`), 'low');
+  eq(run(`Kpi.cls(85, { cls_ex: 85, cls_good: 75, cls_ok: 60 })`), 'ex');
+  run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ resp: { weight: 30 }, ready: { weight: 25 }, info: { weight: 20 }, sat: { weight: 15 }, repair: { weight: 10 } })})`);
+  // معايير القياس في العقد: أزمنة الخدمة والعتبات التنازلية، والاستجابة تُقاس بنسبة الالتزام بزمن العقد
+  const cid = run(`Db.all('Contracts').find(c => c.type === 'ac').contract_id`);
+  throws(`apiAdmSaveSla('${adminTok}', '${cid}', { cls_ex: 80, cls_good: 85, cls_ok: 70 })`, 'تنازلية');
+  run(`apiAdmSaveSla('${adminTok}', '${cid}', { sla_repair: 240, cls_ex: 92, cls_good: 82, cls_ok: 72 })`);
+  eq(run(`Db.get('Contracts', '${cid}').sla_repair`), 240);
+  
 });
 
 t('اعتماد البنود: إعادة صياغة مع الإنجليزية، ودمج، ورفض', () => {
