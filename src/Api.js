@@ -285,6 +285,7 @@ function conBoot_(s) {
     waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
     water: con.type === 'wt' ? Water.conList(con.con_id) : null,
     tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
+    claims: s.web && !s.lead ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar', lead: s.lead_name || '' },
@@ -393,7 +394,11 @@ function engBoot_(s) {
   };
 }
 
-function apiEngBoot(token) { var s = Auth.need(token, STAFF_ROLES); ensureSchemaVersion_(); return engBoot_(s); }
+function apiEngBoot(token) {
+  var s = Auth.need(token, STAFF_ROLES.concat(['fin'])); ensureSchemaVersion_();
+  if (s.role === 'fin') { var u = Db.get('Users', s.id) || {}; return { me: { name: u.name || '', role: 'fin', lang: u.lang || 'ar' }, fin: true, hotels: [] }; }
+  return engBoot_(s);
+}
 
 function apiEngAct(token, woId, action, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
@@ -564,11 +569,17 @@ function apiStatement(token, conId, hotelId, from, to) {
     to = from + '-' + (last < 10 ? '0' : '') + last; from = from + '-01';
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to)) || to < from) throw new Error('حدّد الفترة: من تاريخ إلى تاريخ.');
-  var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
   var s = Auth.need(token, STAFF_ROLES);
   var R = Orders.refs();
   var scope = scopeHotels_(s, R);
   if (hotelId && hotelId !== 'all') scope = scope.filter(function (h) { return h === hotelId; });
+  return statementCore_(scope, conId, from, to);
+}
+
+/** كشف الخدمات المنفذة لنطاق فنادق (يستخدمه الكشف والمطالبات) */
+function statementCore_(scope, conId, from, to) {
+  var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
+  var R = Orders.refs();
   var con = R.cons[conId];
   if (!con) throw new Error('المتعهد غير موجود.');
   var en = {};
@@ -660,7 +671,8 @@ function admBoot_() {
             id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
             resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
-            lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x)
+            lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x),
+            pay: { value: Number(x.value) || 0, mode: x.pay_mode || '', days: x.pay_days === '' || x.pay_days == null ? 30 : Number(x.pay_days), plan: Pay.planOf(x) }
           };
         })
       };
@@ -1328,6 +1340,25 @@ function apiWtStatement(token, conId, hotelId, from, to) {
 }
 
 // ───────── «تواصل»: تذاكر المتعهدين وتقييمهم لمؤسستنا ─────────
+// ───────── المطالبات والسداد ─────────
+var PAY_ROLES_ = ['fin', 'admin', 'management', 'engineer', 'gm', 'supmgr'];
+function payScope_(s) { return s.role === 'supmgr' ? Ops.supHotels(s) : scopeHotels_(s, Orders.refs()); }
+function apiAdmSavePay(token, contractId, d) { return adm_(token, function () { return Pay.setup(contractId, d); }); }
+function apiConClaim(token, d) {
+  var s = Auth.need(token, ['contractor']);
+  if (!s.web || s.lead) throw new Error('المطالبات من صفحة المتعهد على الويب.');
+  return Db.withLock(function () { d = d || {}; d.att = saveFiles_(d.att, 'CLM'); var id = Pay.submit(s.id, d); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+}
+function apiPayBoot(token) { var s = Auth.need(token, PAY_ROLES_); return Pay.board(s, payScope_(s)); }
+function apiClaimDecide(token, id, ok, reason) {
+  var s = Auth.need(token, ['admin', 'engineer', 'gm', 'supmgr']);
+  return Db.withLock(function () { Pay.decide(s, payScope_(s), id, ok, reason); Db.reset(); return Pay.board(s, payScope_(s)); });
+}
+function apiFinPay(token, id, d) {
+  var s = Auth.need(token, ['fin', 'admin']);
+  return Db.withLock(function () { Pay.pay(s, id, d); Db.reset(); return Pay.board(s, payScope_(s)); });
+}
+
 function apiConTicket(token, d) {
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'TK'); var id = Tickets.create(s.id, d, d.by); Db.reset(); return { id: id, boot: conBoot_(s) }; });

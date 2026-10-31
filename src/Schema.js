@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 24;
+var SCHEMA_VERSION = 25;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -56,7 +56,8 @@ var SCHEMA = [
     ['prev_contract_id', 'العقد السابق (عند التجديد)'], ['created_at', 'تاريخ الإنشاء'],
     ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
     ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح'],
-    ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])']] },
+    ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])'],
+    ['value', 'قيمة العقد (ريال)'], ['pay_mode', 'طريقة السداد: sched · monthly · stmt'], ['pay_days', 'مهلة السداد (يوم)'], ['pay_plan', 'جدول الدفعات (JSON)']] },
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
@@ -127,6 +128,12 @@ var SCHEMA = [
     ['reply', 'الرد'], ['action', 'الإجراء المتخذ'], ['accepted', 'الشكوى: مقبولة · غير مقبولة'], ['closed_by', 'أغلقها'], ['closed_role', 'دوره'], ['closed_at', 'وقت الإغلاق'],
     ['sat', 'رضا المتعهد عن الرد: راضٍ · غير راضٍ'], ['sat_note', 'ملاحظته'], ['sat_at', 'وقت التقييم'], ['reopened', 'أُعيدت مرة']] },
 
+  { name: 'Claims', cols: [
+    ['claim_id', 'المعرّف'], ['contract_id', 'العقد'], ['con_id', 'المتعهد'], ['type', 'النوع'], ['item', 'البند (iN أو yyyy-MM)'], ['label', 'وصف البند'],
+    ['due', 'الاستحقاق'], ['amount', 'مبلغ المطالبة'], ['expected', 'المتوقع (الجدول أو الكشف)'], ['invoice_no', 'رقم الفاتورة'], ['att', 'مرفق الفاتورة'],
+    ['note', 'ملاحظة'], ['by_name', 'رفعها'], ['created_at', 'وقت الرفع'], ['status', 'submitted · approved · rejected · paid'], ['reason', 'سبب الرفض'],
+    ['ok_by', 'اعتمدها'], ['ok_role', 'دوره'], ['ok_at', 'وقت الاعتماد'], ['paid_at', 'تاريخ السداد'], ['paid_ref', 'رقم الحوالة/الشيك'], ['paid_note', 'ملاحظة السداد'], ['paid_by', 'سجّله']] },
+
   { name: 'OrgEvals', cols: [
     ['oe_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر المقيَّم yyyy-MM'], ['scores', 'الدرجات (JSON: البند ← 1..5)'],
     ['note', 'ملاحظة'], ['by_name', 'قيّمها'], ['at', 'الوقت']] },
@@ -182,7 +189,7 @@ var STATUS = {
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
   Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
-  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE'
+  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE', Claims: 'CLM'
 };
 
 function tableDef(name) {

@@ -228,7 +228,7 @@ var Auth = (function () {
     var u = String(username || '').trim().toLowerCase();
     if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error('اسم الدخول بالإنجليزية بلا مسافات (3 أحرف على الأقل)، مثل: eng.ahmed');
     if (Db.find('Users', function (r) { return String(r.username).toLowerCase() === u; })) throw new Error('اسم الدخول مستخدم من قبل.');
-    if (['admin', 'engineer', 'management', 'gm', 'om', 'duty', 'supmgr', 'sup'].indexOf(role) === -1) throw new Error('دور غير معروف.');
+    if (['admin', 'engineer', 'management', 'gm', 'om', 'duty', 'supmgr', 'sup', 'fin'].indexOf(role) === -1) throw new Error('دور غير معروف.');
     if (isSup(role)) {
       // الإشراف بلا كلمة مرور: يختار رقمه السري عند أول دخول
       return { user: Db.insert('Users', { name: String(name || '').trim(), role: role, username: u, email: email || '', hotel_ids: hotelIds || '',

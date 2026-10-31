@@ -149,7 +149,7 @@ var SV={tab:'pest',h:null,zf:'all',sel:{},multi:false,f:{},
   if(!SV.b)return $('#app').innerHTML=hdr('الإشراف');
   var b=SV.b,role=SV.mgr()?'مدير الإشراف':'مشرف ميداني';
   var right='<div style="text-align:left"><p style="margin:0;font-size:14px;font-weight:700">'+esc(b.me.name)+'</p><p style="margin:0;font-size:12px;color:var(--goldL)">'+role+'</p></div><button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="SV.logout()">خروج</button>';
-  var tabs=[['pest','المكافحة'],['waste','النفايات']].concat(SV.mgr()?[['tk','تجربة الأعوان'],['notes','الملاحظات'],['reports','التقارير']]:[]);if(SV.tab==='plan'){SV.tab='pest';SV.pv='plan'}
+  var tabs=[['pest','المكافحة'],['waste','النفايات']].concat(SV.mgr()?[['tk','تجربة الأعوان'],['pay','المطالبات'],['notes','الملاحظات'],['reports','التقارير']]:[]);if(SV.tab==='plan'){SV.tab='pest';SV.pv='plan'}
   var nt=(b.notes||[]).filter(function(n){return !n.seen}).length;
   $('#app').innerHTML=hdr('الإشراف',right)+'<div class="wrap" style="max-width:980px">'+SV[SV.tab+'View']()+'</div><nav class="bnav" aria-label="التنقل">'+tabs.map(function(t){return '<button class="'+(SV.tab===t[0]?'on':'')+'" onclick="SV.tab=\''+t[0]+'\';SV.sel={};SV.multi=false;SV.f={};render();window.scrollTo(0,0)">'+t[1]+(t[0]==='notes'&&nt?' ('+nt+')':'')+'</button>'}).join('')+'</nav>'+(SV.modal?SV.modal():'')},
  logout:function(){call('apiLogout',S.tok);store(tokKey(),null);S.tok=null;SV.b=null;S.mode='';render()},

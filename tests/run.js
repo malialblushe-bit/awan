@@ -1074,6 +1074,36 @@ t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد
   const rep = JSON.parse(o.report).pop(); eq(rep.by, 'م. عدنان (قائد الفريق)');
 });
 
+t('المطالبات والسداد: طريقة السداد في العقد، المتعهد يرفع المطالبة ولا يرى السداد، مالك الخدمة يعتمد، والمالية تسدد', () => {
+  const wc = run(`Db.all('Contracts').find(c => c.type === 'wa').contract_id`);
+  const td = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  throws(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'sched', value: 1200, days: 30, plan: [{ due: '${td}', amount: 500 }] })`, 'مجموع');
+  run(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'sched', value: 1200, days: 30, plan: [{ due: '${td}', amount: 600 }, { due: '2099-01-01', amount: 600 }] })`);
+  const cb = run(`apiPinWebLogin('${waPin}')`), ct = cb.token;
+  eq(cb.boot.claims.open.length, 2); eq('expected' in cb.boot.claims.open[0], false);
+  throws(`apiConClaim('${ct}', { contract_id: '${wc}', item: 'i1', amount: 600, invoice: 'INV-1' })`, 'أرفق');
+  run(`apiConClaim('${ct}', { contract_id: '${wc}', item: 'i1', amount: 600, invoice: 'INV-1', att: ['data:application/pdf;base64,AAAA'] })`);
+  throws(`apiConClaim('${ct}', { contract_id: '${wc}', item: 'i1', amount: 600, invoice: 'INV-2', att: ['data:application/pdf;base64,AAAA'] })`, 'البند');
+  const cl = run(`conBoot_(Auth.session('${ct}')).claims`); eq(cl.list[0].status, 'submitted'); eq(cl.open.length, 1);
+  const b0 = run(`apiPayBoot('${mgrTok}')`); const r1 = b0.rows.find(r => r.key === 'i1'); eq(r1.st, 'submitted'); eq(r1.claim.amount, 600);
+  throws(`apiClaimDecide('${engTok}', '${r1.claim.id}', true)`, 'مالك');
+  const pw = run(`apiAdmAddUser('${adminTok}', { name: 'المالية', role: 'fin', username: 'fin.one', hotel_ids: [] })`).password;
+  run(`Auth.changePassword(apiStaffLogin('fin.one', '${pw}').token, 'Fin2026xxx')`);
+  const fin = run(`apiStaffLogin('fin.one', 'Fin2026xxx')`).token;
+  eq(run(`apiEngBoot('${fin}')`).fin, true);
+  throws(`apiStatement('${fin}', 'x', 'all', '${td}', '${td}')`, '');
+  throws(`apiFinPay('${fin}', '${r1.claim.id}', { date: '${td}', ref: 'TR1' })`, 'اعتماد');
+  run(`apiClaimDecide('${mgrTok}', '${r1.claim.id}', true)`);
+  throws(`apiFinPay('${mgrTok}', '${r1.claim.id}', { date: '${td}', ref: 'TR1' })`, '');
+  const b1 = run(`apiFinPay('${fin}', '${r1.claim.id}', { date: '${td}', ref: 'TR1' })`);
+  eq(b1.rows.find(r => r.key === 'i1').st, 'paid'); eq(b1.rows.find(r => r.key === 'i1').delay, 0);
+  const cl2 = run(`conBoot_(Auth.session('${ct}')).claims.list[0]`); eq(cl2.status, 'closed'); eq('paid' in cl2 || 'ref' in cl2, false);
+  // حسب الكشف: المتوقع من كشف المياه
+  const wtc = run(`Db.all('Contracts').find(c => c.type === 'wt').contract_id`);
+  run(`apiAdmSavePay('${adminTok}', '${wtc}', { mode: 'stmt', days: 15 })`);
+  if (!run(`Pay.items(Db.get('Contracts', '${wtc}'))`).length) throw new Error('stmt months');
+});
+
 t('الواجهة: كل كتل السكربت في ملفات html سليمة الصياغة (خطأ واحد يعطل الصفحة كلها)', () => {
   fs.readdirSync(src).filter(f => f.endsWith('.html')).forEach(f => {
     const html = fs.readFileSync(path.join(src, f), 'utf8').replace(/<\?!=[\s\S]*?\?>/g, '0');
