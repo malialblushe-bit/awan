@@ -879,7 +879,7 @@ t('البريد الرسمي عنواناً بديلاً، وزمن الاستل
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
   run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'diag', rec: ['بكرة باب'], working: 'نعم' })`);
   const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${id}')`);
-  eq(sentMail[n0].gmail, true); eq(sentMail[n0].to.from, 'maint@nawazi.sa');
+  eq(sentMail[n0].gmail, true); eq(sentMail[n0].to.from, 'eng@warf.sa'); // من مهندس صيانة الفندق لا العام
   run(`apiAdmMailFrom('${adminTok}', '')`);
   const k = run(`apiKpiBoot('${acTok}')`); eq(Object.keys(k.prices).length, 0);
   eq(k.rows.some(r => r.d && (r.d.spend !== undefined || r.d.acts !== undefined)), false);

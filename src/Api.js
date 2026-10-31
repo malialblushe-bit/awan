@@ -407,7 +407,7 @@ function apiEngAct(token, woId, action, d) {
       try {
         var o = Db.get('WorkOrders', woId), me = Db.get('Users', s.id) || {};
         var m = Mail.notice(action, o, me, action === 'paid' ? (d || {}).receipt : (d || {}).date);
-        if (m) { Mail.send(m, me.email); mailed = m.to; } else mailed = 'none';
+        if (m) { Mail.send(m, me.email, o.hotel_id, me); mailed = m.to; } else mailed = 'none';
       } catch (e) { mailed = 'fail'; }
     }
     Db.reset();
@@ -439,7 +439,7 @@ function apiEngRfq(token, woId, preview) {
   var m = Mail.rfq(o, me);
   if (preview) return { to: m.to, cc: m.cc, subject: m.subject, html: m.html };
   return Db.withLock(function () {
-    Mail.send(m, me.email);
+    Mail.send(m, me.email, o.hotel_id, me);
     Orders.engAct(s, woId, 'rfq', {});
     Db.reset();
     return { to: m.to, boot: engBoot_(s) };

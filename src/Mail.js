@@ -150,13 +150,22 @@ var Mail = (function () {
       '--' + bd + '\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' + wrap_(b64_(m.html || '')) +
       '--' + bd + '--';
   }
-  function fromAddr_() {
-    var f = String(Db.setting('mail_from') || '').trim();
+  /** المرسل: مهندس الصيانة للفندق (المرسل نفسه إن كان مهندس الفندق، وإلا مهندس الفندق ذو البريد)، ثم الافتراضي ثم حساب الصيانة.
+   *  يجب أن يكون بريده مؤكداً في Gmail حساب الصيانة («إرسال البريد بصفة»)، وإلا تصل من حساب الصيانة. */
+  function hotelEng_(hotelId, me) {
+    var covers = function (u) { var hs = String(u.hotel_ids || '').split(',').map(function (x) { return x.trim(); }).filter(String); return !hs.length || hs.indexOf(hotelId) !== -1; };
+    if (me && me.role === 'engineer' && me.email && covers(me)) return String(me.email).trim();
+    if (!hotelId) return '';
+    var u = Db.all('Users', function (x) { return x.role === 'engineer' && x.email && x.active !== false && String(x.active) !== 'FALSE' && covers(x); })[0];
+    return u ? String(u.email).trim() : '';
+  }
+  function fromAddr_(hotelId, me) {
+    var f = hotelEng_(hotelId, me) || String(Db.setting('mail_from') || '').trim();
     return f || Session.getEffectiveUser().getEmail();
   }
 
-  function send(m, replyTo) {
-    var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, fromAddr_(), replyTo || m.cc || '')).getBytes());
+  function send(m, replyTo, hotelId, me) {
+    var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, fromAddr_(hotelId, me), replyTo || m.cc || '')).getBytes());
     try { Gmail.Users.Messages.send({ raw: raw }, 'me'); }
     catch (e) {
       var msg = String(e && e.message || e);
