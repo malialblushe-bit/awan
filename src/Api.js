@@ -437,12 +437,12 @@ function apiEngRfq(token, woId, preview) {
   if (!o) throw new Error('العملية غير موجودة.');
   if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
   var m = Mail.rfq(o, me);
-  if (preview) return { to: m.to, cc: m.cc, subject: m.subject, html: m.html };
+  if (preview) return { from: Mail.fromOf(o.hotel_id, me), to: m.to, cc: m.cc, subject: m.subject, html: m.html };
   return Db.withLock(function () {
-    Mail.send(m, me.email, o.hotel_id, me);
+    var from = Mail.send(m, me.email, o.hotel_id, me);
     Orders.engAct(s, woId, 'rfq', {});
     Db.reset();
-    return { to: m.to, boot: engBoot_(s) };
+    return { to: m.to, from: from, boot: engBoot_(s) };
   });
 }
 
