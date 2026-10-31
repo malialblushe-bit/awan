@@ -12,8 +12,10 @@ var Water = (function () {
 
   function ms(d) { return Orders.ms(d); }
   function day_(t) { return t ? Utilities.formatDate(new Date(t), TZ, 'yyyy-MM-dd') : ''; }
+  /** تسعيرة المواسم للعقد: [{name, from, to, add: {الحجم: ريال}}] */
+  function seasonOf(c) { var v = c && c.season; if (typeof v === 'string') { try { v = JSON.parse(v || '[]'); } catch (e) { v = []; } } return Array.isArray(v) ? v : []; }
   function contract(hotelId) { return Orders.activeContract(hotelId, 'wt'); }
-  /** الأحجام من العقد: مفاتيح رقمية (م³) */
+  /** الأحجام من العقد: مفاتيح رقمية (طن) */
   function sizes_(c) {
     var p = pricesOf_(c);
     return Object.keys(p).filter(function (k) { return Number(k) > 0; }).map(Number).sort(function (a, b) { return a - b; });
@@ -53,7 +55,7 @@ var Water = (function () {
     var driver = String(d.driver || '').trim();
     if (driver.length < 2) throw new Error('اكتب اسم السائق.');
     var size = Number(d.size);
-    if (sizes_(c).indexOf(size) === -1) throw new Error('اختر حجم النقلة.');
+    if (sizes_(c).indexOf(size) === -1) throw new Error('اختر حجم الرحلة.');
     var receipt = String(d.receipt || '').trim();
     if (!receipt) throw new Error('اكتب رقم السند.');
     var mine = Db.all('WaterLoads', function (v) { return v.con_id === con.con_id; });
@@ -98,7 +100,7 @@ var Water = (function () {
     };
   }
 
-  /** المتعهد: نقلاته في آخر 35 يوماً بحالتها (بلا أسعار) */
+  /** المتعهد: رحلاته في آخر 35 يوماً بحالتها (بلا أسعار) */
   function conList(conId) {
     var R = Orders.refs(), since = Date.now() - 35 * 864e5;
     return Db.all('WaterLoads', function (v) { return v.con_id === conId && ms(v.at) >= since; }).map(function (v) {
@@ -106,16 +108,16 @@ var Water = (function () {
     }).sort(function (a, b) { return b.at - a.at; });
   }
 
-  /** اعتماد أو رفض نقلة واحدة (لا اعتماد جماعي) */
+  /** اعتماد أو رفض رحلة واحدة (لا اعتماد جماعي) */
   function match(s, ids, ok, reason, scope) {
-    if (!ids || ids.length !== 1) throw new Error('تُطابق النقلات واحدة واحدة.');
+    if (!ids || ids.length !== 1) throw new Error('تُطابق الرحلات واحدة واحدة.');
     if (MATCH_ROLES.indexOf(s.role) === -1) throw new Error('المطابقة لمدير الفندق أو المدير المناوب.');
     reason = String(reason || '').trim();
     if (!ok && !reason) throw new Error('اكتب سبب الرفض.');
     var me = Db.get('Users', s.id) || {}, n = 0;
     (ids || []).forEach(function (id) {
       var v = Db.get('WaterLoads', id);
-      if (!v || scope.indexOf(v.hotel_id) === -1) throw new Error('النقلة ليست ضمن فنادقك.');
+      if (!v || scope.indexOf(v.hotel_id) === -1) throw new Error('الرحلة ليست ضمن فنادقك.');
       if (v.status !== 'pending') return;
       Db.update('WaterLoads', id, { status: ok ? 'approved' : 'rejected', match_by: me.name || '', match_role: s.role, match_at: new Date(), reason: ok ? '' : reason });
       n++;
@@ -123,22 +125,32 @@ var Water = (function () {
     return n;
   }
 
-  /** كشف النقلات المعتمدة بتاريخ التفريغ × سعر العقد لذلك الفندق */
+  /** كشف الرحلات المعتمدة بتاريخ التفريغ × سعر العقد لذلك الفندق */
   function statement(scope, conId, hotelId, from, to) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to)) || to < from) throw new Error('حدّد الفترة: من تاريخ إلى تاريخ.');
     var R = Orders.refs(), con = R.cons[conId];
     if (!con || con.type !== 'wt') throw new Error('المتعهد غير موجود.');
     if (hotelId && hotelId !== 'all') scope = scope.filter(function (h) { return h === hotelId; });
-    var price = function (v) {
+    var bestOf = function (v) {
       var best = null, t = ms(v.at);
       R.contracts.forEach(function (c) {
         if (c.con_id !== conId || c.type !== 'wt' || Orders.csv(c.hotel_ids).indexOf(v.hotel_id) === -1) return;
         var fits = t >= (ms(c.start) || 0) && t <= (ms(c.end) || 9e15) + 864e5;
         if (!best || (fits && !best.fits) || (fits === best.fits && ms(c.created_at) > ms(best.c.created_at))) best = { c: c, fits: fits };
       });
-      var p = best ? pricesOf_(best.c)[String(Number(v.size))] : null;
+      return best && best.c;
+    };
+    var price = function (v) {
+      var c = bestOf(v), p = c ? pricesOf_(c)[String(Number(v.size))] : null;
       return p == null || p === '' ? null : Number(p);
     };
+    // زيادة الموسم: تُحسب في الإجمالي فقط، والتفاصيل بسعر العقد الأساسي
+    var seasonAdd = function (v) {
+      var c = bestOf(v), d = day_(v.at), sz = String(Number(v.size)), hit = null;
+      seasonOf(c).forEach(function (x) { if (!hit && d >= x.from && d <= x.to && Number(x.add[sz]) > 0) hit = { name: x.name, from: x.from, to: x.to, add: Number(x.add[sz]) }; });
+      return hit;
+    };
+    var seas = {};
     var inR = function (v) { var d = day_(v.at); return v.con_id === conId && scope.indexOf(v.hotel_id) !== -1 && d >= from && d <= to; };
     var all = Db.all('WaterLoads', inR).sort(function (a, b) { return ms(a.at) - ms(b.at); });
     var lines = {}, rows = [];
@@ -147,20 +159,25 @@ var Water = (function () {
       var L = lines[k] || (lines[k] = { size: sz, qty: 0, price: pr });
       L.qty++;
       var x = view_(v, R); x.price = pr; rows.push(x);
+      var sa = seasonAdd(v);
+      if (sa) { x.season = sa.name; var sk = sa.name + '|' + sz + '|' + sa.add, S = seas[sk] || (seas[sk] = { name: sa.name, from: sa.from, to: sa.to, size: sz, add: sa.add, qty: 0 }); S.qty++; }
     });
     var list = Object.keys(lines).map(function (k) { var L = lines[k]; L.vol = L.size * L.qty; L.total = L.price == null ? null : Math.round(L.price * L.qty * 100) / 100; return L; })
       .sort(function (a, b) { return a.size - b.size; });
+    var seasonL = Object.keys(seas).map(function (k) { var S = seas[k]; S.total = Math.round(S.add * S.qty * 100) / 100; return S; }).sort(function (a, b) { return a.from < b.from ? -1 : a.from > b.from ? 1 : a.size - b.size; });
+    var base = Math.round(list.reduce(function (a, L) { return a + (L.total || 0); }, 0) * 100) / 100;
+    var seasonT = Math.round(seasonL.reduce(function (a, S) { return a + S.total; }, 0) * 100) / 100;
     return {
-      con: { id: conId, name: con.name }, from: from, to: to,
+      con: { id: conId, name: con.name }, from: from, to: to, base: base, season: seasonL, seasonTotal: seasonT,
       hotels: scope.map(function (h) { return (R.hotels[h] || {}).name || h; }),
       lines: list, rows: rows,
       count: rows.length, vol: list.reduce(function (a, L) { return a + L.vol; }, 0),
-      total: Math.round(list.reduce(function (a, L) { return a + (L.total || 0); }, 0) * 100) / 100,
+      total: Math.round((base + seasonT) * 100) / 100,
       missing: list.filter(function (L) { return L.price == null; }).length,
       pending: all.filter(function (v) { return v.status === 'pending'; }).length,
       rejected: all.filter(function (v) { return v.status === 'rejected'; }).length
     };
   }
 
-  return { login: login, boot: boot, submit: submit, staffBoot: staffBoot, conList: conList, match: match, statement: statement, MATCH_ROLES: MATCH_ROLES };
+  return { seasonOf: seasonOf, login: login, boot: boot, submit: submit, staffBoot: staffBoot, conList: conList, match: match, statement: statement, MATCH_ROLES: MATCH_ROLES };
 })();

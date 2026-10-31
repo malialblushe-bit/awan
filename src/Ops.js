@@ -429,6 +429,25 @@ var Ops = (function () {
     return { V: V, X: X, score: score_(V, th), th: th, days: days };
   }
 
+  /** كشف المكافحة أو النفايات لمتعهد في فترة: الملخص من metrics والتفاصيل من السجل */
+  function statement(scope, conId, hotelId, from, to) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to)) || to < from) throw new Error('حدّد الفترة: من تاريخ إلى تاريخ.');
+    var con = Db.get('Contractors', conId);
+    if (!con || (con.type !== 'wa' && con.type !== 'pc')) throw new Error('المتعهد غير موجود.');
+    var mine = {}; Db.all('Contracts', function (c) { return c.con_id === conId; }).forEach(function (c) { csv(c.hotel_ids).forEach(function (h) { mine[h] = 1; }); });
+    var hs = scope.filter(function (h) { return mine[h] && (!hotelId || hotelId === 'all' || h === hotelId); });
+    if (!hs.length) throw new Error('لا فنادق لهذا المتعهد ضمن نطاقك.');
+    var a = new Date(from + 'T00:00:00+03:00').getTime(), b = new Date(to + 'T23:59:59+03:00').getTime();
+    var hn = {}; Db.all('Hotels').forEach(function (h) { hn[h.hotel_id] = h.name; });
+    var m = metrics(con, hs, from, to), rows;
+    if (con.type === 'wa') {
+      rows = waVisits(hs, a).filter(function (v) { return v.at <= b; }).map(function (v) { v.hotel = hn[v.hotel_id] || ''; delete v.photos; delete v.dist; return v; }).reverse();
+    } else {
+      rows = logsOf(hs, a).filter(function (l) { return l.at <= b; }).map(function (l) { l.hotel = hn[l.hotel_id] || ''; return l; }).reverse();
+    }
+    return { con: { id: conId, name: con.name, type: con.type }, from: from, to: to, hotels: hs.map(function (h) { return hn[h] || h; }), V: m.V, X: m.X, score: m.score, rows: rows };
+  }
+
   /** من يقيّم من: المهندس للتكييف والمصاعد والسلامة، ومدير الإشراف للنفايات والمكافحة، ومشرف النظام للكل */
   function canEval_(s, type) {
     if (s.role === 'admin') return true;
@@ -487,7 +506,7 @@ var Ops = (function () {
   }
 
   return {
-    geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
+    statement: statement, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
     waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
     pestBoot: pestBoot, pestState: pestState, flag: flag, reqFlag: reqFlag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS

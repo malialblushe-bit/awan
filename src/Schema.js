@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 23;
+var SCHEMA_VERSION = 24;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -55,7 +55,8 @@ var SCHEMA = [
     ['resp_urgent', 'الاستجابة: طارئ (دقيقة)'], ['pm_per_month', 'زيارات دورية في الشهر'],
     ['prev_contract_id', 'العقد السابق (عند التجديد)'], ['created_at', 'تاريخ الإنشاء'],
     ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
-    ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح']] },
+    ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح'],
+    ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])']] },
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
@@ -114,8 +115,8 @@ var SCHEMA = [
 
   { name: 'WaterLoads', cols: [
     ['load_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'متعهد المياه'], ['at', 'وقت التفريغ (من الخادم)'], ['driver', 'السائق'],
-    ['size', 'الحجم (م³)'], ['receipt_no', 'رقم السند'], ['photos', 'صورة السند'], ['note', 'ملاحظة'],
-    ['status', 'pending · approved · rejected'], ['dup', 'مكرر محتمل (نقلة خلال 20 دقيقة)'], ['match_by', 'طابقها'], ['match_role', 'دوره'],
+    ['size', 'الحجم (طن)'], ['receipt_no', 'رقم السند'], ['photos', 'صورة السند'], ['note', 'ملاحظة'],
+    ['status', 'pending · approved · rejected'], ['dup', 'مكرر محتمل (رحلة خلال 20 دقيقة)'], ['match_by', 'طابقها'], ['match_role', 'دوره'],
     ['match_at', 'وقت المطابقة'], ['reason', 'سبب الرفض'], ['lat', 'خط العرض'], ['lng', 'خط الطول'], ['acc', 'دقة الموقع (م)'], ['dist', 'البعد عن الفندق (م)']] },
 
   { name: 'Tickets', cols: [

@@ -660,7 +660,7 @@ function admBoot_() {
             id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
             resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
-            lead: x.lead_name || '', leadPin: !!x.lead_pin_hash
+            lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x)
           };
         })
       };
@@ -910,9 +910,31 @@ function apiAdmSaveContractPrices(token, contractId, prices) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c) throw new Error('العقد غير موجود.');
-    if (c.type === 'wt') { prices = wtPrices_(prices); if (!Object.keys(prices).length) throw new Error('اكتب حجم نقلة واحد على الأقل بسعره.'); }
+    if (c.type === 'wt') { prices = wtPrices_(prices); if (!Object.keys(prices).length) throw new Error('اكتب حجم رحلة واحد على الأقل بسعره.'); }
     Db.update('Contracts', contractId, { prices: cleanPrices_(prices) });
     return {};
+  });
+}
+
+/** المياه: تسعيرة المواسم للعقد — فترات بزيادة لكل حجم تُضاف في إجمالي الكشف */
+function apiAdmSaveSeason(token, contractId, list) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c || c.type !== 'wt') throw new Error('تسعيرة المواسم لعقود شاحنات المياه.');
+    var sizes = Object.keys(pricesOf_(c));
+    var out = (list || []).filter(function (x) { return x && (x.name || x.from || x.to); }).map(function (x, i) {
+      var name = String(x.name || '').trim(), from = String(x.from || ''), to = String(x.to || '');
+      if (!name) throw new Error('الموسم ' + (i + 1) + ': اكتب اسمه.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw new Error('«' + name + '»: حدّد الفترة من تاريخ إلى تاريخ.');
+      var add = {};
+      sizes.forEach(function (k) { var v = x.add && x.add[k]; if (v !== '' && v != null && Number(v) > 0) add[k] = Math.round(Number(v) * 100) / 100; });
+      if (!Object.keys(add).length) throw new Error('«' + name + '»: اكتب زيادة الموسم لحجم واحد على الأقل.');
+      return { name: name, from: from, to: to, add: add };
+    });
+    out.sort(function (a, b) { return a.from < b.from ? -1 : 1; });
+    for (var i = 1; i < out.length; i++) if (out[i].from <= out[i - 1].to) throw new Error('فترتا «' + out[i - 1].name + '» و«' + out[i].name + '» متداخلتان.');
+    Db.update('Contracts', contractId, { season: JSON.stringify(out) });
+    return { season: out };
   });
 }
 
@@ -935,7 +957,7 @@ function apiAdmSaveConInfo(token, conId, d) {
 function apiAdmSaveContract(token, d) {
   return adm_(token, function () {
     if (['ac', 'el', 'sf', 'wa', 'pc', 'wt'].indexOf(d.type) === -1) throw new Error('اختر نوع المتعهد.');
-    if (d.type === 'wt' && !Object.keys(wtPrices_(d.prices)).length) throw new Error('اكتب حجم نقلة واحد على الأقل بسعره.');
+    if (d.type === 'wt' && !Object.keys(wtPrices_(d.prices)).length) throw new Error('اكتب حجم رحلة واحد على الأقل بسعره.');
     if (d.type === 'wt') d.prices = wtPrices_(d.prices);
     if (d.type === 'wa' && !(Number(d.wa_per_week) > 0)) throw new Error('اكتب عدد مرات الرفع في الأسبوع.');
     if (!d.hotel_ids || !d.hotel_ids.length) throw new Error('اختر فندقاً واحداً على الأقل.');
@@ -1165,6 +1187,11 @@ function apiSupBoot(token) { var s = Auth.need(token, SUP_ROLES_); ensureSchemaV
 /** «الخدمات المساندة» للفريق: النفايات والمكافحة اطلاعاً (ورفض الزيارات لمشرف النظام) — تُقرأ عند فتح التبويب فقط */
 var SVC_ROLES_ = ['admin', 'gm', 'om', 'duty', 'management'];
 function apiSvcBoot(token) { var s = Auth.need(token, SVC_ROLES_); return supBoot_(s); }
+/** كشف المكافحة أو النفايات (للاطلاع والطباعة) */
+function apiOpsStatement(token, conId, hotelId, from, to) {
+  var s = Auth.need(token, SVC_ROLES_.concat(['supmgr']));
+  return Ops.statement(Ops.supHotels(s), conId, hotelId, from, to);
+}
 function apiWaReject(token, id, reason) {
   var s = Auth.need(token, ['supmgr', 'admin']);
   return Db.withLock(function () { Ops.waReject(s, id, reason); Db.reset(); return { boot: supBoot_(s) }; });

@@ -746,6 +746,9 @@ t('النفايات: باركود منطقة النفايات بتحقق الم�
   const r = run(`apiWaSubmit('${s.token}', 'WARIF2', { truck: 'لا', left_carts: 5, rating: 2, note: 'لم تحضر' }, ${JSON.stringify(near)})`);
   const v = run(`Db.get('WasteVisits', '${r.id}')`); eq(v.removed, 'لا'); eq(v.by_name, 'علي المشرف');
   const sb = run(`apiSupBoot('${mgrTok}')`); eq(sb.waste.length, 2); eq(sb.hotels[0].wa.perWeek, 3);
+  { const td = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10), wcon = run(`Db.all('Contractors').find(c => c.type === 'wa').con_id`);
+    const ws = run(`apiOpsStatement('${mgrTok}', '${wcon}', 'all', '${td}', '${td}')`); eq(ws.rows.length, 2); eq(ws.con.type, 'wa'); eq(typeof ws.X.expected, 'number');
+    throws(`apiOpsStatement('${engTok}', '${wcon}', 'all', '${td}', '${td}')`, ''); }
   // ملاحظة مدير الفندق للإشراف تصل لمدير الإشراف
   eq(sb.notes.some(n => n.service === 'wa'), true);
   run(`apiNoteSeen('${mgrTok}', '${sb.notes.find(n => n.service === 'wa').id}')`);
@@ -931,6 +934,12 @@ t('شاحنات المياه: باركود بالرقم السري والموق�
   const st = run(`apiWtStatement('${gm}', '${conId}', 'all', '${today}', '${today}')`);
   eq(st.count, 2); eq(st.vol, 38); eq(st.total, 700); eq(st.rejected, 1); eq(st.pending, 0); eq(st.lines[0].size, 19);
   throws(`apiWtStatement('${cb.me ? 'x' : ''}', '${conId}', 'all', '${today}', '${today}')`, '');
+  // تسعيرة المواسم: التفاصيل بالسعر الأساسي، والزيادة سطر مستقل في الإجمالي
+  const wcid = run(`Db.all('Contracts').find(c => c.type === 'wt').contract_id`);
+  throws(`apiAdmSaveSeason('${adminTok}', '${wcid}', [{ name: 'رمضان', from: '${today}', to: '${today}', add: {} }])`, 'زيادة');
+  run(`apiAdmSaveSeason('${adminTok}', '${wcid}', [{ name: 'رمضان', from: '${today}', to: '${today}', add: { '19': 30 } }])`);
+  const ss = run(`apiWtStatement('${gm}', '${conId}', 'all', '${today}', '${today}')`);
+  eq(ss.base, 700); eq(ss.seasonTotal, 60); eq(ss.total, 760); eq(ss.season[0].qty, 2); eq(ss.rows[0].price, 350); eq(ss.rows[0].season, 'رمضان');
 });
 
 t('البحث بالفهرس: الوصول لعملية بمعرّفها يقرأ صفاً واحداً، والأرشفة الليلية تبقي الجدول النشط صغيراً دون فقد شيء', () => {

@@ -72,7 +72,7 @@ var TK={f:{},flt:'open',
 (function(){var wr=W.render;W.render=function(){wr();if(!S.tok||!W.b||W.must||!W.b.tickets)return;
   if(W.tab==='tk'){var wrap=document.querySelector('#app .wrap');if(wrap){wrap.innerHTML=TK.staff(W.b.tickets)+(W.b.org?'<div style="margin-top:18px">'+TK.orgView(W.b.org)+'</div>':'');tr(wrap)}}
   var nav=document.querySelector('#app .topnav');if(nav&&!nav.querySelector('[data-tk]')){var n=W.b.tickets.filter(TK.needsMe).length;
-   var bt=document.createElement('button');bt.setAttribute('data-tk','1');bt.textContent=T('تواصل')+(n?' ('+n+')':'');if(W.tab==='tk'){[].forEach.call(nav.querySelectorAll('button'),function(x){x.className=''});bt.className='on'}
+   var bt=document.createElement('button');bt.setAttribute('data-tk','1');bt.textContent=T('تجربة الأعوان')+(n?' ('+n+')':'');if(W.tab==='tk'){[].forEach.call(nav.querySelectorAll('button'),function(x){x.className=''});bt.className='on'}
    bt.onclick=function(){W.tab='tk';W.modal=null;render()};var rep=nav.querySelector('[data-rep]');nav.insertBefore(bt,rep||null)}}})();
 (function(){var d=W.dash;W.dash=function(qs,canAct){var h=d(qs,canAct),n=(W.b.tickets||[]).filter(TK.needsMe).length;if(!n)return h;
   return h.replace(/(<div class="dg dg2[^"]*"><div class="dh"><span>تحتاج متابعة<\/span><b>)(\d+)(<\/b><\/div>)/,function(m,a,c,e){return a+(Number(c)+n)+e+'<button class="dq red" onclick="W.tab=\'tk\';render()"><span class="dl">تذاكر المتعهدين</span><b>'+n+'</b></button>'})}})();
