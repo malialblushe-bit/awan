@@ -119,12 +119,12 @@ const ctx = {
     ProtectionType: { SHEET: 'SHEET' }
   },
   DriveApp: {
-    getFileById: (id) => ({ setTrashed: () => {}, getParents: () => { let d = false; return { hasNext: () => !d, next: () => { d = true; return projectFolder; } }; }, moveTo: () => {} }),
+    getFileById: (id) => ({ makeCopy: (n) => ({ getName: () => n, getUrl: () => 'https://drive/x' }), setTrashed: () => {}, getParents: () => { let d = false; return { hasNext: () => !d, next: () => { d = true; return projectFolder; } }; }, moveTo: () => {} }),
     getFolderById: (id) => { if (!folders[id]) throw new Error('no folder ' + id); return folders[id]; },
     getRootFolder: () => rootFolder,
     Access: { ANYONE_WITH_LINK: 'A' }, Permission: { VIEW: 'V' }
   },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; }, deleteProperty: k => { delete props[k]; } }) },
   CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
   Utilities: {
     DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
@@ -1110,6 +1110,20 @@ t('الواجهة: كل كتل السكربت في ملفات html سليمة ا
     const re = /<script[^>]*>([\s\S]*?)<\/script>/g; let m, i = 0;
     while ((m = re.exec(html))) { i++; try { new vm.Script(m[1]); } catch (e) { throw new Error(f + ' كتلة ' + i + ': ' + e.message); } }
   });
+});
+
+t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
+  throws(`apiAdmLaunchInventory('${engTok}')`, '');
+  const inv = run(`apiAdmLaunchInventory('${adminTok}')`);
+  const wo = inv.tables.find(x => x.table === 'WorkOrders'); eq(wo.kind, 'clear'); if (!wo.rows) throw new Error('wo rows');
+  eq(inv.tables.find(x => x.table === 'Hotels').kind, 'keep');
+  const hotels0 = inv.tables.find(x => x.table === 'Hotels').rows, ctr0 = inv.tables.find(x => x.table === 'Contracts').rows;
+  throws(`apiAdmLaunchReset('${adminTok}', 'نعم')`, 'إطلاق');
+  const r = run(`apiAdmLaunchReset('${adminTok}', 'إطلاق')`);
+  if (!r.backup.includes('نسخة قبل الإطلاق')) throw new Error('backup');
+  eq(r.inv.clearCount, 0); eq(r.inv.tables.find(x => x.table === 'Hotels').rows, hotels0); eq(r.inv.tables.find(x => x.table === 'Contracts').rows, ctr0);
+  const id = run(`apiReqSubmit('WARIF2', { type: 'ac', loc: Db.all('Rooms').find(r => r.hotel_id === '${HID}').room_id, symptom: 'لا يبرد', name: 'نورة' })`).id;
+  if (!/-00001$/.test(id)) throw new Error('seq not reset: ' + id);
 });
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

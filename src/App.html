@@ -883,7 +883,7 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
 
 // ═════════ مشرف النظام ═════════
 var A={tab:'hotels',hid:null,f:{},
- view:function(){var a=W.a;if(!a)return '';var tabs=[['hotels','الفنادق'],['contracts','المتعهدون والعقود'],['users','المستخدمون'],['lists','البنود'+(a.pending?' ('+a.pending+')':'')],['th','العتبات'],['qr','الباركودان']];
+ view:function(){var a=W.a;if(!a)return '';var tabs=[['hotels','الفنادق'],['contracts','المتعهدون والعقود'],['users','المستخدمون'],['lists','البنود'+(a.pending?' ('+a.pending+')':'')],['th','العتبات'],['qr','الباركودان'],['launch','تهيئة الإطلاق']];
   var h='<div class="tabs" style="margin-bottom:14px">'+tabs.map(function(t){return '<button class="'+(A.tab===t[0]?'on':'')+'" onclick="A.tab=\''+t[0]+'\';A.f={};render()">'+t[1]+'</button>'}).join('')+'</div>';
   if(a.pending&&A.tab!=='lists')h+='<button class="alert a-tan" style="margin-bottom:12px;border:0;width:100%;text-align:start;font:inherit" onclick="A.tab=\'lists\';A.f={};render()"><b>'+a.pending+'</b> بنود جديدة أضافها المتعهدون بانتظار اعتمادك ←</button>';
   return h+A[A.tab]()},
