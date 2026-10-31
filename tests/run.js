@@ -421,7 +421,7 @@ t('المصاعد: الإنقاذ ثم "يعمل الآن" يغلق عدّاد �
   throws(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'x@y')`, 'غير صحيح');
   run(`apiAdmSaveUserEmail('${adminTok}', '${eu}', 'eng@warf.sa')`);
   const pv = run(`apiEngRfq('${engTok}', '${EL1}', true)`); eq(pv.to, 'sales@lift.sa,ops@lift.sa'); if (!pv.html.includes('نوازي للفندقة') || pv.html.includes('قفل باب الدور') || !pv.html.includes('Nawazi')) throw new Error('محتوى البريد');
-  const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${EL1}')`); eq(sentMail.length, n0 + 1); eq(sentMail[n0].to.replyTo, 'eng@warf.sa');
+  const n0 = sentMail.length; run(`apiEngRfq('${engTok}', '${EL1}')`); eq(sentMail.length, n0 + 1); eq(sentMail[n0].to.replyTo, 'eng@warf.sa, nawazimai@gmail.com'); // الأبوية: الرد للمهندس وGmail معاً
   eq(Number(run(`Db.get('WorkOrders', '${EL1}').rfq_count`)), 1);
   throws(`apiEngAct('${engTok}', '${EL1}', 'quote', { amount: '' })`, 'مبلغ');
   run(`apiEngAct('${engTok}', '${EL1}', 'quote', { amount: '1,850', no: 'Q-77' })`);
