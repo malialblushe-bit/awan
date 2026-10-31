@@ -117,7 +117,7 @@ var Tickets = (function () {
   /** الفنادق التي لم يقيّمها المتعهد للشهر السابق (وكان له عقد فيها) */
   function pendingOrg(conId) {
     var m = prevMonth_(), R = Orders.refs(), done = {};
-    Db.all('OrgEvals', function (e) { return e.con_id === conId && String(e.month) === m; }).forEach(function (e) { done[e.hotel_id] = true; });
+    Db.all('OrgEvals', function (e) { return e.con_id === conId && mon_(e.month) === m; }).forEach(function (e) { done[e.hotel_id] = true; });
     var mStart = new Date(m + '-01T00:00:00+03:00').getTime();
     var hs = [];
     R.contracts.forEach(function (c) {
@@ -134,17 +134,32 @@ var Tickets = (function () {
     CRIT.forEach(function (c) { var v = Number((scores || {})[c[0]]); if (!(v >= 1 && v <= 5)) throw new Error('قيّم كل البنود من 1 إلى 5.'); sc[c[0]] = Math.round(v); });
     Db.insert('OrgEvals', { con_id: conId, hotel_id: hotelId, month: p.month, scores: JSON.stringify(sc), note: String(note || '').trim(), by_name: byName || '', at: new Date() });
   }
-  /** النتائج للإدارة: متوسط كل بند لكل فندق وشهر، مع من لم يقيّم */
+  /** الشهر نصاً yyyy-MM حتى لو حوّله الجدول إلى تاريخ */
+  function mon_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM') : String(v || '').slice(0, 7); }
+  /** النتائج خاماً للعرض المحوري (pivot) في الواجهة: آخر 24 شهراً، مع المطلوب لنسبة الاستجابة */
   function orgResults(hotelIds) {
-    var R = Orders.refs(), rows = {};
+    var R = Orders.refs(), from = Utilities.formatDate(new Date(Date.now() - 730 * 864e5), TZ, 'yyyy-MM'), cons = {}, hotels = {}, recs = [], months = {};
+    var use = function (c, h) { cons[c] = cons[c] || { n: (R.cons[c] || {}).name || '', t: (R.cons[c] || {}).type || '' }; hotels[h] = (R.hotels[h] || {}).name || ''; };
     Db.all('OrgEvals', function (e) { return hotelIds.indexOf(e.hotel_id) !== -1; }).forEach(function (e) {
-      var k = e.hotel_id + '|' + e.month, sc = {}; try { sc = JSON.parse(e.scores); } catch (x) { sc = {}; }
-      var r = rows[k] || (rows[k] = { hotel: (R.hotels[e.hotel_id] || {}).name || '', hotel_id: e.hotel_id, month: String(e.month), n: 0, sum: {}, notes: [] });
-      r.n++; CRIT.forEach(function (c) { r.sum[c[0]] = (r.sum[c[0]] || 0) + (Number(sc[c[0]]) || 0); });
-      if (e.note) r.notes.push({ con: (R.cons[e.con_id] || {}).name || '', note: e.note });
+      var m = mon_(e.month); if (m < from) return;
+      var sc = {}; try { sc = JSON.parse(e.scores); } catch (x) { sc = {}; }
+      use(e.con_id, e.hotel_id); months[m] = 1;
+      recs.push({ m: m, h: e.hotel_id, c: e.con_id, s: CRIT.map(function (k) { return Number(sc[k[0]]) || 0; }), note: e.note || '' });
     });
-    return { crit: CRIT, rows: Object.keys(rows).map(function (k) { var r = rows[k], avg = {}; CRIT.forEach(function (c) { avg[c[0]] = Math.round(r.sum[c[0]] / r.n * 10) / 10; }); return { hotel: r.hotel, hotel_id: r.hotel_id, month: r.month, n: r.n, avg: avg, notes: r.notes }; })
-      .sort(function (a, b) { return a.month < b.month ? 1 : a.month > b.month ? -1 : 0; }) };
+    // المطلوب: كل (شهر، فندق، متعهد) كان له عقد ساري فيه، للأشهر من أول تقييم حتى الشهر السابق
+    var exp = [], last = prevMonth_(), first = Object.keys(months).sort()[0];
+    if (first) {
+      for (var d = new Date(first + '-15T12:00:00+03:00'); ; d = new Date(d.getTime() + 31 * 864e5)) {
+        var m = Utilities.formatDate(d, TZ, 'yyyy-MM'); d = new Date(m + '-15T12:00:00+03:00');
+        if (m > last) break;
+        var a = new Date(m + '-01T00:00:00+03:00').getTime(), seen = {};
+        R.contracts.forEach(function (c) {
+          if ((ms(c.start) || 0) > a + 31 * 864e5 || (ms(c.end) || 9e15) < a) return;
+          Orders.csv(c.hotel_ids).forEach(function (h) { var k = h + '|' + c.con_id; if (hotelIds.indexOf(h) === -1 || seen[k]) return; seen[k] = 1; use(c.con_id, h); exp.push([m, h, c.con_id]); });
+        });
+      }
+    }
+    return { crit: CRIT, recs: recs, exp: exp, cons: cons, hotels: hotels, last: last };
   }
 
   return { TYPES: TYPES, TOPICS: TOPICS, CRIT: CRIT, create: create, visibleTo: visibleTo, forCon: forCon, act: act, rate: rate, addWork: addWork,

@@ -84,5 +84,83 @@ SV.tkView=function(){return TK.staff(SV.b.tickets)};
   if(o.leadAt)x+='<div class="alert a-sand" style="margin:0"><b>أنهى الفني وأرسل لقائد الفريق</b> · '+dmyY(o.leadAt)+' '+hm(o.leadAt)+(o.status==='lead'?' · <span>بانتظار تقرير قائد الفريق</span>':'')+'</div>';
   if((o.att||[]).length)x+='<div class="card stack" style="gap:6px;padding:12px 14px"><b>التقرير الفني للمتعهد</b><div style="display:flex;gap:8px;flex-wrap:wrap">'+o.att.map(function(id,i){return '<a class="btn btn-o sm" target="_blank" rel="noopener" href="https://drive.google.com/file/d/'+esc(id)+'/view">'+F('ملف {0}',i+1)+'</a>'}).join('')+'</div></div>';
   return x?h.replace('<div class="stack">','<div class="stack">'+x):h}})();
+// ═════════ تنظيم «تواصل»: لوحة وفرز وترتيب للتذاكر، وتقييم مؤسستنا بعرض محوري (pivot) ═════════
+(function(){var D={"تنتظرك":"Awaiting you","متأخرة":"Overdue","أُغلقت هذا الشهر":"Closed this month","الكل":"All","كل الفئات":"All categories","كل الفنادق":"All hotels","الأقرب استحقاقاً":"Nearest due","الأحدث":"Newest","الأقدم":"Oldest","بحث: متعهد، رقم، نص":"Search: contractor, no., text","فتح للرد":"Open to reply","إخفاء":"Hide","يُغلق قبل {0}":"Close by {0}","لا تذاكر بهذا الفرز.":"No tickets match this filter.","تكييف":"AC","مصاعد":"Elevators","سلامة":"Safety","نفايات":"Waste","مكافحة الآفات":"Pest control","المياه":"Water","عرض حسب":"View by","الفئة":"Category","الفندق":"Hotel","الفترة":"Period","آخر شهر":"Last month","آخر 3 أشهر":"Last 3 months","السنة":"Year","المؤشر المركّب":"Composite score","البند":"Item","عدد التقييمات":"Ratings","أقوى بند":"Strongest item","أضعف بند":"Weakest item","نسبة الاستجابة":"Response rate","{0} من {1} متعهداً قيّموا":"{0} of {1} contractors rated","مقارنة بالفترة السابقة":"vs previous period","لا فترة سابقة للمقارنة":"No previous period to compare","عينة صغيرة (أقل من 3)":"Small sample (under 3)","اضغط الفئة لعرض متعهديها، والعدد لعرض الملاحظات.":"Tap a category to see its contractors, and the count to see notes.","متعهدو {0}":"{0} contractors","الملاحظات":"Notes","لا ملاحظات مكتوبة.":"No written notes.","4 فأعلى":"4 and above","أقل من 4":"Below 4","لا تقييمات في هذه الفترة.":"No ratings in this period."};Object.keys(D).forEach(function(k){if(!DICT.hasOwnProperty(k))DICT[k]=D[k]})})();
+TK.CAT={ac:'تكييف',el:'مصاعد',sf:'سلامة',wa:'نفايات',pc:'مكافحة الآفات',wt:'المياه'};
+TK.q={st:'',ty:'',cat:'',h:'',sort:'due',s:''};TK.ex={};
+TK.set=function(k,v){TK.q[k]=TK.q[k]===v&&k!=='st'&&k!=='sort'?'':v;render()};
+TK.mstart=function(){var d=new Date();return new Date(d.getFullYear(),d.getMonth(),1).getTime()};
+TK.staff=function(list){list=list||[];var q=TK.q,ms0=TK.mstart();
+ var mine=list.filter(TK.needsMe),late=list.filter(function(t){return t.respLate||t.closeLate}),open=list.filter(function(t){return t.status!=='closed'}),cm=list.filter(function(t){return t.status==='closed'&&t.closedAt>=ms0});
+ if(!q.st)q.st=mine.length?'mine':'open';
+ var base={mine:mine,late:late,open:open,closed:list.filter(function(t){return t.status==='closed'}),all:list}[q.st]||open;
+ var s=String(q.s||'').trim().toLowerCase();
+ var sh=base.filter(function(t){return (!q.ty||t.type===q.ty)&&(!q.cat||t.conType===q.cat)&&(!q.h||t.hotel_id===q.h)&&(!s||(t.con+' '+t.id+' '+t.text+' '+t.topic+' '+t.wo).toLowerCase().indexOf(s)!==-1)});
+ sh.sort(function(a,b){if(q.sort==='new')return b.created-a.created;if(q.sort==='old')return a.created-b.created;
+  var ao=a.status!=='closed',bo=b.status!=='closed';if(ao!==bo)return ao?-1:1;return ao?(a.closeDue||0)-(b.closeDue||0):(b.closedAt||0)-(a.closedAt||0)});
+ var tile=function(k,l,n,red){return '<button class="dq'+(red&&n?' red':'')+'" style="'+(q.st===k?'outline:2px solid var(--navy);':'')+(n?'':'opacity:.55')+'" data-k="'+k+'" onclick="TK.set(\'st\',this.dataset.k)"><span class="dl">'+l+'</span><b>'+n+'</b></button>'};
+ var h='<div class="stack"><div class="row" style="flex-wrap:wrap"><h2 style="font-size:18px">تذاكر المتعهدين</h2><span class="small muted">المالك يفيد خلال يوم عمل، والرد والإغلاق خلال يومي عمل.</span></div>';
+ h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">'+tile('mine','تنتظرك',mine.length,1)+tile('late','متأخرة',late.length,1)+tile('open','المفتوحة',open.length)+tile('closed','أُغلقت هذا الشهر',cm.length)+tile('all','الكل',list.length)+'</div>';
+ var cats={},hs={};list.forEach(function(t){if(t.conType)cats[t.conType]=1;if(t.hotel_id)hs[t.hotel_id]=t.hotel});
+ h+='<div class="card stack" style="gap:8px;padding:10px 12px"><div class="chips">'+[['','الكل'],['complaint','شكوى'],['suggest','اقتراح'],['opinion','رأي']].map(function(x){return '<button class="chip'+(q.ty===x[0]?' on':'')+'" data-v="'+x[0]+'" onclick="TK.q.ty=this.dataset.v;render()">'+x[1]+'</button>'}).join('')+'</div>';
+ h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+ if(Object.keys(cats).length>1)h+='<select class="inp" style="flex:1 1 150px" onchange="TK.q.cat=this.value;render()"><option value="">كل الفئات</option>'+Object.keys(cats).map(function(k){return '<option value="'+k+'"'+(q.cat===k?' selected':'')+'>'+(TK.CAT[k]||k)+'</option>'}).join('')+'</select>';
+ if(Object.keys(hs).length>1)h+='<select class="inp" style="flex:1 1 150px" onchange="TK.q.h=this.value;render()"><option value="">كل الفنادق</option>'+Object.keys(hs).map(function(k){return '<option value="'+k+'"'+(q.h===k?' selected':'')+' data-nt="1">'+esc(hs[k])+'</option>'}).join('')+'</select>';
+ h+='<select class="inp" style="flex:1 1 150px" onchange="TK.q.sort=this.value;render()">'+[['due','الأقرب استحقاقاً'],['new','الأحدث'],['old','الأقدم']].map(function(x){return '<option value="'+x[0]+'"'+(q.sort===x[0]?' selected':'')+'>'+x[1]+'</option>'}).join('')+'</select>';
+ h+='<input class="inp" style="flex:2 1 200px" placeholder="بحث: متعهد، رقم، نص" value="'+esc(q.s)+'" onchange="TK.q.s=this.value;render()"></div></div>';
+ h+=sh.length?sh.map(function(t){return TK.row(t)}).join(''):'<div class="card muted" style="text-align:center">لا تذاكر بهذا الفرز.</div>';
+ return h+'</div>'};
+TK.row=function(t){if(TK.ex[t.id])return TK.card(t,true).replace('style="gap:6px;padding:12px 14px','style="border-inline-start:4px solid '+(t.type==='complaint'?'#A4483A':'var(--gold)')+';gap:6px;padding:12px 14px').replace(/<\/div>$/,'<button class="btn btn-o sm" style="align-self:flex-start" data-id="'+t.id+'" onclick="delete TK.ex[this.dataset.id];render()">إخفاء</button></div>');
+ var st=TK.ST[t.status]||['',''],me=TK.needsMe(t);
+ return '<div class="card" style="padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-inline-start:4px solid '+(t.type==='complaint'?'#A4483A':'var(--gold)')+'"><div style="flex:1 1 260px;min-width:0"><div><b style="color:'+(t.type==='complaint'?'#8E3A2E':'var(--navy)')+'">'+t.typeL+'</b> · '+esc(t.topic)+' <span class="pill '+st[1]+'">'+st[0]+'</span>'+(t.respLate?' <span class="pill st-late">متأخرة عن الإفادة</span>':t.closeLate?' <span class="pill st-late">متأخرة عن الإغلاق</span>':'')+'</div>'
+  +'<div class="small muted"><span data-nt="1">'+esc(t.con)+'</span>'+(t.conType?' · '+(TK.CAT[t.conType]||''):'')+(t.hotel?' · <span data-nt="1">'+esc(t.hotel)+'</span>':'')+' · '+dmyY(t.created)+' · <span dir="ltr">'+esc(t.id)+'</span>'+(t.status!=='closed'&&t.closeDue?' · '+F('يُغلق قبل {0}',dmyY(t.closeDue)):'')+'</div>'
+  +'<div class="small" data-nt="1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(t.text)+'</div></div>'
+  +'<button class="btn '+(me?'btn-p':'btn-o')+' sm" data-id="'+t.id+'" onclick="TK.ex[this.dataset.id]=1;render()">'+(me?'فتح للرد':'التفاصيل')+'</button></div>'};
+// ── تقييم مؤسستنا: عرض محوري
+TK.o={by:'t',per:3,h:'',t:'',drill:'',notes:''};
+TK.mAdd=function(m,k){var y=+m.slice(0,4),mo=+m.slice(5,7)-1+k;y+=Math.floor(mo/12);mo=((mo%12)+12)%12;return y+'-'+(mo<9?'0':'')+(mo+1)};
+TK.agg=function(rs,nc){var sum=[],n=rs.length;for(var i=0;i<nc;i++)sum[i]=0;rs.forEach(function(r){r.s.forEach(function(v,i){sum[i]+=v})});
+ var avg=sum.map(function(x){return n?Math.round(x/n*10)/10:null});return {n:n,avg:avg,comp:n?Math.round(sum.reduce(function(a,b){return a+b},0)/n/nc*10)/10:null}};
+TK.orgView=function(o){if(!o)return '';var O=TK.o,nc=o.crit.length,cat=function(c){return (o.cons[c]||{}).t||''};
+ var h='<div class="stack"><h2 style="font-size:18px">تقييم المتعهدين لمؤسستنا</h2>';
+ if(!o.recs.length)return h+'<div class="card muted" style="text-align:center">لا تقييمات بعد.</div></div>';
+ var months=function(off){var a=[];for(var i=0;i<O.per;i++)a.push(TK.mAdd(o.last,-i-off));return a};
+ var cur=months(0),prev=months(O.per);
+ var keep=function(m){return function(x){var c=x.c||x[2],hh=x.h||x[1];return m.indexOf(x.m||x[0])!==-1&&(!O.h||hh===O.h)&&(!O.t||cat(c)===O.t)&&(!O.drill||cat(c)===O.drill)}};
+ var R=o.recs.filter(keep(cur)),RP=o.recs.filter(keep(prev)),E=o.exp.filter(keep(cur));
+ var chip=function(k,v,l){return '<button class="chip'+(String(O[k])===String(v)?' on':'')+'" data-k="'+k+'" data-v="'+v+'" onclick="TK.o[this.dataset.k]=this.dataset.k===\'per\'?+this.dataset.v:this.dataset.v;TK.o.notes=\'\';'+(k==='by'?'TK.o.drill=\'\';':'')+'render()">'+l+'</button>'};
+ h+='<div class="card stack" style="gap:8px;padding:10px 12px"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="small muted">عرض حسب</span>'+chip('by','t','الفئة')+chip('by','h','الفندق')+'<span class="small muted" style="margin-inline-start:10px">الفترة</span>'+chip('per',1,'آخر شهر')+chip('per',3,'آخر 3 أشهر')+chip('per',12,'السنة')+'</div>';
+ var hs={},ts={};o.exp.concat(o.recs.map(function(r){return [r.m,r.h,r.c]})).forEach(function(x){hs[x[1]]=1;if(cat(x[2]))ts[cat(x[2])]=1});
+ h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+ if(Object.keys(hs).length>1)h+='<select class="inp" style="flex:1 1 160px" onchange="TK.o.h=this.value;render()"><option value="">كل الفنادق</option>'+Object.keys(hs).map(function(k){return '<option value="'+k+'"'+(O.h===k?' selected':'')+' data-nt="1">'+esc(o.hotels[k]||k)+'</option>'}).join('')+'</select>';
+ if(Object.keys(ts).length>1)h+='<select class="inp" style="flex:1 1 160px" onchange="TK.o.t=this.value;TK.o.drill=\'\';render()"><option value="">كل الفئات</option>'+Object.keys(ts).map(function(k){return '<option value="'+k+'"'+(O.t===k?' selected':'')+'>'+(TK.CAT[k]||k)+'</option>'}).join('')+'</select>';
+ h+='</div><span class="small muted">'+P.mlabel(cur[cur.length-1])+(O.per>1?' – '+P.mlabel(cur[0]):'')+'</span></div>';
+ if(!R.length)return h+'<div class="card muted" style="text-align:center">لا تقييمات في هذه الفترة.</div></div>';
+ var all=TK.agg(R,nc),pa=TK.agg(RP,nc),done={};R.forEach(function(r){done[r.m+'|'+r.h+'|'+r.c]=1});
+ var ek={};E.forEach(function(x){ek[x.join('|')]=1});Object.keys(done).forEach(function(k){ek[k]=1});E=Object.keys(ek);var nd=Object.keys(done).length,ord=all.avg.map(function(v,i){return i}).sort(function(a,b){return all.avg[b]-all.avg[a]});
+ var col=function(v){return v==null?'':v>=4?'background:#E3EFE9;color:#245244':'background:#F6E3DF;color:#8E3A2E'};
+ var kpi=function(l,v,sub){return '<div class="card" style="padding:10px 12px"><span class="small muted">'+l+'</span><div style="font-size:22px;font-weight:700">'+v+'</div><span class="small muted">'+sub+'</span></div>'};
+ var tr0=pa.n?(all.comp-pa.comp):null;
+ h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">'
+  +kpi('المؤشر المركّب','<span style="'+col(all.comp)+';padding:0 8px;border-radius:8px">'+all.comp+' / 5</span>',Math.round(all.comp/5*100)+'% · '+F('{0} تقييم',all.n))
+  +kpi('أقوى بند',all.avg[ord[0]],o.crit[ord[0]][1])+kpi('أضعف بند',all.avg[ord[nc-1]],o.crit[ord[nc-1]][1])
+  +kpi('نسبة الاستجابة',(E.length?Math.round(nd/E.length*100):100)+'%',F('{0} من {1} متعهداً قيّموا',nd,E.length))
+  +kpi('مقارنة بالفترة السابقة',tr0==null?'—':(tr0>0?'↑ ':tr0<0?'↓ ':'')+Math.abs(Math.round(tr0*10)/10),tr0==null?'لا فترة سابقة للمقارنة':pa.comp+' ← '+all.comp)+'</div>';
+ var key=O.drill?function(r){return r.c}:O.by==='h'?function(r){return r.h}:function(r){return cat(r.c)};
+ var lbl=O.drill?function(k){return '<span data-nt="1">'+esc((o.cons[k]||{}).n||k)+'</span>'}:O.by==='h'?function(k){return '<span data-nt="1">'+esc(o.hotels[k]||k)+'</span>'}:function(k){return TK.CAT[k]||k};
+ var ks=[];R.forEach(function(r){var k=key(r);if(ks.indexOf(k)===-1)ks.push(k)});
+ var cols=ks.map(function(k){return {k:k,a:TK.agg(R.filter(function(r){return key(r)===k}),nc)}}).sort(function(a,b){return b.a.n-a.a.n});
+ var cell=function(v,n){return '<td style="text-align:center;font-weight:700;'+col(v)+(n<3?';opacity:.5':'')+'"'+(n<3?' title="عينة صغيرة (أقل من 3)"':'')+'>'+(v==null?'—':v)+'</td>'};
+ h+='<div class="card" style="padding:0;overflow-x:auto">';
+ if(O.drill)h+='<div class="row" style="padding:10px 12px"><b>'+F('متعهدو {0}',TK.CAT[O.drill]||O.drill)+'</b><button class="btn btn-o sm" onclick="TK.o.drill=\'\';TK.o.notes=\'\';render()">رجوع</button></div>';
+ h+='<table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:14px"><thead><tr><th style="text-align:start;padding:8px">البند</th>'+cols.map(function(c){var dr=!O.drill&&O.by==='t';return '<th style="padding:6px 4px;white-space:nowrap">'+(dr?'<button class="btn btn-o sm" data-k="'+esc(c.k)+'" onclick="TK.o.drill=this.dataset.k;TK.o.notes=\'\';render()">'+lbl(c.k)+' ›</button>':lbl(c.k))+'</th>'}).join('')+'<th style="padding:6px 4px">الكل</th></tr></thead><tbody>';
+ o.crit.forEach(function(c,i){h+='<tr><td style="padding:6px 8px">'+c[1]+'</td>'+cols.map(function(x){return cell(x.a.avg[i],x.a.n)}).join('')+cell(all.avg[i],all.n)+'</tr>'});
+ h+='<tr style="border-top:2px solid var(--line)"><td style="padding:8px"><b>المؤشر المركّب</b></td>'+cols.map(function(x){return cell(x.a.comp,x.a.n)}).join('')+cell(all.comp,all.n)+'</tr>';
+ h+='<tr><td style="padding:6px 8px" class="small muted">عدد التقييمات</td>'+cols.map(function(x){return '<td style="text-align:center"><button class="chip'+(O.notes===x.k?' on':'')+'" data-k="'+esc(x.k)+'" onclick="TK.o.notes=TK.o.notes===this.dataset.k?\'\':this.dataset.k;render()">'+x.a.n+'</button></td>'}).join('')+'<td style="text-align:center"><button class="chip'+(O.notes==='*'?' on':'')+'" onclick="TK.o.notes=TK.o.notes===\'*\'?\'\':\'*\';render()">'+all.n+'</button></td></tr></tbody></table></div>';
+ h+='<span class="small muted"><span style="'+col(4)+';padding:0 6px;border-radius:6px">4 فأعلى</span> <span style="'+col(1)+';padding:0 6px;border-radius:6px">أقل من 4</span> · <span style="opacity:.5">عينة صغيرة (أقل من 3)</span>'+(!O.drill&&O.by==='t'?' · اضغط الفئة لعرض متعهديها، والعدد لعرض الملاحظات.':'')+'</span>';
+ if(O.notes){var ns=R.filter(function(r){return r.note&&(O.notes==='*'||key(r)===O.notes)});
+  h+='<div class="card stack" style="gap:6px"><b>الملاحظات</b>'+(ns.length?ns.map(function(r){return '<span class="small"><b data-nt="1">'+esc((o.cons[r.c]||{}).n||'')+'</b> · <span data-nt="1">'+esc(o.hotels[r.h]||'')+'</span> · '+P.mlabel(r.m)+': <span data-nt="1">'+esc(r.note)+'</span></span>'}).join(''):'<span class="small muted">لا ملاحظات مكتوبة.</span>')+'</div>'}
+ return h+'</div>'};
+SV.tkView=function(){return TK.staff(SV.b.tickets)+(SV.b.org?'<div style="margin-top:18px">'+TK.orgView(SV.b.org)+'</div>':'')};
 render();
 </script>

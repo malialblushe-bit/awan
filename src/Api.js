@@ -383,7 +383,7 @@ function engBoot_(s) {
     notes: notesFor_(s, myHotels, 'maint'),
     water: Water.staffBoot(s, myHotels),
     tickets: Tickets.visibleTo(s, myHotels),
-    org: ['admin', 'management', 'gm', 'om', 'duty'].indexOf(s.role) !== -1 ? Tickets.orgResults(myHotels) : null,
+    org: Tickets.orgResults(myHotels),
     evals: Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
@@ -1151,6 +1151,7 @@ function supBoot_(s) {
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
     tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
+    org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
     canFlag: ['admin', 'gm', 'duty'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),

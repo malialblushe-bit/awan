@@ -1038,7 +1038,11 @@ t('تواصل: تذكرة المتعهد ← إفادة المالك ← رد ا
   throws(`apiConOrgEval('${acTok}', '${HID}', { clarity: 5 }, '')`, 'كل البنود');
   run(`apiConOrgEval('${acTok}', '${HID}', { clarity: 4, speed: 5, access: 3, team: 5, commit: 4, comm: 5, system: 4 }, 'تعاون ممتاز', 'م. سالم')`);
   eq(run(`conBoot_(Auth.session('${acTok}')).org`).hotels.some(h => h.id === HID), false);
-  const o = run(`apiEngBoot('${adminTok}')`).org.rows.find(r => r.hotel_id === HID); eq(o.avg.access, 3);
+  const og = run(`apiEngBoot('${adminTok}')`).org, ai = og.crit.findIndex(c => c[0] === 'access');
+  const o = og.recs.find(r => r.h === HID); eq(o.s[ai], 3); eq(/^\d{4}-\d{2}$/.test(o.m), true);
+  if (!og.exp.some(x => x[1] === HID && x[0] === o.m)) throw new Error('expected list for response rate');
+  if (!og.cons[o.c] || !og.cons[o.c].t) throw new Error('contractor type for category pivot');
+  eq(run(`apiEngBoot('${engTok}')`).org !== null, true); // الجميع يرى
 });
 
 t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد، والقائد برقمه الخاص يستكمل التقرير والمرفق إلزامي', () => {
