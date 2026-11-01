@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 26;
+var SCHEMA_VERSION = 27;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -144,7 +144,15 @@ var SCHEMA = [
     ['log_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['zones', 'المناطق (معرّفات الغرف والمرافق)'],
     ['kind', 'spray = رش · inspect = فحص · trap = فحص مصيدة'], ['pests', 'الآفات المستهدفة'], ['material', 'المادة'],
     ['finding', 'none · light · medium · heavy'], ['trap_id', 'المصيدة'], ['note', 'ملاحظة'], ['photos', 'الصور'], ['by_name', 'الفني'],
-    ['at', 'الوقت'], ['flags_closed', 'البلاغات المنجزة بها']] },
+    ['at', 'الوقت'], ['flags_closed', 'البلاغات المنجزة بها'],
+    ['status', 'rejected = مرفوضة (لم تحدث فعلاً)'], ['rej_by', 'رفضها'], ['rej_at', 'وقت الرفض'], ['rej_reason', 'سبب الرفض']] },
+
+  { name: 'SupRatings', cols: [
+    ['rating_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر yyyy-MM'], ['score', 'الرضا: 100 راضٍ · 50 مقبول · 0 غير راضٍ'],
+    ['note', 'ملاحظة'], ['by_name', 'قيّمه'], ['at', 'الوقت']] },
+
+  { name: 'PcReports', cols: [
+    ['report_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر yyyy-MM'], ['att', 'ملف التقرير'], ['by_name', 'رفعه'], ['at', 'الوقت']] },
 
   { name: 'PestFlags', cols: [
     ['flag_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['zone', 'المنطقة (غرفة أو مرفق)'], ['kind', 'ready = متاحة للرش · infest = بلاغ إصابة'],
@@ -191,7 +199,7 @@ var STATUS = {
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
   Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
-  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE', Claims: 'CLM'
+  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE', Claims: 'CLM', SupRatings: 'SR', PcReports: 'PR'
 };
 
 function tableDef(name) {
@@ -210,13 +218,10 @@ var SEED_SETTINGS = [
 ];
 
 /** [type, kpi, full, half, weight] — الاستجابة بالدقائق (الأقل أفضل)، والبقية نسب (الأعلى أفضل) */
-var SEED_THRESHOLDS = [
-  ['ac', 'resp', 0, 0, 30], ['ac', 'ready', 0, 0, 25], ['ac', 'info', 0, 0, 20], ['ac', 'sat', 0, 0, 15], ['ac', 'repair', 0, 0, 10],
-  ['el', 'resp', 0, 0, 20], ['el', 'rescue', 0, 0, 15], ['el', 'ready', 0, 0, 20], ['el', 'pm', 0, 0, 20], ['el', 'info', 0, 0, 15], ['el', 'sat', 0, 0, 10],
-  ['sf', 'resp', 0, 0, 30], ['sf', 'ready', 0, 0, 25], ['sf', 'info', 0, 0, 20], ['sf', 'sat', 0, 0, 15], ['sf', 'repair', 0, 0, 10],
-  ['wa', 'pickup', 0, 0, 50], ['wa', 'clean', 0, 0, 30], ['wa', 'wash', 0, 0, 20],
-  ['pc', 'ontime', 0, 0, 40], ['pc', 'flagresp', 0, 0, 30], ['pc', 'traps', 0, 0, 30]
-];
+/** المؤشرات الأربعة الثابتة لكل العقود (الاستجابة · الجاهزية · الرضا · موثوقية المعلومات)، وأوزانها لكل نوع */
+var SEED_THRESHOLDS = ['ac', 'el', 'sf', 'wa', 'pc'].reduce(function (a, t) {
+  return a.concat([[t, 'resp', 0, 0, 30], [t, 'ready', 0, 0, 30], [t, 'sat', 0, 0, 20], [t, 'info', 0, 0, 20]]);
+}, []);
 
 /** [type, list, ar, en] */
 var SEED_LISTS = [

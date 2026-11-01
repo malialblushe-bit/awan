@@ -220,26 +220,47 @@ var Kpi = (function () {
     return out;
   }
 
-  /** التشكيلة: مؤشرات كل نوع (القيمة من 100، والدرجة = مجموع القيمة × الوزن ÷ مجموع أوزان ما له عينة كافية) */
-  var KPIS = { ac: ['resp', 'ready', 'info', 'sat', 'repair'], sf: ['resp', 'ready', 'info', 'sat', 'repair'], el: ['resp', 'rescue', 'ready', 'pm', 'info', 'sat'],
-    wa: ['pickup', 'clean', 'wash'], pc: ['ontime', 'flagresp', 'traps'] };
+  /** المؤشرات الأربعة الثابتة لكل العقود، وتحت كل منها مقاييسه الفرعية حسب نوع المتعهد (كلٌّ من 100) */
+  var PILLARS = ['resp', 'ready', 'sat', 'info'];
+  var SUBS = {
+    ac: { resp: ['resp', 'repair'], ready: ['ready'], sat: ['sat'], info: ['info'] },
+    sf: { resp: ['resp', 'repair'], ready: ['ready'], sat: ['sat'], info: ['info'] },
+    el: { resp: ['resp', 'rescue'], ready: ['ready', 'pm'], sat: ['sat'], info: ['info'] },
+    wa: { resp: ['pickup'], ready: ['clean', 'wash'], sat: ['rating'], info: ['visitsOk'] },
+    pc: { resp: ['flagresp'], ready: ['ontime', 'traps'], sat: ['rating'], info: ['logsOk', 'reports'] }
+  };
+  var KPIS = {}; Object.keys(SUBS).forEach(function (t) { KPIS[t] = PILLARS.slice(); });
+  var EXEMPT = ['pm', 'rescue', 'rating', 'reports'];
   var MIN_N = 5;
+  function subsOf(type) { var o = SUBS[type] || {}, a = []; PILLARS.forEach(function (p) { (o[p] || []).forEach(function (k) { a.push(k); }); }); return a; }
   function pct(a, b) { return b ? Math.round(1000 * a / b) / 10 : null; }
-  /** قيم المؤشرات وعيّناتها من مجاميع الملخص (التكييف والمصاعد والسلامة). pmExp = الزيارات الدورية المطلوبة */
+  /** قيم المقاييس الفرعية وعيّناتها من مجاميع الملخص (التكييف والمصاعد والسلامة). pmExp = الزيارات الدورية المطلوبة */
   function values(z, pmExp) {
     var V = { resp: pct(z.respOk, z.respN), ready: pct(z.readyOk, z.readyN), info: pct(z.infoOk, z.infoN), sat: z.satN ? Math.round(10 * z.satSum / z.satN) / 10 : null,
       repair: pct(z.repairOk, z.repairN), rescue: pct(z.rescueOk, z.rescueN), pm: pmExp ? Math.min(100, pct(z.pm, pmExp)) : null };
     var N = { resp: z.respN, ready: z.readyN, info: z.infoN, sat: z.satN, repair: z.repairN, rescue: z.rescueN, pm: pmExp || 0 };
     return { V: V, N: N };
   }
-  /** الدرجة المركّبة. w: {kpi: {weight}} */
+  /** المؤشر الرئيس = متوسط مقاييسه التي لها قيمة؛ ويدخل الدرجة إن كان لأحد مقاييسه عينة كافية (5) أو كان معفى (دوري/شهري) */
+  function pillars(type, V, N) {
+    var P = {}, o = SUBS[type] || {};
+    PILLARS.forEach(function (p) {
+      var ks = (o[p] || []).filter(function (k) { return V[k] != null; });
+      if (!ks.length) { P[p] = { v: null, n: 0, subs: [], ok: false }; return; }
+      var n = 0, sum = 0, ok = false;
+      ks.forEach(function (k) { sum += Number(V[k]); n += Number(N[k]) || 0; if ((Number(N[k]) || 0) >= MIN_N || EXEMPT.indexOf(k) !== -1) ok = true; });
+      P[p] = { v: Math.round(10 * sum / ks.length) / 10, n: n, subs: ks, ok: ok };
+    });
+    return P;
+  }
+  /** الدرجة المركّبة = Σ(المؤشر الرئيس × وزنه) ÷ Σ أوزان ما دخل. w: {resp|ready|sat|info: {weight}} */
   function score(type, V, N, w) {
-    var ks = (KPIS[type] || Object.keys(V)).filter(function (k) { return V[k] != null && Number((w[k] || {}).weight) > 0; });
-    var ok = ks.filter(function (k) { return (N[k] || 0) >= MIN_N || k === 'pm' || k === 'rescue'; }), small = false;
+    var P = pillars(type, V, N), ks = PILLARS.filter(function (k) { return P[k].v != null && Number((w[k] || {}).weight) > 0; });
+    var ok = ks.filter(function (k) { return P[k].ok; }), small = false;
     if (!ok.length) { ok = ks; small = ks.length > 0; }
-    var sw = 0, s = 0;
-    ok.forEach(function (k) { var wt = Number(w[k].weight); sw += wt; s += wt * V[k]; });
-    return { score: sw ? Math.round(10 * s / sw) / 10 : null, used: ok, small: small };
+    var sw = 0, s2 = 0;
+    ok.forEach(function (k) { var wt = Number(w[k].weight); sw += wt; s2 += wt * P[k].v; });
+    return { score: sw ? Math.round(10 * s2 / sw) / 10 : null, used: ok, small: small, P: P };
   }
   /** التصنيف من عتبات العقد */
   function cls(v, c) {
@@ -253,5 +274,5 @@ var Kpi = (function () {
     return { ex: Number(best && best.cls_ex) || 90, good: Number(best && best.cls_good) || 80, ok: Number(best && best.cls_ok) || 70 };
   }
 
-  return { KPIS: KPIS, MIN_N: MIN_N, values: values, score: score, cls: cls, clsOf: clsOf, refresh: refresh, touch: touch, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
+  return { KPIS: KPIS, PILLARS: PILLARS, SUBS: SUBS, subsOf: subsOf, pillars: pillars, MIN_N: MIN_N, values: values, score: score, cls: cls, clsOf: clsOf, refresh: refresh, touch: touch, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
 })();

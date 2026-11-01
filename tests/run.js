@@ -184,7 +184,7 @@ t('الإعداد ينشئ كل الجداول ويحذف الورقة الاف�
 });
 
 t('البذور: الإعدادات والعتبات والقوائم', () => {
-  eq(run("Db.all('Thresholds').length"), 22);
+  eq(run("Db.all('Thresholds').length"), 20);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
   eq(run("Db.all('Lists')[0].item_id"), 'LST-00001');
   if (!run("Db.setting('photos_folder_id')")) throw new Error('مجلد الصور لم يُنشأ');
@@ -193,7 +193,7 @@ t('البذور: الإعدادات والعتبات والقوائم', () => {
 t('الإعداد آمن للتكرار ولا يكرر البذور', () => {
   run('Db.reset(); setupAwan()');
   run('Db.reset()');
-  eq(run("Db.all('Thresholds').length"), 22);
+  eq(run("Db.all('Thresholds').length"), 20);
   eq(run("Db.all('Lists').length"), run('SEED_LISTS.length'));
 });
 
@@ -502,7 +502,7 @@ t('الأداء: يُحسب مسبقاً في KpiSummary بعد الإغلاق (
 t('الأداء: المهندس يرى فنادقه، والمتعهد يرى أرقامه فقط', () => {
   const e = run(`apiKpiBoot('${engTok}')`);
   if (e.rows.length < 2) throw new Error('صفوف المهندس ناقصة');
-  eq(e.thresholds.ac.resp.weight, 30); eq(e.kpis.el.indexOf('rescue') !== -1, true);
+  eq(e.thresholds.ac.resp.weight, 30); eq(e.subs.el.resp.indexOf('rescue') !== -1, true); eq(e.kpis.wa.join(','), 'resp,ready,sat,info');
   if (!e.rows.some(r => r.d && r.d.respN && r.d.respOk <= r.d.respN)) throw new Error('الالتزام بزمن الاستجابة');
   const c = run(`apiKpiBoot('${acTok}')`);
   const con = run(`Db.find('Contractors', c => c.name === 'مؤسسة التبريد').con_id`);
@@ -510,19 +510,21 @@ t('الأداء: المهندس يرى فنادقه، والمتعهد يرى أ
   eq(c.cons.length, 1);
 });
 
-t('العتبات: أوزان كل نوع مجموعها 100، والمؤشر من 100 × وزنه، والتصنيف من عتبات العقد', () => {
-  const ok = { resp: { weight: 40 }, ready: { weight: 30 }, info: { weight: 15 }, sat: { weight: 15 }, repair: { weight: 0 } };
-  throws(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ ...ok, sat: { weight: 10 } })})`, '100');
-  run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify(ok)})`);
-  const th = run(`apiAdmBoot('${adminTok}')`).thresholds.ac;
-  eq(th.ready.weight, 30); eq(th.repair.weight, 0);
-  eq(run(`Db.all('Thresholds').length`), 22);
-  // الدرجة المركّبة: القيم من 100 × الأوزان ÷ مجموع أوزان ما له عينة كافية
-  const sc = run(`Kpi.score('ac', { resp: 80, ready: 100, info: 90, sat: 50 }, { resp: 10, ready: 10, info: 10, sat: 2 }, { resp: { weight: 40 }, ready: { weight: 30 }, info: { weight: 15 }, sat: { weight: 15 } })`);
-  eq(sc.score, Math.round(10 * (80 * 40 + 100 * 30 + 90 * 15) / 85) / 10); eq(sc.used.indexOf('sat'), -1);
+t('القياس: أربعة مؤشرات ثابتة لكل العقود (من 100 × وزنها)، مقاييس فرعية حسب النوع، والتصنيف من عتبات العقد', () => {
+  const ok = { resp: { weight: 40 }, ready: { weight: 30 }, sat: { weight: 15 }, info: { weight: 15 } };
+  throws(`apiAdmSaveThresholds('${adminTok}', 'pc', ${JSON.stringify({ ...ok, sat: { weight: 10 } })})`, '100');
+  run(`apiAdmSaveThresholds('${adminTok}', 'pc', ${JSON.stringify(ok)})`);
+  eq(run(`apiAdmBoot('${adminTok}')`).thresholds.pc.resp.weight, 40);
+  eq(run(`Db.all('Thresholds').length`), 20);
+  // الاستجابة في التكييف = متوسط الالتزام بزمن الاستجابة والإصلاح ضمن الزمن
+  const sc = run(`Kpi.score('ac', { resp: 80, repair: 60, ready: 100, info: 90, sat: 50 }, { resp: 10, repair: 10, ready: 10, info: 10, sat: 2 }, { resp: { weight: 30 }, ready: { weight: 30 }, sat: { weight: 20 }, info: { weight: 20 } })`);
+  eq(sc.P.resp.v, 70); eq(sc.used.indexOf('sat'), -1);
+  eq(sc.score, Math.round(10 * (70 * 30 + 100 * 30 + 90 * 20) / 80) / 10);
+  // النفايات: الجاهزية = النظافة والغسل، والرضا من الإشراف الشهري (معفى من الحد الأدنى)
+  const sw = run(`Kpi.score('wa', { pickup: 90, clean: 80, wash: 100, rating: 50, visitsOk: 100 }, { pickup: 10, clean: 10, wash: 10, rating: 1, visitsOk: 10 }, { resp: { weight: 30 }, ready: { weight: 30 }, sat: { weight: 20 }, info: { weight: 20 } })`);
+  eq(sw.P.ready.v, 90); eq(sw.used.indexOf('sat') !== -1, true);
   eq(run(`Kpi.cls(91, {})`), 'ex'); eq(run(`Kpi.cls(85, {})`), 'good'); eq(run(`Kpi.cls(72, {})`), 'ok'); eq(run(`Kpi.cls(60, {})`), 'low');
-  eq(run(`Kpi.cls(85, { cls_ex: 85, cls_good: 75, cls_ok: 60 })`), 'ex');
-  run(`apiAdmSaveThresholds('${adminTok}', 'ac', ${JSON.stringify({ resp: { weight: 30 }, ready: { weight: 25 }, info: { weight: 20 }, sat: { weight: 15 }, repair: { weight: 10 } })})`);
+  run(`apiAdmSaveThresholds('${adminTok}', 'pc', ${JSON.stringify({ resp: { weight: 30 }, ready: { weight: 30 }, sat: { weight: 20 }, info: { weight: 20 } })})`);
   // معايير القياس في العقد: أزمنة الخدمة والعتبات التنازلية، والاستجابة تُقاس بنسبة الالتزام بزمن العقد
   const cid = run(`Db.all('Contracts').find(c => c.type === 'ac').contract_id`);
   throws(`apiAdmSaveSla('${adminTok}', '${cid}', { cls_ex: 80, cls_good: 85, cls_ok: 70 })`, 'تنازلية');
@@ -1083,6 +1085,24 @@ t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد
   run(`apiConAct('${L.token}', 'submit', '${id}', { att: ['data:application/pdf;base64,JVBERi0='], outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`);
   const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.status, 'matching'); if (!o.att) throw new Error('no att');
   const rep = JSON.parse(o.report).pop(); eq(rep.by, 'م. عدنان (قائد الفريق)');
+});
+
+t('المكافحة والنفايات: رفض معالجة لم تحدث، ورضا الإشراف الشهري، والتقرير الشهري للمتعهد، تدخل في المؤشرات الأربعة', () => {
+  ['pc', 'wa'].forEach(t => { const c = run(`Db.all('Contracts').find(c => c.type === '${t}').contract_id`); run(`Db.update('Contracts', '${c}', { start: new Date(Date.now() - 90 * 864e5) })`); });
+  const pcCon = run(`Db.all('Contractors').find(c => c.type === 'pc').con_id`);
+  const lg = run(`Db.all('PestLogs').find(l => l.con_id === '${pcCon}')`);
+  throws(`apiPcReject('${mgrTok}', '${lg.log_id}', '')`, 'سبب');
+  run(`apiPcReject('${mgrTok}', '${lg.log_id}', 'لم تحدث')`);
+  eq(run(`Db.get('PestLogs', '${lg.log_id}').status`), 'rejected');
+  const due = run(`apiSupBoot('${mgrTok}')`).rates; if (!due.due.some(x => x.con === pcCon)) throw new Error('rate due');
+  throws(`apiSupRate('${mgrTok}', '${pcCon}', '${HID}', 70)`, 'راضٍ');
+  run(`apiSupRate('${mgrTok}', '${pcCon}', '${HID}', 100, 'جيد')`);
+  eq(run(`apiSupBoot('${mgrTok}')`).rates.due.some(x => x.con === pcCon && x.hotel === '${HID}'), false);
+  const pt = run(`apiPinWebLogin('${pcPin}')`), rd = pt.boot.pcReports; if (!rd.due.length) throw new Error('report due');
+  throws(`apiConPcReport('${pt.token}', '${HID}', [])`, 'أرفق');
+  run(`apiConPcReport('${pt.token}', '${HID}', ['data:application/pdf;base64,AAAA'], 'سالم')`);
+  const m = run(`Ops.metrics(Db.get('Contractors', '${pcCon}'), ['${HID}'], '${run("Ops.ratesDue([]).month")}-01', Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd'))`);
+  eq(m.V.rating, 100); eq(m.V.reports, 100); if (!(m.V.logsOk < 100)) throw new Error('logsOk'); eq(Object.keys(m.P).join(','), 'resp,ready,sat,info');
 });
 
 t('المطالبات والسداد: طريقة السداد في العقد، المتعهد يرفع المطالبة ولا يرى السداد، مالك الخدمة يعتمد، والمالية تسدد', () => {

@@ -133,6 +133,58 @@ var Ops = (function () {
     return 1;
   }
 
+  /** رفض معالجة مكافحة مسجّلة لم تحدث فعلاً: لا تُحسب في الدورية ولا المصائد، وتُنقص موثوقية المعلومات */
+  function pcReject(s, id, reason) {
+    if (['supmgr', 'admin'].indexOf(s.role) === -1) throw new Error('رفض المعالجات لمدير الإشراف أو مشرف النظام.');
+    reason = String(reason || '').trim();
+    if (!reason) throw new Error('اكتب سبب الرفض.');
+    var l = Db.get('PestLogs', id);
+    if (!l || supHotels(s).indexOf(l.hotel_id) === -1) throw new Error('المعالجة ليست ضمن فنادقك.');
+    if (l.status === 'rejected') return 0;
+    Db.update('PestLogs', id, { status: 'rejected', rej_by: (Db.get('Users', s.id) || {}).name || '', rej_at: new Date(), rej_reason: reason });
+    return 1;
+  }
+
+  // ───────── رضا الإشراف الشهري (النفايات والمكافحة) وتقرير المكافحة الشهري ─────────
+  function prevMonth_() { var d = new Date(); return Utilities.formatDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - 864e5), TZ, 'yyyy-MM'); }
+  function mon_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM') : String(v || '').slice(0, 7); }
+  /** المتعهدون (نفايات/مكافحة) الذين كان لهم عقد ساري في الشهر لكل فندق */
+  function activeIn_(month, types, hotelIds) {
+    var a = new Date(month + '-01T00:00:00+03:00').getTime(), out = [];
+    Db.all('Contracts', function (c) { return types.indexOf(c.type) !== -1; }).forEach(function (c) {
+      if ((ms(c.start) || 0) > a + 31 * 864e5 || (ms(c.end) || 9e15) < a) return;
+      csv(c.hotel_ids).forEach(function (h) { if ((!hotelIds || hotelIds.indexOf(h) !== -1) && !out.some(function (x) { return x.con === c.con_id && x.hotel === h; })) out.push({ con: c.con_id, hotel: h, type: c.type }); });
+    });
+    return out;
+  }
+  /** مدير الإشراف: ما لم يُقيَّم للشهر السابق */
+  function ratesDue(hotelIds) {
+    var m = prevMonth_(), done = {};
+    Db.all('SupRatings', function (r) { return mon_(r.month) === m; }).forEach(function (r) { done[r.con_id + '|' + r.hotel_id] = 1; });
+    var cn = {}, hn = {}; Db.all('Contractors').forEach(function (c) { cn[c.con_id] = c.name; }); Db.all('Hotels').forEach(function (h) { hn[h.hotel_id] = h.name; });
+    return { month: m, due: activeIn_(m, ['wa', 'pc'], hotelIds).filter(function (x) { return !done[x.con + '|' + x.hotel]; }).map(function (x) { return { con: x.con, conName: cn[x.con] || '', hotel: x.hotel, hotelName: hn[x.hotel] || '', type: x.type }; }) };
+  }
+  function rate(s, conId, hotelId, score, note) {
+    if (['supmgr', 'admin'].indexOf(s.role) === -1) throw new Error('تقييم الرضا لمدير الإشراف.');
+    if ([0, 50, 100].indexOf(Number(score)) === -1) throw new Error('اختر: راضٍ أو مقبول أو غير راضٍ.');
+    var d = ratesDue(supHotels(s));
+    if (!d.due.some(function (x) { return x.con === conId && x.hotel === hotelId; })) throw new Error('لا تقييم مطلوب لهذا المتعهد والفندق.');
+    Db.insert('SupRatings', { con_id: conId, hotel_id: hotelId, month: "'" + d.month, score: Number(score), note: String(note || '').trim(), by_name: (Db.get('Users', s.id) || {}).name || '', at: new Date() });
+  }
+  /** متعهد المكافحة: التقارير الشهرية المطلوبة (الشهر السابق) */
+  function reportsDue(conId) {
+    var m = prevMonth_(), done = {}, hn = {};
+    Db.all('Hotels').forEach(function (h) { hn[h.hotel_id] = h.name; });
+    Db.all('PcReports', function (r) { return r.con_id === conId && mon_(r.month) === m; }).forEach(function (r) { done[r.hotel_id] = 1; });
+    return { month: m, due: activeIn_(m, ['pc']).filter(function (x) { return x.con === conId && !done[x.hotel]; }).map(function (x) { return { hotel: x.hotel, name: hn[x.hotel] || '' }; }) };
+  }
+  function pcReport(conId, hotelId, att, by) {
+    var d = reportsDue(conId);
+    if (!d.due.some(function (x) { return x.hotel === hotelId; })) throw new Error('لا تقرير مطلوب لهذا الفندق.');
+    if (!att || !att.length) throw new Error('أرفق التقرير الشهري (PDF أو صورة).');
+    Db.insert('PcReports', { con_id: conId, hotel_id: hotelId, month: "'" + d.month, att: att.join(','), by_name: String(by || '').trim(), at: new Date() });
+  }
+
   // ───────── مكافحة الآفات ─────────
   function schedule(hotelId) {
     var out = {};
@@ -199,7 +251,8 @@ var Ops = (function () {
     Db.all('Rooms').forEach(function (r) { zones[r.room_id] = String(r.number); });
     return Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && ms(l.at) >= sinceMs; }).map(function (l) {
       return { id: l.log_id, hotel_id: l.hotel_id, kind: l.kind, zoneIds: csv(l.zones), zones: csv(l.zones).map(function (z) { return zones[z] || z; }), pests: csv(l.pests), material: l.material || '',
-        finding: l.finding || '', note: l.note || '', by: l.by_name, at: ms(l.at), trap: l.trap_id || '', flags: csv(l.flags_closed).length };
+        finding: l.finding || '', note: l.note || '', by: l.by_name, at: ms(l.at), trap: l.trap_id || '', flags: csv(l.flags_closed).length,
+        status: l.status || '', rejBy: l.rej_by || '', rejAt: ms(l.rej_at) || null, reason: l.rej_reason || '' };
     }).sort(function (a, b) { return b.at - a.at; });
   }
 
@@ -350,6 +403,12 @@ var Ops = (function () {
   }
   function pct_(a, b) { return b ? Math.round(100 * a / b) : null; }
 
+  /** رضا الإشراف الشهري في الفترة (متوسط من 100) */
+  function ratingIn_(conId, hotelIds, from, to) {
+    var m1 = from.slice(0, 7), m2 = to.slice(0, 7);
+    var rs = Db.all('SupRatings', function (r) { var m = mon_(r.month); return r.con_id === conId && hotelIds.indexOf(r.hotel_id) !== -1 && m >= m1 && m <= m2; });
+    return { v: rs.length ? Math.round(10 * rs.reduce(function (a, r) { return a + Number(r.score); }, 0) / rs.length) / 10 : null, n: rs.length };
+  }
   /** مؤشرات المتعهد في الفترة [from, to] (تواريخ yyyy-MM-dd) لفنادق محددة */
   function metrics(con, hotelIds, from, to) {
     var a = new Date(from + 'T00:00:00').getTime(), b = new Date(to + 'T23:59:59').getTime(), days = Math.max(1, Math.round((b - a) / 864e5));
@@ -375,13 +434,16 @@ var Ops = (function () {
       V.pickup = exp ? Math.min(100, pct_(done, exp)) : null;
       V.clean = rated.length ? Math.round(rated.reduce(function (s, v) { return s + Number(v.rating); }, 0) / rated.length * 20) : null;
       V.wash = came.length ? pct_(came.filter(function (v) { return yes_(v.washed); }).length, came.length) : null;
-      N = { pickup: exp, clean: rated.length, wash: came.length };
+      var allV = Db.all('WasteVisits', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && inR(v.at); });
+      V.visitsOk = allV.length ? pct_(vs.length, allV.length) : null;
+      var rt = ratingIn_(con.con_id, hotelIds, from, to); V.rating = rt.v;
+      N = { pickup: exp, clean: rated.length, wash: came.length, visitsOk: allV.length, rating: rt.n };
       X = { visits: vs.length, done: done, expected: exp, missed: Math.max(0, exp - done), noTruck: vs.length - came.length, leftMax: vs.reduce(function (m, v) { return Math.max(m, Number(v.left_carts) || 0); }, 0) };
     } else if (con.type === 'pc') {
       var expS = 0, gotS = 0;
       hotelIds.forEach(function (h) {
         var sch = schedule(h), sprays = {}, hd = cdays(h);
-        Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && inR(l.at); }).forEach(function (l) { csv(l.zones).forEach(function (z) { sprays[z] = (sprays[z] || 0) + 1; }); });
+        Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && l.status !== 'rejected' && inR(l.at); }).forEach(function (l) { csv(l.zones).forEach(function (z) { sprays[z] = (sprays[z] || 0) + 1; }); });
         var floors = {}; Db.all('Floors', function (f) { return f.hotel_id === h; }).forEach(function (f) { floors[f.floor_id] = f; });
         Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) {
           var ft = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST), ev = sch[ft];
@@ -400,7 +462,7 @@ var Ops = (function () {
       expS += avR; gotS += avD;
       var fl = Db.all('PestFlags', function (f) { return hotelIds.indexOf(f.hotel_id) !== -1 && inR(f.created_at) && f.status !== 'cancelled'; });
       var dn = fl.filter(function (f) { return f.status === 'done'; });
-      var tl = Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && l.kind === 'trap' && inR(l.at); }).length;
+      var tl = Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && l.kind === 'trap' && l.status !== 'rejected' && inR(l.at); }).length;
       var tExp = 0;
       Db.all('Traps', function (t) { return hotelIds.indexOf(t.hotel_id) !== -1 && ms(t.placed_at) <= b && (t.status === 'active' || ms(t.removed_at) >= a); }).forEach(function (t) {
         var s0 = Math.max(a, ms(t.placed_at)), e0 = t.status === 'active' ? b : Math.min(b, ms(t.removed_at));
@@ -411,6 +473,15 @@ var Ops = (function () {
       var due = fl.filter(function (f) { return f.status === 'done' || ms(f.created_at) + slaH * 36e5 < Date.now(); });
       V.flagresp = due.length ? pct_(due.filter(function (f) { return f.status === 'done' && ms(f.done_at) - ms(f.created_at) <= slaH * 36e5; }).length, due.length) : null;
       N.flagresp = due.length; N.ontime = expS; N.traps = tExp;
+      var allL = Db.all('PestLogs', function (l) { return l.con_id === con.con_id && hotelIds.indexOf(l.hotel_id) !== -1 && inR(l.at); });
+      V.logsOk = allL.length ? pct_(allL.filter(function (l) { return l.status !== 'rejected'; }).length, allL.length) : null; N.logsOk = allL.length;
+      // التقرير الشهري: لكل شهر انتهى داخل الفترة ولكل فندق كان فيه عقد
+      var need = 0, got = 0, pm0 = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+      for (var mm = from.slice(0, 7); mm <= to.slice(0, 7) && mm < pm0; mm = Utilities.formatDate(new Date(new Date(mm + '-15T12:00:00+03:00').getTime() + 31 * 864e5), TZ, 'yyyy-MM')) {
+        activeIn_(mm, ['pc'], hotelIds).forEach(function (x) { if (x.con !== con.con_id) return; need++; if (Db.all('PcReports', function (r) { return r.con_id === con.con_id && r.hotel_id === x.hotel && mon_(r.month) === mm; }).length) got++; });
+      }
+      V.reports = need ? pct_(got, need) : null; N.reports = need;
+      var rt2 = ratingIn_(con.con_id, hotelIds, from, to); V.rating = rt2.v; N.rating = rt2.n;
       X.flagAvgH = dn.length ? Math.round(dn.reduce(function (s, f) { return s + (ms(f.done_at) - ms(f.created_at)) / 36e5; }, 0) / dn.length) : ''; X.slaH = slaH;
       V.traps = tExp ? Math.min(100, pct_(tl, tExp)) : null;
       X = { flagAvgH: X.flagAvgH, slaH: X.slaH, sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.length - dn.length, trapChecks: tl, trapExpected: tExp, availReq: avR, availMissed: avR - avD };
@@ -424,7 +495,7 @@ var Ops = (function () {
       var pmExp = 0;
       if (con.type === 'el') hotelIds.forEach(function (h) { pmExp += cdays(h, 'pm_per_month') * 7 / 30; });
       pmExp = Math.round(pmExp);
-      var vv = Kpi.values(z, pmExp), KS = Kpi.KPIS[con.type] || ['resp', 'ready', 'info', 'sat'];
+      var vv = Kpi.values(z, pmExp), KS = Kpi.subsOf(con.type);
       KS.forEach(function (k) { V[k] = vv.V[k]; N[k] = vv.N[k]; });
       X = { respAvg: z.respN ? Math.round(z.respSum / z.respN) + ' د' : '', rescueAvg: z.rescueN ? Math.round(z.rescueSum / z.rescueN) + ' د' : '', pmExp: con.type === 'el' ? pmExp : '', orders: z.orders, closed: z.closed, pm: z.pm, trapped: z.trapped, claim: z.clN ? Math.round(z.clSum / z.clN) + ' د' : '', respN: z.respN, readyN: z.readyN, infoN: z.infoN, satN: z.satN, months: m1 === m2 ? m1 : m1 + ' — ' + m2 };
     }
@@ -433,8 +504,8 @@ var Ops = (function () {
     X.caNot = cas.filter(function (c) { return Number(c.rounds) > 0; }).length;
     var th = Kpi.thresholds()[con.type] || {}, sc = Kpi.score(con.type, V, N, th), cl = Kpi.clsOf(con.con_id);
     var c2 = { cls_ex: cl.ex, cls_good: cl.good, cls_ok: cl.ok }, C = {};
-    Object.keys(V).forEach(function (k) { C[k] = Kpi.cls(V[k], c2); });
-    return { V: V, N: N, X: X, score: sc.score, small: sc.small, used: sc.used, cls: Kpi.cls(sc.score, c2), C: C, bands: cl, th: th, days: days };
+    Object.keys(sc.P).forEach(function (k) { C[k] = Kpi.cls(sc.P[k].v, c2); });
+    return { V: V, N: N, P: sc.P, X: X, score: sc.score, small: sc.small, used: sc.used, cls: Kpi.cls(sc.score, c2), C: C, bands: cl, th: th, days: days };
   }
 
   /** كشف المكافحة أو النفايات لمتعهد في فترة: الملخص من metrics والتفاصيل من السجل */
@@ -494,7 +565,7 @@ var Ops = (function () {
     var sc = evalScope_(s, conId), m = metrics(sc.con, sc.hotels, from, to);
     var me = Db.get('Users', s.id) || {};
     var rec = Db.insert('Evaluations', { con_id: conId, type: sc.con.type, hotel_ids: sc.hotels.join(','), from: "'" + from, to: "'" + to,
-      data: { V: m.V, N: m.N, X: m.X, th: m.th, days: m.days, cls: m.cls, C: m.C, bands: m.bands, small: m.small }, score: m.score == null ? '' : m.score, decision: decision, note: String(note || '').trim(),
+      data: { type: sc.con.type, V: m.V, N: m.N, P: m.P, used: m.used, X: m.X, th: m.th, days: m.days, cls: m.cls, C: m.C, bands: m.bands, small: m.small }, score: m.score == null ? '' : m.score, decision: decision, note: String(note || '').trim(),
       by: me.name || '', created_at: new Date() });
     return { id: rec.eval_id };
   }
@@ -514,7 +585,7 @@ var Ops = (function () {
   }
 
   return {
-    statement: statement, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
+    statement: statement, pcReject: pcReject, ratesDue: ratesDue, rate: rate, reportsDue: reportsDue, pcReport: pcReport, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
     waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
     pestBoot: pestBoot, pestState: pestState, flag: flag, reqFlag: reqFlag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS

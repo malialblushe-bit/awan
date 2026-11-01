@@ -142,11 +142,9 @@ function upgradeSchema_() {
   seedMissingLists_();
   Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
   // v26: المؤشر يُقاس من 100 ويُضرب في وزنه؛ أوزان التشكيلة الجديدة لكل نوع، وإعادة حساب الملخص
-  if (Number(Db.setting('schema_version')) < 26) {
-    SEED_THRESHOLDS.forEach(function (r) {
-      if (!Db.updateWhere('Thresholds', function (t) { return t.type === r[0] && t.kpi === r[1]; }, { weight: r[4] })) Db.insert('Thresholds', { type: r[0], kpi: r[1], full: 0, half: 0, weight: r[4] });
-    });
-    Db.all('Thresholds').forEach(function (t) { if (!SEED_THRESHOLDS.some(function (r) { return r[0] === t.type && r[1] === t.kpi; })) Db.updateWhere('Thresholds', function (x) { return x.type === t.type && x.kpi === t.kpi; }, { weight: 0 }); });
+  // v27: المؤشرات الأربعة الثابتة لكل العقود بأوزانها، وإعادة حساب الملخص
+  if (Number(Db.setting('schema_version')) < 27) {
+    Db.rewrite('Thresholds', SEED_THRESHOLDS.map(function (r) { return { type: r[0], kpi: r[1], full: 0, half: 0, weight: r[4] }; }));
     try { Kpi.rebuild(); } catch (e) { }
   }
   var row = Db.find('Settings', function (r) { return r.key === 'schema_version'; });
@@ -294,6 +292,7 @@ function conBoot_(s) {
     water: con.type === 'wt' ? Water.conList(con.con_id) : null,
     tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
     claims: s.web && !s.lead ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
+    pcReports: con.type === 'pc' ? Ops.reportsDue(con.con_id) : null,
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar', lead: s.lead_name || '' },
@@ -560,7 +559,7 @@ function apiKpiBoot(token) {
     var h = R.hotels[r.hotel]; if (h) hs[r.hotel] = { id: h.hotel_id, name: h.name, brand: h.brand || 'nawazi' };
   });
   return {
-    rows: rows, thresholds: Kpi.thresholds(), kpis: Kpi.KPIS, minN: Kpi.MIN_N,
+    rows: rows, thresholds: Kpi.thresholds(), kpis: Kpi.KPIS, subs: Kpi.SUBS, minN: Kpi.MIN_N,
     cls: (function () { var o = {}; Object.keys(cons).forEach(function (k) { o[k] = Kpi.clsOf(k); }); return o; })(),
     cons: Object.keys(cons).map(function (k) { return cons[k]; }),
     hotels: Object.keys(hs).map(function (k) { return hs[k]; }),
@@ -1216,6 +1215,7 @@ function supBoot_(s) {
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
     tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
     org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
+    rates: ['supmgr', 'admin'].indexOf(s.role) !== -1 ? Ops.ratesDue(hs) : null,
     canFlag: ['admin', 'gm', 'duty'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
@@ -1233,6 +1233,18 @@ function apiSvcBoot(token) { var s = Auth.need(token, SVC_ROLES_); return supBoo
 function apiOpsStatement(token, conId, hotelId, from, to) {
   var s = Auth.need(token, SVC_ROLES_.concat(['supmgr']));
   return Ops.statement(Ops.supHotels(s), conId, hotelId, from, to);
+}
+function apiPcReject(token, id, reason) {
+  var s = Auth.need(token, ['supmgr', 'admin']);
+  return Db.withLock(function () { Ops.pcReject(s, id, reason); Db.reset(); return { boot: supBoot_(s) }; });
+}
+function apiSupRate(token, conId, hotelId, score, note) {
+  var s = Auth.need(token, ['supmgr', 'admin']);
+  return Db.withLock(function () { Ops.rate(s, conId, hotelId, score, note); Db.reset(); return { boot: supBoot_(s) }; });
+}
+function apiConPcReport(token, hotelId, att, by) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { var f = saveFiles_(att, 'PR'); Ops.pcReport(s.id, hotelId, f, by); Db.reset(); return { boot: conBoot_(s) }; });
 }
 function apiWaReject(token, id, reason) {
   var s = Auth.need(token, ['supmgr', 'admin']);
