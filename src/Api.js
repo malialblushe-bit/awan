@@ -182,7 +182,7 @@ function apiReqPest(code, d) {
 }
 /** مشرف النظام ومدير الفندق والمناوب: «طلب مكافحة» من الخدمات المساندة */
 function apiSvcPestFlag(token, d) {
-  var s = Auth.need(token, ['admin', 'gm', 'duty']);
+  var s = Auth.need(token, ['admin', 'gm', 'duty', 'fo']);
   return Db.withLock(function () { d = d || {}; d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF'); var n = Ops.flag(s, d); Db.reset(); return { n: n, boot: supBoot_(s) }; });
 }
 
@@ -352,8 +352,8 @@ function apiChangePassword(token, pw) { return Auth.changePassword(token, pw); }
 function apiLogout(token) { Auth.logout(token); return true; }
 
 /** أدوار المتابعة (اطلاع فقط + ملاحظة): الإدارة لكل الفنادق، ومدير الفندق ومدير التشغيل لفنادقهم */
-var STAFF_ROLES = ['admin', 'engineer', 'management', 'gm', 'om', 'duty'];
-var VIEW_ROLES = ['management', 'gm', 'om', 'duty'];
+var STAFF_ROLES = ['admin', 'engineer', 'management', 'gm', 'om', 'duty', 'fo'];
+var VIEW_ROLES = ['management', 'gm', 'om', 'duty', 'fo'];
 function scopeHotels_(s, R) {
   if (s.role === 'admin' || s.role === 'management') return Object.keys(R.hotels);
   return Orders.csv((Db.get('Users', s.id) || {}).hotel_ids);
@@ -1216,7 +1216,7 @@ function supBoot_(s) {
     tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
     org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
     rates: ['supmgr', 'admin'].indexOf(s.role) !== -1 ? Ops.ratesDue(hs) : null,
-    canFlag: ['admin', 'gm', 'duty'].indexOf(s.role) !== -1,
+    canFlag: ['admin', 'gm', 'duty', 'fo'].indexOf(s.role) !== -1,
     cons: cons,
     evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
     lists: { pest: L.pest, material: L.material, ftype: L.ftype },
@@ -1227,7 +1227,7 @@ function supBoot_(s) {
 
 function apiSupBoot(token) { var s = Auth.need(token, SUP_ROLES_); ensureSchemaVersion_(); return supBoot_(s); }
 /** «الخدمات المساندة» للفريق: النفايات والمكافحة اطلاعاً (ورفض الزيارات لمشرف النظام) — تُقرأ عند فتح التبويب فقط */
-var SVC_ROLES_ = ['admin', 'gm', 'om', 'duty', 'management'];
+var SVC_ROLES_ = ['admin', 'gm', 'om', 'duty', 'fo', 'management'];
 function apiSvcBoot(token) { var s = Auth.need(token, SVC_ROLES_); return supBoot_(s); }
 /** كشف المكافحة أو النفايات (للاطلاع والطباعة) */
 function apiOpsStatement(token, conId, hotelId, from, to) {

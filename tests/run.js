@@ -943,6 +943,13 @@ t('شاحنات المياه: باركود بالرقم السري والموق�
   const c = run(`apiWtSubmit('${tk2}', 'WARIF2', { driver: 'سالم', size: 19, receipt: 'A2' }, ${JSON.stringify(near)})`);
   eq(run(`apiWtMatch('${du}', ['${c.id}'], true)`).n, 1);
   throws(`apiEngAct('${du}', '${run(`Db.all('WorkOrders')[0].wo_id`)}', 'close', {})`, 'صلاحية');
+  // مشرف المكاتب الأمامية: صلاحيات المناوب نفسها
+  const fpw = run(`apiAdmAddUser('${adminTok}', { name: 'مشرف المكاتب', role: 'fo', username: 'fo.warif', hotel_ids: ['${HID}'] })`).password;
+  run(`Auth.changePassword(apiStaffLogin('fo.warif', '${fpw}').token, 'Front2026xx')`);
+  const fo = run(`apiStaffLogin('fo.warif', 'Front2026xx')`).token;
+  eq(run(`apiEngBoot('${fo}')`).water.canMatch, true);
+  throws(`apiEngAct('${fo}', '${run(`Db.all('WorkOrders')[0].wo_id`)}', 'close', {})`, 'صلاحية');
+  run(`apiSvcBoot('${fo}')`);
   const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
   const st = run(`apiWtStatement('${gm}', '${conId}', 'all', '${today}', '${today}')`);
   eq(st.count, 2); eq(st.vol, 38); eq(st.total, 700); eq(st.rejected, 1); eq(st.pending, 0); eq(st.lines[0].size, 19);

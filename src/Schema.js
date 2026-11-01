@@ -37,7 +37,7 @@ var SCHEMA = [
     ['install_year', 'سنة التركيب'], ['serial', 'الرقم التسلسلي'], ['notes', 'ملاحظات'], ['tower', 'البرج']] },
 
   { name: 'Users', cols: [
-    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · duty (المدير المناوب) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
+    ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · duty (المدير المناوب) · fo (مشرف المكاتب الأمامية) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },

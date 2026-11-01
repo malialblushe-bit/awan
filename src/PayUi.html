@@ -149,7 +149,7 @@ var LN={inv:null,word:'',done:null,
  load:function(){if(LN.busy)return;LN.busy=true;call('apiAdmLaunchInventory',S.tok).then(function(r){LN.busy=false;LN.inv=r;render()}).catch(function(){LN.busy=false})},
  go:function(){call('apiAdmLaunchReset',S.tok,LN.word).then(function(r){LN.inv=r.inv;LN.done=r;LN.word='';W.a=r.boot;toast(F('تم المسح. النسخة الاحتياطية: {0}',r.backup));render()})},
  view:function(){if(W.b.me.role!=='admin')return '';if(!LN.inv){LN.load();return '<div class="card muted" style="text-align:center">…</div>'}
-  var v=LN.inv,rv=v.review,R={admin:'مشرف النظام',engineer:'مهندس الصيانة',management:'الإدارة',gm:'مدير الفندق',om:'مدير التشغيل',duty:'المدير المناوب',supmgr:'مدير الإشراف',sup:'مشرف ميداني',fin:'المالية'};
+  var v=LN.inv,rv=v.review,R={admin:'مشرف النظام',engineer:'مهندس الصيانة',management:'الإدارة',gm:'مدير الفندق',om:'مدير التشغيل',duty:'المدير المناوب',fo:'مشرف المكاتب الأمامية',supmgr:'مدير الإشراف',sup:'مشرف ميداني',fin:'المالية'};
   var h='<div class="stack"><div class="row"><h2 style="font-size:18px">جرد البيانات</h2><button class="btn btn-o sm" onclick="LN.inv=null;render()">تحديث الجرد</button></div>';
   if(LN.done)h+='<div class="alert a-mint">'+F('تم المسح. النسخة الاحتياطية: {0}',esc(LN.done.backup))+' · <a target="_blank" rel="noopener" href="'+esc(LN.done.backupUrl)+'">فتح النسخة الاحتياطية</a></div>';
   var rows=v.tables.slice().sort(function(a,b){return a.kind===b.kind?b.rows-a.rows:a.kind==='keep'?-1:1});

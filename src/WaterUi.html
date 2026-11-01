@@ -90,7 +90,7 @@ var WT={st:{},pin:'',
  render=function(){if(S.mode==='wt'){applyTheme(themeNow()||'');return WT.render()}return r0()}})();
 
 // تبويب «الخدمات المساندة» للفريق: المياه، والنفايات والمكافحة (اطلاع؛ ورفض زيارات النفايات لمشرف النظام)
-var SVC={roles:['admin','gm','om','duty','management'],
+var SVC={roles:['admin','gm','om','duty','fo','management'],
  subs:function(){var r=[];if(W.b.water)r.push(['wt','المياه']);if(SVC.roles.indexOf(W.b.me.role)!==-1){r.push(['wa','النفايات']);r.push(['pc','المكافحة'])}return r},
  view:function(){var subs=SVC.subs();if(!subs.some(function(x){return x[0]===SVC.sub}))SVC.sub=subs[0][0];
   var h='<div class="stack"><div class="chips">'+subs.map(function(x){return '<button class="chip'+(SVC.sub===x[0]?' on':'')+'" style="min-height:42px;font-size:15px" data-k="'+x[0]+'" onclick="SVC.go(this.dataset.k)">'+x[1]+'</button>'}).join('')+'</div>';

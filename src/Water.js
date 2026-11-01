@@ -8,7 +8,7 @@
 var Water = (function () {
   var TZ = 'Asia/Riyadh';
   var DUP_MIN = 20;
-  var MATCH_ROLES = ['gm', 'duty', 'admin'];
+  var MATCH_ROLES = ['gm', 'duty', 'fo', 'admin'];
 
   function ms(d) { return Orders.ms(d); }
   function day_(t) { return t ? Utilities.formatDate(new Date(t), TZ, 'yyyy-MM-dd') : ''; }
