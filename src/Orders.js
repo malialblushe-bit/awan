@@ -313,12 +313,14 @@ var Orders = (function () {
       if (OPEN.indexOf(o.status) === -1) throw new Error('العملية مغلقة.');
       var why = String(d.note || '').trim();
       if (!why) throw new Error('اكتب تعليقاً يوضح سبب الإيقاف.');
+      patch.stop_prev = JSON.stringify({ status: o.status, decision: o.decision || '', reject_reason: o.reject_reason || '' });
       to = 'rejected'; patch.decision = 'stop'; patch.reject_reason = 'أُوقف: ' + why; patch.closed_at = t; note = patch.reject_reason;
     } else if (action === 'unstop') {
-      // إلغاء الإيقاف خلال 7 أيام: يعود للمتعهد (مُسند، أو قيد التنفيذ إن كان قد وصل)
+      // إلغاء الإيقاف في أي وقت: يعود لآخر مرحلة قبل الإيقاف بقرارها وملاحظتها
       if (o.status !== 'rejected' || o.decision !== 'stop') throw new Error('الطلب ليس موقوفاً.');
-      if (Date.now() - ms(o.closed_at) > 7 * 864e5) throw new Error('مضى على الإيقاف أكثر من 7 أيام. ارفع طلباً جديداً.');
-      to = o.arrived_at ? 'in_progress' : 'assigned'; patch.decision = ''; patch.reject_reason = ''; patch.closed_at = ''; note = 'أُلغي الإيقاف';
+      var pv = {}; try { pv = JSON.parse(o.stop_prev || '{}'); } catch (e) { pv = {}; }
+      to = pv.status || (o.arrived_at ? 'in_progress' : 'assigned');
+      patch.decision = pv.decision || ''; patch.reject_reason = pv.reject_reason || ''; patch.closed_at = ''; patch.stop_prev = ''; note = 'أُلغي الإيقاف';
     } else if (action === 'follow') {
       // فتح متابعة من التقرير: عطل آخر ظهر في تقرير المتعهد، يُفتح باسمه دون تغيير حالة الأصل
       var fn = String(d.note || '').trim();

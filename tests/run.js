@@ -1169,6 +1169,12 @@ t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صح�
   throws(`apiEngAct('${engTok}', '${id}', 'stop', { note: 'x' })`, 'مغلقة');
   run(`apiEngAct('${engTok}', '${id}', 'unstop', {})`);
   const u = run(`Db.get('WorkOrders', '${id}')`); eq(u.status, 'assigned'); eq(u.decision, ''); eq(u.reject_reason, '');
+  // الإعادة لآخر مرحلة: طلب بانتظار القرار يعود بانتظار القرار
+  const q = run(`Db.all('WorkOrders').find(x => ['decision', 'quote', 'in_progress', 'matching'].indexOf(x.status) !== -1)`);
+  const st0 = q.status;
+  run(`apiEngAct('${engTok}', '${q.wo_id}', 'stop', { note: 'مكرر' })`);
+  run(`apiEngAct('${engTok}', '${q.wo_id}', 'unstop', {})`);
+  eq(run(`Db.get('WorkOrders', '${q.wo_id}').status`), st0);
   throws(`apiEngAct('${engTok}', '${id}', 'unstop', {})`, 'ليس موقوفاً');
 });
 

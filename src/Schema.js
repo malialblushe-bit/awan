@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 27;
+var SCHEMA_VERSION = 28;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -78,7 +78,7 @@ var SCHEMA = [
     ['floor_id', 'الدور'], ['room', 'الغرفة أو المكان'], ['equip', 'المعدة أو المصعد'],
     ['symptom', 'العَرَض'], ['trapped', 'احتجاز'], ['requester', 'رافع الطلب'], ['description', 'الوصف'],
     ['photos', 'الصور (معرّفات Drive)'], ['report', 'التقرير (JSON)'],
-    ['quote', 'عرض السعر'], ['decision', 'القرار'], ['decision_note', 'ملاحظة القرار'],
+    ['quote', 'عرض السعر'], ['decision', 'القرار'], ['decision_note', 'ملاحظة القرار'], ['stop_prev', 'ما قبل الإيقاف'],
     ['reject_reason', 'سبب الرفض أو إعادة الفتح'], ['receipt', 'رقم الإيصال'], ['sat', 'رضا المهندس'],
     ['follow_of', 'متابعة للعملية'], ['visits', 'عدد الزيارات'], ['work_minutes', 'دقائق العمل الفعلي'],
     ['work_from', 'بداية العمل الجاري'], ['reopens', 'مرات إعادة الفتح'],

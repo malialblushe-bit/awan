@@ -120,7 +120,7 @@ function archiveAwan() {
     var all = Db.all('WorkOrders');
     var old = all.filter(function (o) {
       var c = Orders.ms(o.closed_at);
-      return (o.status === 'closed' || o.status === 'rejected') && c && c < cut && !Orders.truthy(o.pay_pending);
+      return (o.status === 'closed' || o.status === 'rejected') && c && c < cut && !Orders.truthy(o.pay_pending) && o.decision !== 'stop';
     });
     if (!old.length) return 0;
     Db.insertMany('WorkOrdersArchive', old.map(function (o) { var c = {}; Object.keys(o).forEach(function (k) { c[k] = o[k]; }); return c; }));
