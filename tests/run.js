@@ -1167,6 +1167,9 @@ t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صح�
   const o = run(`Db.get('WorkOrders', '${id}')`);
   eq(o.status, 'rejected'); eq(o.decision, 'stop'); eq(o.reject_reason, 'أُوقف: طلب غير صحيح: لا يوجد صوت');
   throws(`apiEngAct('${engTok}', '${id}', 'stop', { note: 'x' })`, 'مغلقة');
+  run(`apiEngAct('${engTok}', '${id}', 'unstop', {})`);
+  const u = run(`Db.get('WorkOrders', '${id}')`); eq(u.status, 'assigned'); eq(u.decision, ''); eq(u.reject_reason, '');
+  throws(`apiEngAct('${engTok}', '${id}', 'unstop', {})`, 'ليس موقوفاً');
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {

@@ -314,6 +314,11 @@ var Orders = (function () {
       var why = String(d.note || '').trim();
       if (!why) throw new Error('اكتب تعليقاً يوضح سبب الإيقاف.');
       to = 'rejected'; patch.decision = 'stop'; patch.reject_reason = 'أُوقف: ' + why; patch.closed_at = t; note = patch.reject_reason;
+    } else if (action === 'unstop') {
+      // إلغاء الإيقاف خلال 7 أيام: يعود للمتعهد (مُسند، أو قيد التنفيذ إن كان قد وصل)
+      if (o.status !== 'rejected' || o.decision !== 'stop') throw new Error('الطلب ليس موقوفاً.');
+      if (Date.now() - ms(o.closed_at) > 7 * 864e5) throw new Error('مضى على الإيقاف أكثر من 7 أيام. ارفع طلباً جديداً.');
+      to = o.arrived_at ? 'in_progress' : 'assigned'; patch.decision = ''; patch.reject_reason = ''; patch.closed_at = ''; note = 'أُلغي الإيقاف';
     } else if (action === 'follow') {
       // فتح متابعة من التقرير: عطل آخر ظهر في تقرير المتعهد، يُفتح باسمه دون تغيير حالة الأصل
       var fn = String(d.note || '').trim();
@@ -412,7 +417,7 @@ var Orders = (function () {
       follow_of: o.follow_of || '', resp: respOf_(o, contractOf_(R, o)),
       created: ms(o.created_at), assigned: ms(o.assigned_at), arrived: ms(o.arrived_at), rescued: ms(o.rescued_at),
       submitted: ms(o.submitted_at), decided: ms(o.decided_at), paid: forCon ? null : ms(o.paid_at),
-      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), down_from: ms(o.down_from), down_to: ms(o.down_to),
+      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), stopped: o.decision === 'stop', down_from: ms(o.down_from), down_to: ms(o.down_to),
       claimed_by: o.claimed_by || '', claimed_at: ms(o.claimed_at), tg: !!o.tg_msg,
       pay_pending: forCon ? false : truthy(o.pay_pending), repair_date: String(o.repair_date || ''),
       rfq: forCon ? null : ms(o.rfq_at), rfq_count: forCon ? 0 : (Number(o.rfq_count) || 0), quote_no: forCon ? '' : String(o.quote_no || ''), quote_at: forCon ? null : ms(o.quote_at)
