@@ -1150,6 +1150,16 @@ t('الواجهة: كل كتل السكربت في ملفات html سليمة ا
   });
 });
 
+t('فتح متابعة من التقرير: المهندس يفتح عملية باسم المتعهد نفسه مرتبطة بالأصل، دون تغيير حالته', () => {
+  const o = run(`Db.all('WorkOrders').find(x => x.type === 'el' && x.con_id && x.status === 'closed') || Db.all('WorkOrders').find(x => x.type === 'el' && x.con_id)`);
+  throws(`apiEngAct('${engTok}', '${o.wo_id}', 'follow', { note: '' })`, 'يحتاج معالجة');
+  const r = run(`apiEngAct('${engTok}', '${o.wo_id}', 'follow', { note: 'المبينات في الأدوار 3 و4 لا تعمل' })`);
+  if (!r.created) throw new Error('no follow');
+  const f = run(`Db.get('WorkOrders', '${r.created}')`);
+  eq(f.follow_of, o.wo_id); eq(f.con_id, o.con_id); eq(f.equip, o.equip); eq(f.source, 'engineer');
+  eq(run(`Db.get('WorkOrders', '${o.wo_id}').status`), o.status);
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   throws(`apiAdmLaunchInventory('${engTok}')`, '');
   const inv = run(`apiAdmLaunchInventory('${adminTok}')`);

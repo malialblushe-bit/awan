@@ -410,9 +410,11 @@ function apiEngBoot(token) {
 function apiEngAct(token, woId, action, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
+    d = d || {};
     var to = Orders.engAct(s, woId, action, d);
-    Kpi.touch([woId]);
+    Kpi.touch(d.created ? [woId, d.created] : [woId]);
     if (action === 'assign') Tg.post(woId); else Tg.refresh([woId]);
+    if (d.created) Tg.post(d.created);
     var mailed = '';
     if (action === 'paid' || action === 'prepay') {
       // إشعار إدارة المتعهد بالبريد (لا يمنع الإجراء إن تعذّر)
@@ -423,7 +425,7 @@ function apiEngAct(token, woId, action, d) {
       } catch (e) { mailed = 'fail'; }
     }
     Db.reset();
-    return { to: to, mailed: mailed, boot: engBoot_(s) };
+    return { to: to, mailed: mailed, created: d.created || '', boot: engBoot_(s) };
   });
 }
 

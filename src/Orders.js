@@ -308,6 +308,16 @@ var Orders = (function () {
       if (!d.reason) throw new Error('اختر سبب الإجراء التصحيحي.');
       to = 'in_progress'; patch.reject_reason = d.reason + (d.required ? ' — ' + String(d.required).trim() : ''); patch.reopens = (Number(o.reopens) || 0) + 1; note = patch.reject_reason;
       Quality.openForOrder(o, d, me ? me.name : s.id);
+    } else if (action === 'follow') {
+      // فتح متابعة من التقرير: عطل آخر ظهر في تقرير المتعهد، يُفتح باسمه دون تغيير حالة الأصل
+      var fn = String(d.note || '').trim();
+      if (!fn) throw new Error('اكتب ما الذي يحتاج معالجة.');
+      if (!o.con_id) throw new Error('العملية بلا متعهد.');
+      var nf = create({
+        hotel_id: o.hotel_id, type: o.type, kind: 'corrective', source: 'engineer', con_id: o.con_id,
+        floor_id: o.floor_id, room: o.room, equip: o.equip, symptom: fn, follow_of: woId, description: fn
+      }, me ? me.name : s.id).order;
+      d.created = nf.wo_id; note = 'فُتحت متابعة ' + nf.wo_id + ': ' + fn;
     } else if (action === 'assign') {
       if (OPEN.indexOf(o.status) === -1) throw new Error('العملية مغلقة.');
       patch.con_id = d.con_id; patch.assigned_at = t;
