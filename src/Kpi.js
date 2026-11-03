@@ -49,7 +49,7 @@ var Kpi = (function () {
 
   function compute_(conId, hotelId, month, hotelOrders, canon) {
     var ms = Orders.ms, win = windowDays_() * 864e5, R = Orders.refs();
-    var mine = hotelOrders.filter(function (o) { return o.con_id === conId && month_(o.created_at) === month; });
+    var mine = hotelOrders.filter(function (o) { return o.con_id === conId && month_(o.created_at) === month && o.decision !== 'stop'; });
     var d = {
       orders: mine.length, closed: 0,
       respSum: 0, respN: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0,

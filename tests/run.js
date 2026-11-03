@@ -1160,6 +1160,15 @@ t('فتح متابعة من التقرير: المهندس يفتح عملية �
   eq(run(`Db.get('WorkOrders', '${o.wo_id}').status`), o.status);
 });
 
+t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صحيح بتعليق إلزامي، ولا يُحسب على المتعهد', () => {
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت غريب', name: 'تجربة' })`).id;
+  throws(`apiEngAct('${engTok}', '${id}', 'stop', { note: ' ' })`, 'تعليقاً');
+  run(`apiEngAct('${engTok}', '${id}', 'stop', { note: 'طلب غير صحيح: لا يوجد صوت' })`);
+  const o = run(`Db.get('WorkOrders', '${id}')`);
+  eq(o.status, 'rejected'); eq(o.decision, 'stop'); eq(o.reject_reason, 'أُوقف: طلب غير صحيح: لا يوجد صوت');
+  throws(`apiEngAct('${engTok}', '${id}', 'stop', { note: 'x' })`, 'مغلقة');
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   throws(`apiAdmLaunchInventory('${engTok}')`, '');
   const inv = run(`apiAdmLaunchInventory('${adminTok}')`);

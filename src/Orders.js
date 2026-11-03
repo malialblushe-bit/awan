@@ -308,6 +308,12 @@ var Orders = (function () {
       if (!d.reason) throw new Error('اختر سبب الإجراء التصحيحي.');
       to = 'in_progress'; patch.reject_reason = d.reason + (d.required ? ' — ' + String(d.required).trim() : ''); patch.reopens = (Number(o.reopens) || 0) + 1; note = patch.reject_reason;
       Quality.openForOrder(o, d, me ? me.name : s.id);
+    } else if (action === 'stop') {
+      // إيقاف طلب غير صحيح من مالك الخدمة (أياً كان رافعه) بتعليق إلزامي؛ لا يُحسب على المتعهد
+      if (OPEN.indexOf(o.status) === -1) throw new Error('العملية مغلقة.');
+      var why = String(d.note || '').trim();
+      if (!why) throw new Error('اكتب تعليقاً يوضح سبب الإيقاف.');
+      to = 'rejected'; patch.decision = 'stop'; patch.reject_reason = 'أُوقف: ' + why; patch.closed_at = t; note = patch.reject_reason;
     } else if (action === 'follow') {
       // فتح متابعة من التقرير: عطل آخر ظهر في تقرير المتعهد، يُفتح باسمه دون تغيير حالة الأصل
       var fn = String(d.note || '').trim();
