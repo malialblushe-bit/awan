@@ -313,7 +313,6 @@ var Ops = (function () {
   function pcCon_(s, hotelId) {
     var con = Db.get('Contractors', s.id);
     if (!con || con.type !== 'pc') throw new Error('هذا الإجراء لمتعهد المكافحة.');
-    if (s.lead) throw new Error('هذا الإجراء لمتعهد المكافحة.');
     if (!Orders.activeContract(hotelId, 'pc', con.con_id)) throw new Error('لا يوجد عقد ساري لك في هذا الفندق.');
     return con;
   }
@@ -332,7 +331,7 @@ var Ops = (function () {
     var closed = Db.all('PestFlags', function (f) { return f.hotel_id === hotelId && f.status === 'open' && d.zones.indexOf(f.zone) !== -1 && (f.kind === 'infest' || d.kind === 'spray'); });
     var rec = Db.insert('PestLogs', {
       hotel_id: hotelId, con_id: con.con_id, zones: d.zones.join(','), kind: d.kind, pests: (d.pests || []).join(','), material: String(d.material || '').trim(),
-      finding: d.finding, note: String(d.note || '').trim(), photos: (d.photos || []).join(','), by_name: String(d.tech || '').trim() || con.name, at: t,
+      finding: d.finding, note: String(d.note || '').trim(), photos: (d.photos || []).join(','), by_name: String(d.tech || '').trim() || (s.lead_name ? s.lead_name + ' (قائد الفريق)' : con.name), at: t,
       flags_closed: closed.map(function (f) { return f.flag_id; }).join(',')
     });
     closed.forEach(function (f) { Db.update('PestFlags', f.flag_id, { status: 'done', done_at: t, done_log: rec.log_id }); });

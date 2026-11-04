@@ -1019,18 +1019,18 @@ function apiAdmSaveContract(token, d) {
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
       prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || '',
-      lead_name: d.type === 'el' ? String(d.lead_name || '').trim() : ''
+      lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : ''
     });
-    var leadPin = (d.type === 'el' && String(d.lead_name || '').trim()) ? Auth.setLeadPin(ctr.contract_id) : null;
+    var leadPin = ((d.type === 'el' || d.type === 'pc') && String(d.lead_name || '').trim()) ? Auth.setLeadPin(ctr.contract_id) : null;
     return { pin: pin, leadPin: leadPin };
   });
 }
 
-/** قائد فريق المصاعد: الاسم ورقم سري جديد يظهر مرة واحدة */
+/** قائد فريق المصاعد أو المكافحة: الاسم ورقم سري جديد يظهر مرة واحدة */
 function apiAdmLeadPin(token, contractId, name) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
-    if (!c || c.type !== 'el') throw new Error('قائد الفريق لعقود المصاعد.');
+    if (!c || (c.type !== 'el' && c.type !== 'pc')) throw new Error('قائد الفريق لعقود المصاعد والمكافحة.');
     name = String(name || c.lead_name || '').trim();
     if (!name) throw new Error('اكتب اسم قائد الفريق.');
     Db.update('Contracts', contractId, { lead_name: name });

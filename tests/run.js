@@ -801,6 +801,12 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   throws(`apiPestLog('${acTok}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`, 'المكافحة');
   // متعهد المكافحة يسجّل من الويب أيضاً (بلا باركود)
   const wt = run(`apiPinWebLogin('${pcPin}')`).token;
+  // قائد فريق المكافحة: رقم خاص بصلاحيات الشركة، ومعالجته موسومة باسمه
+  const pcc = run(`Db.all('Contracts').find(c => c.type === 'pc').contract_id`);
+  const lpc = run(`apiAdmLeadPin('${adminTok}', '${pcc}', 'أبو فهد')`).pin;
+  const LP = run(`apiPinWebLogin('${lpc}')`); eq(LP.kind, 'con'); eq(!!LP.boot.claims, true);
+  run(`apiPestLog('${LP.token}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`);
+  eq(run(`Db.all('PestLogs').slice(-1)[0].by_name`), 'أبو فهد (قائد الفريق)');
   eq(run(`apiPestLog('${wt}', { hotel_id: '${HID}', zones: ['${room.id}', '${kitchen.id}'], kind: 'inspect', finding: 'none' })`).result.flags >= 0, true);
 });
 
