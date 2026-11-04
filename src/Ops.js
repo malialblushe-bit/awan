@@ -451,13 +451,13 @@ var Ops = (function () {
           var e = Math.floor(hd / ev); if (!e) return; expS += e; gotS += Math.min(e, sprays[r.room_id] || 0);
         });
       });
-      // غرف النزلاء (مرات في الشهر): المطلوب = بلاغات «متاحة للرش» في الفترة (عدا آخر 24 ساعة)، والمنجز منها؛ وغير المتاحة لا تُحسب على المتعهد
+      // غرف النزلاء (مرات في الشهر): المطلوب = بلاغات «متاحة للرش» في الفترة (المنجز يُحسب فوراً، والمفتوح بعد 24 ساعة)، والمنجز منها؛ وغير المتاحة لا تُحسب على المتعهد
       var avR = 0, avD = 0;
       hotelIds.forEach(function (h) {
         var qt = quotas(h); if (!Object.keys(qt).length) return;
         var zt = {}, floors = {}; Db.all('Floors', function (f) { return f.hotel_id === h; }).forEach(function (f) { floors[f.floor_id] = f; });
         Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) { zt[r.room_id] = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST); });
-        Db.all('PestFlags', function (f) { return f.hotel_id === h && f.kind === 'ready' && f.status !== 'cancelled' && qt[zt[f.zone]] && ms(f.created_at) >= a && ms(f.created_at) <= b - 864e5; }).forEach(function (f) { avR++; if (f.status === 'done') avD++; });
+        Db.all('PestFlags', function (f) { return f.hotel_id === h && f.kind === 'ready' && f.status !== 'cancelled' && qt[zt[f.zone]] && ms(f.created_at) >= a && (f.status === 'done' ? ms(f.created_at) <= b : ms(f.created_at) <= b - 864e5); }).forEach(function (f) { avR++; if (f.status === 'done') avD++; });
       });
       expS += avR; gotS += avD;
       var fl = Db.all('PestFlags', function (f) { return hotelIds.indexOf(f.hotel_id) !== -1 && inR(f.created_at) && f.status !== 'cancelled'; });
