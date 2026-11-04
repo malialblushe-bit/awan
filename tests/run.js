@@ -65,6 +65,8 @@ class Sheet {
     for (let i = this.grid.length - 1; i >= 0; i--) if ((this.grid[i] || []).some(v => v !== '' && v !== undefined)) return i + 1;
     return 0;
   }
+  getMaxRows() { return Math.max(1000, this.grid.length); }
+  getMaxColumns() { return Math.max(26, this.getLastColumn()); }
   getLastColumn() {
     let m = 0;
     this.grid.forEach(r => (r || []).forEach((v, j) => { if (v !== '' && v !== undefined) m = Math.max(m, j + 1); }));
@@ -119,6 +121,7 @@ const ctx = {
     ProtectionType: { SHEET: 'SHEET' }
   },
   DriveApp: {
+    getStorageUsed: () => 3.2e9, getStorageLimit: () => 15e9,
     getFileById: (id) => ({ makeCopy: (n) => ({ getName: () => n, getUrl: () => 'https://drive/x' }), setTrashed: () => {}, getParents: () => { let d = false; return { hasNext: () => !d, next: () => { d = true; return projectFolder; } }; }, moveTo: () => {} }),
     getFolderById: (id) => { if (!folders[id]) throw new Error('no folder ' + id); return folders[id]; },
     getRootFolder: () => rootFolder,
@@ -1199,6 +1202,7 @@ t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صح�
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
+  const cap = run(`apiAdmLaunchInventory('${adminTok}')`).cap; eq(cap.drive.pct, 21.3); eq(cap.cells.limit, 10000000); if (!(cap.cells.used > 0)) throw new Error('cells');
   throws(`apiAdmLaunchInventory('${engTok}')`, '');
   const inv = run(`apiAdmLaunchInventory('${adminTok}')`);
   const wo = inv.tables.find(x => x.table === 'WorkOrders'); eq(wo.kind, 'clear'); if (!wo.rows) throw new Error('wo rows');

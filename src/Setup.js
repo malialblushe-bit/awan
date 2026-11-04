@@ -115,6 +115,7 @@ function done_(title, report) {
 
 /** ليلياً: العمليات المغلقة أو المرفوضة منذ أكثر من ARCHIVE_DAYS تنتقل للأرشيف (ما عدا سداد معلّق) */
 function archiveAwan() {
+  try { Launch.capAlert(); } catch (e) { }
   return Db.withLock(function () {
     var cut = Date.now() - ARCHIVE_DAYS * 864e5;
     var all = Db.all('WorkOrders');

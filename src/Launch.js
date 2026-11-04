@@ -38,7 +38,7 @@ var Launch = (function () {
       users: Db.all('Users').map(function (u) { return { name: u.name, role: u.role, username: u.username }; }),
       pendingLists: Db.all('Lists', function (l) { return l.status === 'pending'; }).length
     };
-    return { tables: out, review: review, clearCount: out.filter(function (x) { return x.kind === 'clear'; }).reduce(function (s, x) { return s + x.rows; }, 0) };
+    return { tables: out, review: review, cap: capacity(), clearCount: out.filter(function (x) { return x.kind === 'clear'; }).reduce(function (s, x) { return s + x.rows; }, 0) };
   }
 
   /** النسخة الاحتياطية ثم المسح وتصفير الترقيم */
@@ -57,7 +57,37 @@ var Launch = (function () {
     return { backup: copy.getName(), backupUrl: copy.getUrl(), cleared: done };
   }
 
-  return { inventory: inventory, reset: reset, KEEP: KEEP, CLEAR: CLEAR };
+  /** مؤشرات السعة: مساحة Drive للحساب، وخلايا ملف البيانات (الحد 10 ملايين) */
+  var WARN = 70, CELL_LIMIT = 10000000;
+  function capacity() {
+    var out = { warn: WARN, drive: null };
+    try {
+      var u = DriveApp.getStorageUsed(), l = DriveApp.getStorageLimit();
+      out.drive = { used: u, limit: l, pct: l ? Math.round(1000 * u / l) / 10 : null };
+    } catch (e) { out.drive = null; }
+    var cells = 0, sheets = [];
+    Db.ss().getSheets().forEach(function (sh) { var n = sh.getMaxRows() * sh.getMaxColumns(); cells += n; sheets.push({ name: sh.getName(), cells: n }); });
+    sheets.sort(function (a, b) { return b.cells - a.cells; });
+    out.cells = { used: cells, limit: CELL_LIMIT, pct: Math.round(1000 * cells / CELL_LIMIT) / 10, top: sheets.slice(0, 5) };
+    return out;
+  }
+  /** ليلياً: تنبيه بالبريد لمشرفي النظام عند بلوغ 70% (مرة في الأسبوع على الأكثر) */
+  function capAlert() {
+    var c = capacity(), hot = [];
+    if (c.drive && c.drive.pct >= WARN) hot.push('مساحة Drive ' + c.drive.pct + '%');
+    if (c.cells.pct >= WARN) hot.push('خلايا ملف البيانات ' + c.cells.pct + '%');
+    if (!hot.length) return false;
+    var props = PropertiesService.getScriptProperties(), last = Number(props.getProperty('CAP_ALERT') || 0);
+    if (Date.now() - last < 7 * 864e5) return false;
+    var to = Db.all('Users', function (u) { return u.role === 'admin' && u.email; }).map(function (u) { return u.email; }).join(',');
+    if (!to) return false;
+    var txt = 'تنبيه سعة أعوان: ' + hot.join(' · ') + '. راجع الإدارة ← تهيئة الإطلاق ← السعة.';
+    try { Mail.send({ to: to, subject: 'أعوان · تنبيه السعة', text: txt, html: '<div dir="rtl" style="font-family:Tahoma,Arial;font-size:15px">' + txt + '</div>' }, ''); } catch (e) { return false; }
+    props.setProperty('CAP_ALERT', String(Date.now()));
+    return true;
+  }
+
+  return { inventory: inventory, reset: reset, capacity: capacity, capAlert: capAlert, KEEP: KEEP, CLEAR: CLEAR };
 })();
 
 function apiAdmLaunchInventory(token) { Auth.need(token, ['admin']); return Launch.inventory(); }
