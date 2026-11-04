@@ -1090,6 +1090,7 @@ t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد
   eq(run(`Db.get('WorkOrders', '${id}').status`), 'lead');
   const L = run(`apiPinWebLogin('${lp}')`); eq(L.kind, 'con'); eq(L.boot.me.lead, 'م. عدنان');
   eq(L.boot.jobs.some(j => j.id === id && j.status === 'lead'), true);
+  eq(!!L.boot.claims, true); // القائد بصلاحية الشركة نفسها (المطالبات)
   throws(`apiConAct('${L.token}', 'submit', '${id}', { outcome: 'lead', working: 'نعم' })`, 'الفني');
   throws(`apiConAct('${L.token}', 'submit', '${id}', { outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`, 'التقرير الفني');
   run(`apiConAct('${L.token}', 'submit', '${id}', { att: ['data:application/pdf;base64,JVBERi0='], outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`);

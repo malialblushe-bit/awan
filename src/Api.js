@@ -291,7 +291,7 @@ function conBoot_(s) {
     waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
     water: con.type === 'wt' ? Water.conList(con.con_id) : null,
     tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
-    claims: s.web && !s.lead ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
+    claims: s.web ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
     pcReports: con.type === 'pc' ? Ops.reportsDue(con.con_id) : null,
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
@@ -1390,7 +1390,7 @@ function payScope_(s) { return s.role === 'supmgr' ? Ops.supHotels(s) : scopeHot
 function apiAdmSavePay(token, contractId, d) { return adm_(token, function () { return Pay.setup(contractId, d); }); }
 function apiConClaim(token, d) {
   var s = Auth.need(token, ['contractor']);
-  if (!s.web || s.lead) throw new Error('المطالبات من صفحة المتعهد على الويب.');
+  if (!s.web) throw new Error('المطالبات من صفحة المتعهد على الويب.');
   return Db.withLock(function () { d = d || {}; d.att = saveFiles_(d.att, 'CLM'); var id = Pay.submit(s.id, d); Db.reset(); return { id: id, boot: conBoot_(s) }; });
 }
 function apiPayBoot(token) { var s = Auth.need(token, PAY_ROLES_); return Pay.board(s, payScope_(s)); }
