@@ -23,6 +23,16 @@
 .zsep{width:1px;height:24px;background:var(--line);margin:0 4px}
 .tbtn{font:inherit;text-align:start;cursor:pointer;color:inherit}
 @media(min-width:900px){.zc{min-width:72px;min-height:56px;font-size:14px}}
+.shell{display:flex;align-items:flex-start}.shell>.wrap{flex:1;min-width:0}
+.rail{display:none}
+@media(min-width:900px){.rail{display:flex;flex-direction:column;gap:4px;position:sticky;top:66px;height:calc(100vh - 66px);width:220px;flex:0 0 220px;background:#fff;border-inline-end:1px solid var(--line);padding:16px 10px;overflow-y:auto}
+ .rail button{display:flex;gap:12px;align-items:center;min-height:46px;padding:0 14px;border:0;background:none;border-radius:12px;font:inherit;font-size:14.5px;font-weight:700;color:var(--ink2);text-align:start;cursor:pointer}
+ .rail button svg{width:20px;height:20px;flex:0 0 20px}.rail button.on{background:var(--tan);color:var(--navy)}.rail button.on svg{color:var(--goldD)}
+ .rail .rb{margin-inline-start:auto;background:var(--red);color:#fff;border-radius:999px;font-size:11.5px;padding:1px 8px}}
+.bnav.ico button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;line-height:1.25;padding:8px 2px 4px}.bnav.ico svg{width:21px;height:21px}.bnav.ico .rb{position:absolute;margin:-4px 0 0 22px;background:var(--red);color:#fff;border-radius:999px;font-size:10px;padding:0 6px}.bnav.ico button{position:relative}
+.subnav{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}.subnav::-webkit-scrollbar{display:none}
+.subnav button{flex:0 0 auto;min-height:46px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:none;font:inherit;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer}
+.subnav button.on{color:var(--navy);border-bottom-color:var(--gold)}
 @media(max-width:640px){.zfs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding:2px 16px}.zfs::-webkit-scrollbar{display:none}.zf{flex:0 0 auto}}
 .zc.sel{outline:3px solid var(--navy);outline-offset:1px}
 .zc.fac{border-style:dashed}
@@ -133,6 +143,19 @@ var WA={st:{},
 };
 
 // ═════════ خريطة المناطق (مشتركة: المشرف والمتعهد) ═════════
+/** أيقونات الوحدات الرئيسة للشريط الجانبي */
+var ICO=(function(){var g=function(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>'};return {
+ pest:g('<ellipse cx="12" cy="13" rx="4.5" ry="6"/><path d="M12 7V4M9 4.5l1.5 2.5M15 4.5L13.5 7M7.5 11H4M7.5 15H4.5M16.5 11H20M16.5 15h3"/>'),
+ waste:g('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>'),
+ tk:g('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>'),
+ pay:g('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M16 15h2"/>'),
+ notes:g('<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/>'),
+ reports:g('<path d="M5 20V10M10 20V4M15 20v-7M20 20v-11"/>'),
+ ops:g('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'),
+ perf:g('<path d="M4 19h16M6 16l4-5 3 3 5-7"/>'),
+ adm:g('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>'),
+ svc:g('<path d="M12 3c3 4 6 7 6 11a6 6 0 0 1-12 0c0-4 3-7 6-11z"/>')
+}})();
 var Z={
  trapLog:function(list){if(!list||!list.length)return '<div class="card muted" style="text-align:center">لا مصائد خلال 60 يوماً.</div>';
   return list.map(function(t){var on=t.status==='active';return '<div class="card stack" style="gap:6px;padding:12px 14px"><div class="row" style="flex-wrap:wrap;gap:6px"><span><b dir="ltr">'+esc(t.label)+'</b> · '+esc(t.kind)+' · <span data-nt="1">'+esc(t.zoneName)+'</span></span><span class="pill '+(on?'st-closed':'st-assigned')+'">'+(on?'نشطة':'مرفوعة')+'</span></div><span class="small muted">'+F('وُضعت {0}',dmy(t.placed))+' · '+F('كل {0} يوم',t.every)+(t.removed?' · '+F('رُفعت {0}',dmy(t.removed)):'')+'</span><div style="border-inline-start:3px solid var(--line);padding-inline-start:10px;display:flex;flex-direction:column;gap:3px">'+t.events.slice(0,8).map(function(e){var c=/رصد آفة|تالفة/.test(e.text)?'#8E3A2E':/استبدال/.test(e.text)?'var(--goldD)':'inherit';return '<span class="small"><b style="color:'+c+'">'+esc(e.text)+'</b>'+(e.rejected?' <span class="pill st-late">مرفوضة</span>':'')+' <span class="muted">· '+dmy(e.at)+' '+hm(e.at)+(e.by?' · <span data-nt="1">'+esc(e.by)+'</span>':'')+'</span></span>'}).join('')+'</div></div>'}).join('')},
@@ -177,17 +200,19 @@ var SV={tab:'pest',h:null,zf:'all',sel:{},multi:false,f:{},
   var nt=(b.notes||[]).filter(function(n){return !n.seen}).length;
   var btns=tabs.map(function(t){return '<button class="'+(SV.tab===t[0]?'on':'')+'" onclick="SV.tab=\''+t[0]+'\';SV.sel={};SV.multi=false;SV.f={};render();window.scrollTo(0,0)">'+t[1]+(t[0]==='notes'&&nt?' ('+nt+')':'')+'</button>'}).join('');
   // الحاسب: التبويبات في الشريط العلوي · الجوال: شريط سفلي
-  $('#app').innerHTML=hdr('الإشراف',right,'<nav class="topnav dsk" aria-label="التنقل">'+btns+'</nav>')+'<div class="wrap wide">'+SV[SV.tab+'View']()+'</div><nav class="bnav mob" aria-label="التنقل">'+btns+'</nav>'+(SV.modal?SV.modal():'')},
+  var rail=tabs.map(function(t){return '<button class="'+(SV.tab===t[0]?'on':'')+'" onclick="SV.tab=\''+t[0]+'\';SV.sel={};SV.multi=false;SV.f={};render();window.scrollTo(0,0)">'+(ICO[t[0]]||'')+'<span>'+t[1]+'</span>'+(t[0]==='notes'&&nt?'<b class="rb">'+nt+'</b>':'')+'</button>'}).join('');
+  // الحاسب: الوحدات الرئيسة في شريط جانبي والفرعية تبويبات أعلى المحتوى · الجوال: شريط سفلي
+  $('#app').innerHTML=hdr('الإشراف',right)+'<div class="shell"><aside class="rail" aria-label="الوحدات">'+rail+'</aside><div class="wrap wide">'+SV[SV.tab+'View']()+'</div></div><nav class="bnav mob ico" aria-label="التنقل">'+rail+'</nav>'+(SV.modal?SV.modal():'')},
  logout:function(){call('apiLogout',S.tok);store(tokKey(),null);S.tok=null;SV.b=null;S.mode='';render()},
  run:function(fn){var a=[].slice.call(arguments,1);return call.apply(null,[fn,S.tok].concat(a)).then(function(r){if(r&&r.boot)SV.b=r.boot;render();return r})},
  hotelChips:function(){var b=SV.b;if(b.hotels.length<2)return '';return '<div class="chips">'+b.hotels.map(function(x){return '<button class="chip'+(SV.hid()===x.id?' on':'')+'" onclick="SV.h=\''+x.id+'\';SV.sel={};render()">'+esc(x.name)+'</button>'}).join('')+'</div>'},
  // ── المكافحة
  pestView:function(){var b=SV.b,hid=SV.hid(),st=b.pest.hotels[hid];if(!st)return '<div class="card muted">لا فنادق مسندة إليك. راجع مشرف النظام.</div>';
-  var c=Z.counts(st),ho=SV.hotel(),h='<div class="stack">'+SV.hotelChips();
+  var sub='<div class="subnav" role="tablist">'+[['map','الخريطة'],['log','سجل المعالجات'],['traps','سجل المصائد']].concat(SV.mgr()&&!SV.ro?[['plan','الجدولة']]:[]).map(function(x){return '<button role="tab" class="'+((SV.pv||'map')===x[0]?'on':'')+'" data-k="'+x[0]+'" onclick="SV.pv=this.dataset.k;SV.multi=false;SV.sel={};render()">'+x[1]+'</button>'}).join('')+'</div>';
+  var c=Z.counts(st),ho=SV.hotel(),h='<div class="stack">'+sub+SV.hotelChips();
   var gq={n:0,ok:0,av:0};st.floors.forEach(function(fl){fl.zones.forEach(function(z){if(!z.quota)return;gq.n++;if(z.monthN>=z.quota)gq.ok++;else if(z.flags.indexOf('ready')!==-1)gq.av++})});
   if(gq.n)h+='<div class="card" style="padding:12px 14px"><b>غرف النزلاء هذا الشهر</b><div class="chips" style="gap:6px;margin-top:8px"><span class="pill st-closed">مكتملة '+gq.ok+'</span><span class="pill st-review">متاحة الآن '+gq.av+'</span><span class="pill st-assigned">لم تُتح بعد '+(gq.n-gq.ok-gq.av)+'</span><span class="small muted">من '+gq.n+' غرفة</span></div></div>';
   h+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px"><button class="tile tbtn" onclick="SV.pv=\'map\';SV.setF(\'inf\')"><p class="k">بلاغات إصابة مفتوحة</p><p class="v" style="color:var(--st-inf)">'+c.inf+'</p></button><button class="tile tbtn" onclick="SV.pv=\'map\';SV.setF(\'ready\')"><p class="k">متاحة للرش</p><p class="v" style="color:var(--st-ready)">'+c.ready+'</p></button><button class="tile tbtn" onclick="SV.pv=\'map\';SV.setF(\'due\')"><p class="k">مستحقة الرش</p><p class="v" style="color:var(--st-dueT)">'+c.due+'</p></button><div class="tile"><p class="k">المتعهد</p><p style="font-weight:700;margin:4px 0 0">'+esc(ho.pc?ho.pc.name:'لا عقد ساري')+'</p></div></div>';
-  h+='<div class="chips">'+[['map','الخريطة'],['log','سجل المعالجات'],['traps','سجل المصائد']].concat(SV.mgr()&&!SV.ro?[['plan','الجدولة']]:[]).map(function(x){return '<button class="chip'+((SV.pv||'map')===x[0]?' on':'')+'" style="min-height:42px;font-size:15px" data-k="'+x[0]+'" onclick="SV.pv=this.dataset.k;SV.multi=false;SV.sel={};render()">'+x[1]+'</button>'}).join('')+'</div>';
   var lg=(b.pest.logs||[]).filter(function(l){return l.hotel_id===hid&&l.kind!=='trap'}).slice(0,40);
   if(SV.pv==='plan')return h+SV.planView()+'</div>';
   if(SV.pv==='traps')return h+Z.trapLog(st.trapLog)+'</div>';
