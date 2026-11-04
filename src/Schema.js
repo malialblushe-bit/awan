@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 29;
+var SCHEMA_VERSION = 30;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -96,7 +96,7 @@ var SCHEMA = [
     ['action', 'الإجراء'], ['from', 'من حالة'], ['to', 'إلى حالة'], ['note', 'ملاحظة']] },
 
   { name: 'Arrivals', cols: [
-    ['arrival_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['at', 'وقت المسح']] },
+    ['arrival_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['at', 'وقت الوصول'], ['left_at', 'وقت المغادرة (آخر طلب أُتم)']] },
 
   { name: 'CorrectiveActions', cols: [
     ['ca_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['wo_id', 'العملية (فارغ = إجراء مستقل)'],

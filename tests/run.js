@@ -168,6 +168,12 @@ fs.readdirSync(src).filter(f => f.endsWith('.js')).sort().forEach(f => {
   vm.runInContext(fs.readFileSync(path.join(src, f), 'utf8'), ctx, { filename: f });
 });
 const run = (code) => vm.runInContext(code, ctx);
+// الفحوص القديمة كُتبت قبل زر «تسجيل الوصول»: نسجّل الوصول آلياً قبل التسليم من الباركود (يُعطَّل في فحص الزر نفسه)
+run(`var AUTO_ARRIVE = true, apiConAct_ = apiConAct;
+apiConAct = function (token, action, woId, d) {
+  if (AUTO_ARRIVE && (action === 'submit' || action === 'new')) { var s = Auth.session(token); if (s && !s.web) apiConAct_(token, 'arrive', null, woId ? { ids: [woId] } : { ids: [] }); }
+  return apiConAct_(token, action, woId, d);
+};`);
 
 let pass = 0, fail = 0;
 function t(name, fn) {
@@ -349,13 +355,16 @@ t('فريق العمل: احتجاز في المصعد = فوري ويبدأ ع�
   eq(o.priority, 'urgent'); eq(!!o.down_from, true);
 });
 
-t('المتعهد: الرقم السري الخاطئ يُرفض، والصحيح يسجّل الوصول', () => {
+t('المتعهد: الرقم السري الخاطئ يُرفض، والصحيح يدخل، والوصول بزر «تسجيل الوصول»', () => {
   throws("apiConLogin('WARIF2', '000000')", 'غير صحيح');
   const r = run(`apiConLogin('WARIF2', '${acPin}')`);
   acTok = r.token;
   eq(r.boot.me.type, 'ac'); eq(r.boot.jobs.length, 1);
   eq(r.boot.jobs[0].units.join(), 'AC-712-A,AC-712-B');
   eq(r.boot.jobs[0].loc, 'الدور 7 · غرفة 712');
+  eq(!!run(`Db.get('WorkOrders', '${AC1}').arrived_at`), false, 'الدخول لا يسجّل الوصول');
+  eq(r.boot.visit, null);
+  run(`apiConAct_('${acTok}', 'arrive', null, {})`);
   eq(!!run(`Db.get('WorkOrders', '${AC1}').arrived_at`), true);
   eq(run("Db.all('Arrivals').length"), 1);
   if (r.boot.lists.cause.length < 3) throw new Error('القوائم لم تصل');
@@ -1225,6 +1234,33 @@ t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صح�
   run(`apiEngAct('${engTok}', '${q.wo_id}', 'unstop', {})`);
   eq(run(`Db.get('WorkOrders', '${q.wo_id}').status`), st0);
   throws(`apiEngAct('${engTok}', '${id}', 'unstop', {})`, 'ليس موقوفاً');
+});
+
+t('تسجيل الوصول بزر: مرة للزيارة، يبقى بعد إغلاق الصفحة، لعمليات مختارة أو للكل، وآخر طلب يُتم = المغادرة، والدورية تشترطه', () => {
+  run('AUTO_ARRIVE = false');
+  try {
+    run(`Db.all('Arrivals').forEach(function(a){ Db.update('Arrivals', a.arrival_id, { at: new Date(Date.now() - 3 * 864e5) }); })`);
+    const n0 = run("Db.all('Arrivals').length");
+    const a = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'خالد' })`).id;
+    const b = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت مرتفع', name: 'خالد' })`).id;
+    const tk = run(`apiConLogin('WARIF2', '${elPin}')`).token;
+    eq(run(`Db.get('WorkOrders', '${a}').arrived_at`) ? 1 : 0, 0, 'لا وصول آلي');
+    throws(`apiConAct('${tk}', 'submit', '${a}', { outcome: 'visit', working: 'نعم' })`, 'سجّل وصولك');
+    throws(`apiConAct('${tk}', 'new', null, { outcome: 'pm', units: [] })`, 'سجّل وصولك');
+    const r = run(`apiConAct('${tk}', 'arrive', null, { ids: ['${a}'] })`);
+    eq(r.result.ids.join(), a); if (!r.boot.visit || !r.boot.visit.at) throw new Error('visit');
+    eq(!!run(`Db.get('WorkOrders', '${b}').arrived_at`), false, 'غير المختارة');
+    eq(run("Db.all('Arrivals').length"), n0 + 1);
+    // إعادة فتح الصفحة: الوصول باقٍ، وتسجيل عملية أخرى لا ينشئ زيارة جديدة
+    const tk2 = run(`apiConLogin('WARIF2', '${elPin}')`);
+    eq(!!tk2.boot.visit, true);
+    run(`apiConAct('${tk2.token}', 'arrive', null, { ids: ['${b}'] })`);
+    eq(run("Db.all('Arrivals').length"), n0 + 1, 'مرة واحدة للزيارة');
+    run(`apiConAct('${tk2.token}', 'submit', '${a}', { outcome: 'visit', working: 'نعم', note: 'زيارة' })`);
+    const left1 = run(`Orders.visitToday(Db.get('WorkOrders','${a}').con_id, '${HID}').left`); if (!left1) throw new Error('left');
+    run(`apiConAct('${tk2.token}', 'submit', '${b}', { outcome: 'visit', working: 'نعم', note: 'زيارة' })`);
+    const left2 = run(`Orders.visitToday(Db.get('WorkOrders','${a}').con_id, '${HID}').left`); if (!(left2 >= left1)) throw new Error('left2');
+  } finally { run('AUTO_ARRIVE = true'); }
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {

@@ -220,9 +220,6 @@ function apiConLogin(code, pin, geo) {
       throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
     }
     if (Orders.truthy(h.geo_con)) { try { Ops.geoCheck(h, geo); } catch (e) { Auth.logout(r.token); throw e; } }
-    var arr = Orders.arrive(r.con.con_id, h.hotel_id);
-    Kpi.touch(arr);
-    Tg.refresh(arr);
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
 }
@@ -285,6 +282,7 @@ function conBoot_(s) {
   Object.keys(sg).forEach(function (k) { sugg[k] = { part: top3(sg[k].part), cause: top3(sg[k].cause) }; });
   var here = R.hotels[s.hotel_id] || {};
   return {
+    visit: s.web ? null : Orders.visitToday(s.id, s.hotel_id),
     pmLast: pmLast,
     sugg: sugg,
     pest: con.type === 'pc' ? Ops.pestBoot(Object.keys(hotels)) : null,
@@ -328,10 +326,16 @@ function apiConAct(token, action, woId, d) {
     d.photos = savePhotos_(d.photos, woId || 'NEW');
     d.att = saveFiles_(d.att, 'RPT-' + (woId || 'NEW'));
     var res = { msg: '' };
+    if (action === 'arrive') {
+      if (s.web) throw new Error('تسجيل الوصول من باركود أعوان في الفندق.');
+      var arr = Orders.arrive(s.id, s.hotel_id, Array.isArray(d.ids) ? d.ids : null);
+      Kpi.touch(arr); Tg.refresh(arr); Db.reset();
+      return { result: { ids: arr, msg: 'سُجّل وصولك' }, boot: conBoot_(s) };
+    }
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
     else if (action === 'new') res = Orders.conNew(s, d);
     else if (action === 'tech') res = Orders.techReport(s, d);
-    else if (action === 'rescue') Orders.rescue(s, woId);
+    else if (action === 'rescue') { if (!s.web) Orders.arrive(s.id, s.hotel_id, [woId]); Orders.rescue(s, woId); }
     else throw new Error('إجراء غير معروف.');
     Kpi.touch([woId || res.id]);
     if (woId) Tg.refresh([woId]);

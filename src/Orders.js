@@ -75,20 +75,37 @@ var Orders = (function () {
     return { order: rec, contract: contract };
   }
 
-  // ───────── وصول المتعهد (مسح باركود أعوان) ─────────
-  function arrive(conId, hotelId) {
-    var t = now_();
-    Db.insert('Arrivals', { hotel_id: hotelId, con_id: conId, at: t });
-    var ids = [];
+  // ───────── وصول المتعهد: زر «تسجيل الوصول» بعد مسح باركود أعوان ─────────
+  /** زيارة اليوم المفتوحة (آخر وصول اليوم لم تُسجَّل مغادرته) */
+  function visitToday(conId, hotelId) {
+    var today = dayStr_(now_()), best = null;
+    Db.all('Arrivals', function (a) { return a.con_id === conId && a.hotel_id === hotelId && a.at && dayStr_(new Date(a.at)) === today; }).forEach(function (a) {
+      if (!best || ms(a.at) > ms(best.at)) best = a;
+    });
+    return best ? { id: best.arrival_id, at: ms(best.at), left: ms(best.left_at) || null } : null;
+  }
+
+  /** يسجّل الوصول مرة واحدة للزيارة، ويبدأ عدّاد العمليات المختارة (ids غير محدد = كل المفتوحة، [] = الزيارة فقط) */
+  function arrive(conId, hotelId, ids) {
+    var t = now_(), v = visitToday(conId, hotelId);
+    if (!v || v.left) Db.insert('Arrivals', { hotel_id: hotelId, con_id: conId, at: t });
+    else Db.update('Arrivals', v.id, { left_at: '' });
+    var pick = Array.isArray(ids) ? ids : null, done = [];
     Db.all('WorkOrders', function (o) {
-      return o.con_id === conId && o.hotel_id === hotelId && (o.status === 'assigned' || o.status === 'in_progress');
+      return o.con_id === conId && o.hotel_id === hotelId && (o.status === 'assigned' || o.status === 'in_progress') && (!pick || pick.indexOf(o.wo_id) !== -1);
     }).forEach(function (o) {
       var patch = {};
       if (!o.arrived_at) patch.arrived_at = t;
       if (!o.work_from) patch.work_from = t;
-      if (Object.keys(patch).length) { Db.update('WorkOrders', o.wo_id, patch); ids.push(o.wo_id); }
+      if (Object.keys(patch).length) { Db.update('WorkOrders', o.wo_id, patch); log_(o.wo_id, conId, 'arrive', o.status, o.status, ''); done.push(o.wo_id); }
     });
-    return ids;
+    return done;
+  }
+
+  /** إتمام الطلب = إشعار المغادرة: آخر طلب يُتم يحدّث وقت المغادرة */
+  function depart_(conId, hotelId) {
+    var v = visitToday(conId, hotelId);
+    if (v) Db.update('Arrivals', v.id, { left_at: now_() });
   }
 
   function lastArrival_(conId, hotelId) {
@@ -135,6 +152,7 @@ var Orders = (function () {
     var o = Db.get('WorkOrders', woId);
     if (!o || o.con_id !== s.id) throw new Error('العملية غير موجودة.');
     if (o.status !== 'assigned' && o.status !== 'in_progress' && o.status !== 'lead') throw new Error('هذه العملية ليست بانتظار تقريرك الآن.');
+    if (!s.web && !o.arrived_at) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
     var oc = d.outcome;
     if ((OUTCOMES[o.type] || []).indexOf(oc) === -1) throw new Error('اختر النتيجة.');
     if (oc === 'lead' && (s.web || o.status === 'lead')) throw new Error('الإرسال لقائد الفريق من الفني في الموقع.');
@@ -221,6 +239,7 @@ var Orders = (function () {
       }));
       extra.push('البنود الجديدة أُرسلت للمشرف لاعتمادها');
     }
+    if (!s.web) depart_(o.con_id, o.hotel_id);
     return { status: to, minutes: patch.work_minutes, msg: extra.join(' · ') };
   }
 
@@ -229,6 +248,7 @@ var Orders = (function () {
     var con = Db.get('Contractors', s.id);
     var hotelId = d.hotel_id || s.hotel_id;
     if (!activeContract(hotelId, con.type, con.con_id)) throw new Error('لا يوجد عقد ساري لك في هذا الفندق.');
+    if (!s.web && !visitToday(con.con_id, hotelId)) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
     var isPm = d.outcome === 'pm';
     // التحقق قبل الإنشاء حتى لا تبقى عملية ناقصة
     if ((OUTCOMES[con.type] || []).indexOf(d.outcome) === -1) throw new Error('اختر النتيجة.');
@@ -239,9 +259,9 @@ var Orders = (function () {
       floor_id: d.floor_id || '', room: d.room || '', equip: isPm ? (d.units || []).join('، ') : (d.equip || ''),
       symptom: isPm ? 'صيانة دورية' : (d.sym || d.title || '')
     }, con.name).order;
-    // الصيانة الدورية: وقت الدخول = آخر مسح لباركود أعوان اليوم في هذا الفندق
-    var t0 = now_(), last = isPm ? lastArrival_(con.con_id, hotelId) : null;
-    if (last && dayStr_(new Date(last)) === dayStr_(t0)) t0 = new Date(last);
+    // من الباركود: الوصول مسجّل اليوم شرط، والصيانة الدورية تبدأ من وقت الوصول
+    var t0 = now_(), vis = s.web ? null : visitToday(con.con_id, hotelId);
+    if (isPm && vis) t0 = new Date(vis.at);
     Db.update('WorkOrders', o.wo_id, { arrived_at: t0, work_from: t0 });
     var res = conSubmit(s, o.wo_id, d);
     res.id = o.wo_id;
@@ -454,7 +474,7 @@ var Orders = (function () {
 
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
-    create: create, arrive: arrive, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
+    create: create, arrive: arrive, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
     engAct: engAct, engCreate: engCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();
