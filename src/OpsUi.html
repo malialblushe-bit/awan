@@ -30,9 +30,14 @@
  .rail button svg{width:20px;height:20px;flex:0 0 20px}.rail button.on{background:var(--tan);color:var(--navy)}.rail button.on svg{color:var(--goldD)}
  .rail .rb{margin-inline-start:auto;background:var(--red);color:#fff;border-radius:999px;font-size:11.5px;padding:1px 8px}}
 .bnav.ico button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;line-height:1.25;padding:8px 2px 4px}.bnav.ico svg{width:21px;height:21px}.bnav.ico .rb{position:absolute;margin:-4px 0 0 22px;background:var(--red);color:#fff;border-radius:999px;font-size:10px;padding:0 6px}.bnav.ico button{position:relative}
+@media(max-width:899px){.rail.staff{display:flex;position:fixed;bottom:0;inset-inline:0;z-index:6;background:var(--card);border-top:1px solid var(--line);padding:2px 4px 8px;overflow-x:auto;scrollbar-width:none}.rail.staff::-webkit-scrollbar{display:none}
+ .rail.staff button{flex:1 0 58px;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;font:inherit;font-size:11px;font-weight:700;color:var(--muted);padding:8px 2px 4px;border-top:3px solid transparent;position:relative;line-height:1.25}
+ .rail.staff button.on{color:var(--navy);border-top-color:var(--gold)}.rail.staff svg{width:21px;height:21px}.rail.staff .rb{position:absolute;top:2px;margin-inline-start:26px;background:var(--red);color:#fff;border-radius:999px;font-size:10px;padding:0 6px}
+ body:has(.rail.staff){padding-bottom:74px}body:has(.rail.staff) .foot{bottom:66px}}
 .subnav{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}.subnav::-webkit-scrollbar{display:none}
 .subnav button{flex:0 0 auto;min-height:46px;padding:0 16px;border:0;border-bottom:3px solid transparent;background:none;font:inherit;font-size:15px;font-weight:700;color:var(--muted);cursor:pointer}
 .subnav button.on{color:var(--navy);border-bottom-color:var(--gold)}
+.subnav ~ .stack .subnav button{font-size:13.5px;min-height:40px;padding:0 12px}
 @media(max-width:640px){.zfs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding:2px 16px}.zfs::-webkit-scrollbar{display:none}.zf{flex:0 0 auto}}
 .zc.sel{outline:3px solid var(--navy);outline-offset:1px}
 .zc.fac{border-style:dashed}

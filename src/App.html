@@ -40,6 +40,12 @@ select:focus-visible,textarea:focus-visible,.chip:focus-visible,.zf:focus-visibl
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .gauto{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.brief{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:15px;line-height:1.7;color:var(--ink2)}.brief .pill{background:var(--tan);color:var(--goldDD)}.brief b.r{color:var(--redD)}
+.dz{margin:2px 4px 0;font-size:12.5px;color:var(--muted);opacity:.8}.dg1 .dz{color:var(--goldL)}
+.dtop{background:#A4483A;color:#fff;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;margin-bottom:4px}.dtop.g{background:var(--gold)}.dtop.g .btn{color:var(--goldDD)}.dtop b{font-size:16px}.dtop .small{opacity:.85}.dtop .btn{background:#fff;color:#8E3A2E;min-height:38px;margin-top:6px}
+.dmore{display:flex;flex-direction:column;gap:2px;margin-bottom:4px}.dmore button{border:0;background:rgba(255,255,255,.08);color:inherit;font:inherit;font-size:13px;text-align:start;padding:7px 10px;border-radius:10px;cursor:pointer}.dmore .small{opacity:.7;padding:2px 10px}
+.mback{display:none}
+@media(max-width:899px){.mdet>.dash,.mdet>.brief,.mdet .split>.side{display:none}.mdet .mback{display:inline-flex;margin-bottom:10px}}
 .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.dg{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:6px}
 .dg1{background:var(--brand);border:0;color:#fff}.dg1 .dh span{color:var(--goldL)}.dg2.hot{border-color:#E7B9AF;background:#FDF6F4}
 .dh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}.dh span{font-size:14px;font-weight:700;color:var(--muted)}.dh b{font-size:34px;line-height:1}
@@ -274,7 +280,7 @@ var DICT={
 'مسحت باركود أعوان':'You scanned the Awan barcode','اكتب رقمك السري':'Enter your PIN','يُسجَّل وقت وصولك تلقائياً':'Your arrival time is recorded automatically','بعد الدخول اضغط «تسجيل الوصول»':'After signing in, tap “Check in”',
 'أعمالك في كل الفنادق. وقت الوصول يُسجَّل من باركود الفندق فقط.':'Your jobs across all hotels. Arrival is recorded from the hotel barcode only.',
 'سُجّل وصولك تلقائياً من الباركود':'Your arrival was recorded from the barcode',
-'تسجيل الوصول':'Check in','اضغط «تسجيل الوصول» مرة للزيارة، وإتمام آخر طلب يُسجَّل مغادرتك':'Tap “Check in” once per visit; completing your last job records departure','اضغط «تسجيل الوصول» قبل البدء':'Tap “Check in” before you start','مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة. وإتمام آخر طلب يُسجَّل مغادرة.':'Once per visit; it stays recorded if you close the page. Completing your last job records your departure.',
+'تسجيل الوصول':'Check in','لا شيء آخر ({0})':'Nothing else ({0})','الأهم الآن':'Most urgent','افتح وتصرّف':'Open and act','و{0} أخرى':'and {0} more','ملخص':'Summary','احتجاز {0} لم يُسجَّل إنقاذه':'{0} entrapment(s) without a recorded rescue','{0} عملية عليك الآن':'{0} jobs on you now','أقدمها {0}':'oldest {0}','{0} متأخرة عن الاستجابة':'{0} late on response','{0} يحمل {1} من {2} مفتوحة':'{0} holds {1} of {2} open','{0} بنود تحتاج متابعة، ولا شيء عليك الآن':'{0} items need follow-up; nothing on you now','لا شيء عليك الآن. كل الأعمال لدى المتعهدين تسير.':'Nothing on you now. All contractor work is moving.','‹ رجوع للقائمة':'‹ Back to list','اضغط «تسجيل الوصول» مرة للزيارة، وإتمام آخر طلب يُسجَّل مغادرتك':'Tap “Check in” once per visit; completing your last job records departure','اضغط «تسجيل الوصول» قبل البدء':'Tap “Check in” before you start','مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة. وإتمام آخر طلب يُسجَّل مغادرة.':'Once per visit; it stays recorded if you close the page. Completing your last job records your departure.',
 'مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة.':'Once per visit; it stays recorded if you close the page.','إتمام آخر طلب يُسجَّل مغادرة':'Completing your last job records departure','لم يُسجَّل وصولك لهذه العملية بعد.':'Your arrival for this job is not recorded yet.',
 'أعمال جديدة لم يُسجَّل وصولك لها:':'New jobs without arrival:','اضغط لبدء عدّاد هذه العملية.':'Tap to start this job’s timer.','آخر طلب أُتم':'Last job completed','سجّل وصولك أولاً: اضغط «تسجيل الوصول».':'Check in first: tap “Check in”.','سُجّل وصولك':'Arrival recorded','وصلت':'Arrived','تسجيل الوصول من باركود أعوان في الفندق.':'Check-in is from the Awan barcode at the hotel.','امسح الباركود ثم اضغط «تسجيل الوصول»':'Scan the barcode, then tap “Check in”',
 'مفتوحة لك':'Open for you','قيد المراجعة والمطابقة':'Under review and matching','متوسط الاستجابة هذا الشهر':'Average response this month','أنجزت اليوم':'Done today',
@@ -749,7 +755,7 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
  late:function(o){return (o.status==='assigned')&&o.resp!=null&&o.assigned&&!o.arrived&&(Date.now()-o.assigned)/60000>o.resp},
  queues:function(){var O=W.b.orders,open=O.filter(function(o){return ['closed','rejected'].indexOf(o.status)===-1});
   return [['quote','بانتظار عرض السعر',O.filter(function(o){return o.status==='quote'}),'var(--goldD)'],['decision',W.viewer()?'بانتظار قرار المهندس':'بانتظار قرارك',O.filter(function(o){return o.status==='decision'}),'var(--goldD)'],['matching','بانتظار المطابقة',O.filter(function(o){return o.status==='matching'}),'var(--goldD)'],['pay','بانتظار الاعتماد والسداد',O.filter(function(o){return o.status==='pay'||o.pay_pending}),'var(--goldD)'],['parts','بانتظار قطع',O.filter(function(o){return o.status==='parts'}),'var(--navy)'],['late','متأخرة',open.filter(W.late),'#8E3A2E'],['open','كل المفتوحة',open,'var(--navy)'],['closed','المغلقة (30 يوماً)',O.filter(function(o){return o.status==='closed'||o.status==='rejected'}),'#245244'],['stopped','طلبات موقوفة (7 أيام)',O.filter(function(o){return o.stopped&&o.status==='rejected'&&Date.now()-(o.closed||0)<7*864e5}),'#8E3A2E'],['ca','إجراءات تصحيحية',(W.b.cas||[]).filter(function(c){return c.status!=='closed'}),'#8E3A2E'],['notes',W.viewer()?'ملاحظاتي':'ملاحظات الإدارة',(W.b.notes||[]).filter(function(n){return W.viewer()||!n.seen}),'var(--navy)']]},
- attention:function(){var b=W.b,O=b.orders,it=[];
+ attention:function(mode){var b=W.b,O=b.orders,it=[];
   O.filter(function(o){return o.trapped&&!o.rescued&&['closed','rejected'].indexOf(o.status)===-1}).forEach(function(o){it.push(['#8E3A2E','احتجاز لم يُسجَّل إنقاذه',o,'open'])});
   O.filter(W.late).forEach(function(o){it.push(['#8E3A2E','متأخر عن زمن الاستجابة',o,'late'])});
   O.filter(function(o){return o.tg&&!o.claimed_by&&o.status==='assigned'&&Date.now()-o.created>10*60000&&!W.late(o)}).forEach(function(o){it.push(['#8E3A2E','لم يستلمه أحد في تيليجرام',o,'open'])});
@@ -759,6 +765,7 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   O.filter(function(o){return o.status==='matching'&&W.freonRepeat(o).length}).forEach(function(o){it.push(['#8E3A2E','تسريب فريون محتمل',o,'matching'])});
   O.filter(function(o){return o.status==='pay'&&o.decided&&Date.now()-o.decided>2*864e5}).forEach(function(o){it.push(['var(--goldD)','بانتظار السداد أكثر من يومين',o,'pay'])});
   var ca=(b.cas||[]).filter(function(c){return c.status==='responded'}).length,nt=(b.notes||[]).filter(function(n){return !n.seen}).length,mt=O.filter(function(o){return o.status==='matching'}).length;
+  if(mode==='items')return it;
   if(!it.length&&!ca&&!nt)return '';
   var h='<div class="card stack" style="gap:8px;border-color:var(--goldL);background:var(--sand)"><div class="row"><h2 style="font-size:16px">يحتاج انتباهك اليوم</h2><span class="small muted">'+(mt?mt+' بانتظار المطابقة':'')+'</span></div><div style="display:flex;flex-wrap:wrap;gap:8px">';
   it.slice(0,8).forEach(function(x){h+='<button class="chip" style="min-height:38px;text-align:right" onclick="W.q=\''+x[3]+'\';W.sel=\''+x[2].id+'\';W.bk=null;render()"><b style="color:'+x[0]+'">'+x[1]+'</b> · <span dir="ltr">'+esc(x[2].id)+'</span> · '+esc(x[2].loc)+'</button>'});
@@ -790,24 +797,34 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   return h+'<button class="btn btn-p" onclick="call(\'apiNote\',S.tok,{hotel_id:W.f.hotel,service:W.f.svc,text:W.f.text}).then(function(r){W.b=r.boot;W.modal=null;W.q=\'notes\';toast(\'أُرسلت الملاحظة.\');render()})">إرسال</button></div></div>'},
  find:function(){var v=(document.getElementById('fnd')||{}).value;if(!v)return;call('apiEngFind',S.tok,v).then(function(o){W.found=o;W.sel=o.id;W.f={};render()})},
  /** لوحة العمليات: ثلاث مجموعات حسب الأثر — ما عليك الآن، ما يحتاج متابعة، ما لدى المتعهدين — مع عمر أقدم عنصر */
+ /** جملة الخلاصة فوق اللوحة: ما يعنيه الرقم لا الرقم وحده */
+ brief:function(Q,tot,rk,trapped){var b=W.b,p=[],old=function(ks){var t=Infinity;ks.forEach(function(k){(Q[k]?Q[k][2]:[]).forEach(function(o){t=Math.min(t,o.submitted||o.created||Infinity)})});return t<Infinity?ago(t):''};
+  if(trapped)p.push('<b class="r">'+F('احتجاز {0} لم يُسجَّل إنقاذه',trapped)+'</b>');
+  if(tot){var o=old(['decision','matching','quote','pay']);p.push(F('{0} عملية عليك الآن',tot)+(o?'، '+F('أقدمها {0}',o):''))}
+  var late=Q.late?Q.late[2].length:0;if(late)p.push(F('{0} متأخرة عن الاستجابة',late));
+  var open=b.orders.filter(function(o){return ['closed','rejected'].indexOf(o.status)===-1}),by={};open.forEach(function(o){by[o.hotel]=(by[o.hotel]||0)+1});var hs=Object.keys(by).sort(function(x,y){return by[y]-by[x]});
+  if(hs.length>1&&open.length>=4)p.push(F('{0} يحمل {1} من {2} مفتوحة',esc(hs[0]),by[hs[0]],open.length));
+  if(!p.length)p.push(rk?F('{0} بنود تحتاج متابعة، ولا شيء عليك الآن',rk):'لا شيء عليك الآن. كل الأعمال لدى المتعهدين تسير.');
+  return '<div class="brief"><span class="pill">ملخص</span><span>'+p.join(' · ')+'</span></div>'},
  dash:function(qs,canAct){var Q={};qs.forEach(function(q){Q[q[0]]=q});var b=W.b;
   var oldest=function(l){var t=Math.min.apply(null,l.map(function(x){return x.created||Date.now()}));return t<Date.now()-60000?ago(t):''};
-  var it=function(k,lbl,cls){var q=Q[k];if(!q)return '';var n=q[2].length,o=n?oldest(q[2]):'';
+  var zc=0,zz=function(){var n=zc;zc=0;return n?'<p class="dz">'+F('لا شيء آخر ({0})',n)+'</p>':''};
+  var it=function(k,lbl,cls){var q=Q[k];if(!q)return '';var n=q[2].length,o=n?oldest(q[2]):'';if(!n&&W.q!==k){zc++;return ''}
    return '<button class="dq'+(W.q===k?' on':'')+(n?'':' z')+(n&&cls?' '+cls:'')+'" onclick="W.q=\''+k+'\';W.sel=null;W.bk=null;render()"><span class="dl">'+(lbl||q[1])+(o?'<small>أقدمها '+o+'</small>':'')+'</span><b>'+n+'</b></button>'};
   var sum=function(ks){return ks.reduce(function(a,k){return a+(Q[k]?Q[k][2].length:0)},0)};
   var mine=['decision','quote','matching','pay'],risk=['late','ca','notes','stopped'],tot=sum(mine),rk=sum(risk);
   var wp=b.water&&b.water.canMatch?b.water.loads.filter(function(x){return x.status==='pending'}).length:0;rk+=wp;
   var trapped=b.orders.filter(function(o){return o.trapped&&!o.rescued&&['closed','rejected'].indexOf(o.status)===-1}).length;
-  var h='<div class="dash">';
-  h+='<div class="dg dg1"><div class="dh"><span>'+(canAct?'عليك الآن':'بانتظار المهندس')+'</span><b>'+tot+'</b></div>'+it('decision','','g')+it('matching','','g')+it('quote','','g')+it('pay','','g')+'</div>';
-  h+='<div class="dg dg2'+(rk||trapped?' hot':'')+'"><div class="dh"><span>تحتاج متابعة</span><b>'+(rk+trapped)+'</b></div>'+(trapped?'<button class="dq red" onclick="W.q=\'open\';W.sel=null;render()"><span class="dl">احتجاز لم يُسجَّل إنقاذه</span><b>'+trapped+'</b></button>':'')+(wp?'<button class="dq red" onclick="W.tab=\'svc\';SVC.sub=\'wt\';SV.b=null;render()"><span class="dl">رحلات مياه بانتظار مطابقتك</span><b>'+wp+'</b></button>':'')+it('late','متأخرة عن الاستجابة','red')+it('ca','','red')+it('notes','','g')+it('stopped','','g')+'</div>';
-  h+='<div class="dg dg3"><div class="dh"><span>لدى المتعهدين</span><b>'+sum(['open'])+'</b></div>'+it('open','كل المفتوحة')+it('parts','')+it('closed','')+'<p class="dtd"><span>اليوم:</span> <span>قرارات</span> '+b.stats.decidedToday+' · <span>أُغلقت</span> '+b.stats.closedToday+'</p></div>';
+  var top=canAct?W.attention('items'):[],h=W.brief(Q,tot,rk+trapped,trapped)+'<div class="dash">';
+  var hot=top[0]?'<div class="dtop'+(top[0][0]==='#8E3A2E'?'':' g')+'"><span class="small">الأهم الآن</span><b>'+top[0][1]+'</b><span class="small" data-nt="1">'+esc(top[0][2].id)+' · '+esc(top[0][2].loc)+'</span><button class="btn sm" onclick="W.q=\''+top[0][3]+'\';W.sel=\''+top[0][2].id+'\';W.bk=null;W.mdet=1;render()">افتح وتصرّف</button></div>'+(top.length>1?'<div class="dmore">'+top.slice(1,4).map(function(x){return '<button onclick="W.q=\''+x[3]+'\';W.sel=\''+x[2].id+'\';W.bk=null;W.mdet=1;render()"><b>'+x[1]+'</b> · <span data-nt="1" dir="ltr">'+esc(x[2].id)+'</span></button>'}).join('')+(top.length>4?'<span class="small">'+F('و{0} أخرى',top.length-4)+'</span>':'')+'</div>':''):'';
+  h+='<div class="dg dg1"><div class="dh"><span>'+(canAct?'عليك الآن':'بانتظار المهندس')+'</span><b>'+tot+'</b></div>'+hot+it('decision','','g')+it('matching','','g')+it('quote','','g')+it('pay','','g')+zz()+'</div>';
+  h+='<div class="dg dg2'+(rk||trapped?' hot':'')+'"><div class="dh"><span>تحتاج متابعة</span><b>'+(rk+trapped)+'</b></div>'+(trapped?'<button class="dq red" onclick="W.q=\'open\';W.sel=null;render()"><span class="dl">احتجاز لم يُسجَّل إنقاذه</span><b>'+trapped+'</b></button>':'')+(wp?'<button class="dq red" onclick="W.tab=\'svc\';SVC.sub=\'wt\';SV.b=null;render()"><span class="dl">رحلات مياه بانتظار مطابقتك</span><b>'+wp+'</b></button>':'')+it('late','متأخرة عن الاستجابة','red')+it('ca','','red')+it('notes','','g')+it('stopped','','g')+zz()+'</div>';
+  h+='<div class="dg dg3"><div class="dh"><span>لدى المتعهدين</span><b>'+sum(['open'])+'</b></div>'+it('open','كل المفتوحة')+it('parts','')+it('closed','')+zz()+'<p class="dtd"><span>اليوم:</span> <span>قرارات</span> '+b.stats.decidedToday+' · <span>أُغلقت</span> '+b.stats.closedToday+'</p></div>';
   return h+'</div>'},
  opsView:function(){var b=W.b,qs=W.queues(),cur=qs.filter(function(q){return q[0]===W.q})[0]||qs[5],list=cur[2];
   if(W.found&&W.sel===W.found.id){}else if(!W.sel||!b.orders.some(function(o){return o.id===W.sel}))W.sel=list[0]?list[0].id:null;
   var canAct=['management','gm','om','duty','fo'].indexOf(b.me.role)===-1;
-  var h='<div class="stack">'+W.dash(qs,canAct);
-  if(canAct)h+=W.attention();
+  var h='<div class="stack'+(W.mdet&&W.sel?' mdet':'')+'">'+W.dash(qs,canAct);
   if(W.q==='ca')return h+W.caPanel(canAct)+'</div>';
   if(W.q==='notes')return h+W.notesPanel()+'</div>';
   h+='<div class="split"><div class="side"><div class="row"><h2 style="font-size:16px">'+cur[1]+' ('+list.length+')</h2>'+(canAct?'<button class="btn btn-p sm" onclick="W.f={};W.modal=W.createModal;render()">+ طلب جديد</button>':'')+'</div>';
@@ -815,9 +832,9 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   if(!list.length)h+='<div class="card muted" style="text-align:center">لا شيء هنا الآن.</div>';
   if(canAct&&W.q==='matching'&&list.length>1)h+=W.bulkBar(list);
   if(W.bk&&W.q==='matching')list=[];
-  list.forEach(function(o){var late=W.late(o);h+='<button class="job'+(o.id===W.sel?' on':'')+'" onclick="W.sel=\''+o.id+'\';W.f={};render();if(window.innerWidth<900)document.getElementById(\'det\').scrollIntoView()"><div class="row"><span class="id">'+esc(o.id)+'</span><span class="pill st-'+(late?'late':o.status)+'">'+(late?'متأخر':STLBL[o.status])+'</span></div><span class="t">'+esc(o.title)+'</span><span class="l">'+esc(o.con||'بلا متعهد')+' · '+esc(o.loc)+'</span><span class="small muted">'+esc(o.hotel)+' · '+ago(o.created)+'</span>'+(o.trapped&&!o.rescued?'<span class="pill st-late" style="align-self:flex-start">احتجاز</span>':'')+'</button>'});
+  list.forEach(function(o){var late=W.late(o);h+='<button class="job'+(o.id===W.sel?' on':'')+'" onclick="W.sel=\''+o.id+'\';W.f={};W.mdet=1;render();window.scrollTo(0,0)"><div class="row"><span class="id">'+esc(o.id)+'</span><span class="pill st-'+(late?'late':o.status)+'">'+(late?'متأخر':STLBL[o.status])+'</span></div><span class="t">'+esc(o.title)+'</span><span class="l">'+esc(o.con||'بلا متعهد')+' · '+esc(o.loc)+'</span><span class="small muted">'+esc(o.hotel)+' · '+ago(o.created)+'</span>'+(o.trapped&&!o.rescued?'<span class="pill st-late" style="align-self:flex-start">احتجاز</span>':'')+'</button>'});
   var fo=W.found&&W.sel===W.found.id;
-  h+='</div><div class="main card" id="det">'+(fo&&W.found.archived?'<div class="alert a-tan">من الأرشيف · للاطلاع فقط</div>':'')+(W.sel?W.detail(fo?W.found:b.orders.filter(function(o){return o.id===W.sel})[0],fo&&W.found.archived?false:canAct):'<p class="muted">اختر عملية.</p>')+'</div></div></div>';
+  h+='</div><div class="main card" id="det">'+(W.mdet?'<button class="btn btn-o sm mback" onclick="W.mdet=0;render();window.scrollTo(0,0)">‹ رجوع للقائمة</button>':'')+(fo&&W.found.archived?'<div class="alert a-tan">من الأرشيف · للاطلاع فقط</div>':'')+(W.sel?W.detail(fo?W.found:b.orders.filter(function(o){return o.id===W.sel})[0],fo&&W.found.archived?false:canAct):'<p class="muted">اختر عملية.</p>')+'</div></div></div>';
   return h},
  cycle:function(o){var c=[];if(o.trapped&&o.rescued)c.push(['الإنقاذ',dur(mins(o.created,o.rescued))]);if(o.arrived)c.push(['الاستجابة',dur(mins(o.assigned||o.created,o.arrived))]);if(o.work_minutes)c.push(['الإصلاح',dur(o.work_minutes)]);if(o.decided)c.push(['القرار',dur(mins(o.submitted,o.decided))]);if(o.paid)c.push(['السداد',dur(mins(o.decided,o.paid))]);if(o.part_arrived)c.push(['القطعة',dur(mins(o.decided,o.part_arrived))]);if(o.type==='el'&&o.down_from)c.push(['توقف المصعد',dur(mins(o.down_from,o.down_to||Date.now()))+(o.down_to?'':' (مستمر)')]);c.push([o.closed?'دورة الطلب':'منذ الرفع',dur(mins(o.created,o.closed||Date.now()))]);return c},
  /** من الطلبات المحمّلة أصلاً: تعبئة فريون أخرى لنفس الموقع خلال 30 يوماً */
