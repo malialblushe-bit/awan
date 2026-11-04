@@ -321,7 +321,7 @@ function apiConAct(token, action, woId, d) {
   return Db.withLock(function () {
     d = d || {};
     if (s.web) {
-      if (action !== 'submit') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
+      if (action !== 'submit' && action !== 'tech') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
       var w = Db.get('WorkOrders', woId);
       if (w && w.con_id === s.id && !w.arrived_at) throw new Error('سجّل وصولك أولاً بمسح باركود أعوان في الفندق، ثم أرسل التقرير.');
     }
@@ -330,6 +330,7 @@ function apiConAct(token, action, woId, d) {
     var res = { msg: '' };
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
     else if (action === 'new') res = Orders.conNew(s, d);
+    else if (action === 'tech') res = Orders.techReport(s, d);
     else if (action === 'rescue') Orders.rescue(s, woId);
     else throw new Error('إجراء غير معروف.');
     Kpi.touch([woId || res.id]);

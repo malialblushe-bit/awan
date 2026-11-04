@@ -192,8 +192,16 @@ var Auth = (function () {
         return { kind: 'con', token: newSession_({ role: 'contractor', id: L.con_id, hotel_id: '', web: true, lead: L.contract_id, lead_name: L.lead_name || '' }), con: lc };
       }
     }
-    try { var c = conWebLogin(pin); clear_('pin_web'); return { kind: 'con', token: c.token, con: c.con }; }
+    var c;
+    try { c = conWebLogin(pin); }
     catch (e) { fail_('pin_web'); throw new Error('الرقم السري غير صحيح.'); }
+    clear_('pin_web');
+    // المصاعد: إن عُيّن قائد فريق فهو ممثل الشركة على الويب، ورقم الشركة للباركود في الفندق فقط (المكافحة مستثناة)
+    if (c.con.type === 'el' && Db.find('Contracts', function (x) { return x.con_id === c.con.con_id && x.type === 'el' && !!x.lead_pin_hash; })) {
+      logout(c.token);
+      throw new Error('رقم الشركة للدخول من باركود أعوان في الفندق. من الويب ادخل برقم قائد الفريق.');
+    }
+    return { kind: 'con', token: c.token, con: c.con };
   }
 
   // ───────── الموظفون ─────────

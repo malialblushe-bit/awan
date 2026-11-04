@@ -1102,6 +1102,16 @@ t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد
   run(`apiConAct('${L.token}', 'submit', '${id}', { att: ['data:application/pdf;base64,JVBERi0='], outcome: 'fix', sym: 'الباب لا يُغلق', part: 'حساس الباب', cause: ['تآكل طبيعي'], action: ['ضبط'], working: 'نعم', follow: 'لا' })`);
   const o = run(`Db.get('WorkOrders', '${id}')`); eq(o.status, 'matching'); if (!o.att) throw new Error('no att');
   const rep = JSON.parse(o.report).pop(); eq(rep.by, 'م. عدنان (قائد الفريق)');
+  // رقم الشركة لا يعمل من الويب بعد تعيين القائد (للباركود فقط)
+  throws(`apiPinWebLogin('${elPin}')`, 'قائد الفريق');
+  // التقرير الفني من الويب: الملف إلزامي؛ تقرير حالة ← المطابقة؛ تشخيص مع عرض السعر ← قرار المهندس مباشرة
+  const pdf = ['data:application/pdf;base64,JVBERi0='];
+  throws(`apiConAct('${L.token}', 'tech', null, { hotel_id: '${HID}', kind: 'report', equip: 'مصعد النزلاء 1', title: 'المبينات' })`, 'كليشة');
+  const r1 = run(`apiConAct('${L.token}', 'tech', null, { hotel_id: '${HID}', kind: 'report', equip: 'مصعد النزلاء 1، مصعد الخدمة', title: 'المبينات', att: ${JSON.stringify(pdf)} })`).result;
+  eq(run(`Db.get('WorkOrders', '${r1.id}').status`), 'matching');
+  throws(`apiConAct('${L.token}', 'tech', null, { hotel_id: '${HID}', kind: 'diag', equip: 'مصعد النزلاء 1', title: 'المبينات', rec: ['شاشة'], working: 'نعم', att: ${JSON.stringify(pdf)} })`, 'مبلغ');
+  const r2 = run(`apiConAct('${L.token}', 'tech', null, { hotel_id: '${HID}', kind: 'diag', equip: 'مصعد النزلاء 1', title: 'المبينات', rec: ['شاشة'], working: 'نعم', amount: '4,500', no: 'Q-7', att: ${JSON.stringify(pdf)} })`).result;
+  const d2 = run(`Db.get('WorkOrders', '${r2.id}')`); eq(d2.status, 'decision'); eq(Number(d2.quote), 4500); eq(d2.quote_no, 'Q-7');
 });
 
 t('المكافحة والنفايات: رفض معالجة لم تحدث، ورضا الإشراف الشهري، والتقرير الشهري للمتعهد، تدخل في المؤشرات الأربعة', () => {

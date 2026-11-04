@@ -248,6 +248,32 @@ var Orders = (function () {
     return res;
   }
 
+  /** التقرير الفني من الويب (قائد الفريق، المصاعد): تقرير حالة ← المطابقة، أو تشخيص يحتاج قطعة مع عرض السعر ← قرار المهندس مباشرة */
+  function techReport(s, d) {
+    if (!s.web) throw new Error('التقرير الفني من صفحة الويب.');
+    var con = Db.get('Contractors', s.id);
+    if (!con || con.type !== 'el') throw new Error('التقرير الفني من الويب لمتعهد المصاعد.');
+    if (!d.hotel_id) throw new Error('اختر الفندق.');
+    if (!String(d.equip || '').trim()) throw new Error('اختر المصعد.');
+    if (!String(d.title || '').trim()) throw new Error('اكتب عنوان التقرير.');
+    if (!(d.att || []).length) throw new Error('أرفق التقرير الفني بكليشة مقدم الخدمة موقّعاً (صورة أو PDF).');
+    var diag = d.kind === 'diag', amt = 0;
+    if (diag) {
+      amt = Number(String(d.amount || '').replace(/[,،\s]/g, ''));
+      if (!(amt > 0)) throw new Error('اكتب مبلغ عرض السعر بالريال.');
+      if (!(d.rec || []).length) throw new Error('اختر القطعة الموصى باستبدالها.');
+      if (!d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
+    }
+    var res = conNew(s, { hotel_id: d.hotel_id, outcome: diag ? 'diag' : 'report', equip: d.equip, title: String(d.title).trim(), sym: String(d.title).trim(),
+      body: d.note || '', note: d.note || '', rec: d.rec || [], part: d.part || '', cause: d.cause || [], working: d.working || '', att: d.att });
+    if (diag) {
+      var t = now_();
+      Db.update('WorkOrders', res.id, { status: 'decision', quote: amt, quote_no: String(d.no || '').trim(), quote_at: t });
+      log_(res.id, s.lead_name || con.name, 'quote', 'quote', 'decision', 'عرض السعر ضمن التقرير الفني ' + amt);
+    }
+    return res;
+  }
+
   function rescue(s, woId) {
     var o = Db.get('WorkOrders', woId);
     if (!o || o.con_id !== s.id) throw new Error('العملية غير موجودة.');
@@ -428,7 +454,7 @@ var Orders = (function () {
 
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
-    create: create, arrive: arrive, conSubmit: conSubmit, conNew: conNew, rescue: rescue,
+    create: create, arrive: arrive, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
     engAct: engAct, engCreate: engCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();
