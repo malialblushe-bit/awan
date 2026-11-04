@@ -156,7 +156,7 @@ TK.orgView=function(o){if(!o)return '';var O=TK.o,nc=o.crit.length,cat=function(
  if(!R.length)return h+'<div class="card muted" style="text-align:center">لا تقييمات في هذه الفترة.</div></div>';
  var all=TK.agg(R,nc),pa=TK.agg(RP,nc),done={};R.forEach(function(r){done[r.m+'|'+r.h+'|'+r.c]=1});
  var ek={};E.forEach(function(x){ek[x.join('|')]=1});Object.keys(done).forEach(function(k){ek[k]=1});E=Object.keys(ek);var nd=Object.keys(done).length,ord=all.avg.map(function(v,i){return i}).sort(function(a,b){return all.avg[b]-all.avg[a]});
- var col=function(v){return v==null?'':v>=4?'background:#E3EFE9;color:#245244':'background:#F6E3DF;color:#8E3A2E'};
+ var col=function(v){return v==null?'':v>=4?'background:#E3EFE9;color:var(--green)':'background:#F6E3DF;color:var(--redD)'};
  var kpi=function(l,v,sub){return '<div class="card" style="padding:10px 12px"><span class="small muted">'+l+'</span><div style="font-size:22px;font-weight:700">'+v+'</div><span class="small muted">'+sub+'</span></div>'};
  var tr0=pa.n?(all.comp-pa.comp):null;
  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">'
