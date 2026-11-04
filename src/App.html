@@ -77,6 +77,10 @@ textarea.inp{resize:vertical}
 .tabs button{min-height:40px;border:0;background:none;border-bottom:3px solid transparent;padding:0 10px;font-size:13.5px;font-weight:700;color:var(--muted)}
 .tabs button.on{color:var(--navy);border-bottom-color:var(--gold)}
 body:has(.bnav) .foot-up{bottom:72px}
+:root{--st-inf:#A4483A;--st-ready:#9C7F45;--st-due:#F3D9AE;--st-dueT:#6B4A12;--st-ok:#CFE5DA;--st-okT:#245244;--st-none:#EDEFF2;--st-noneT:#7A8594}
+.wrap.wide{max-width:1240px}
+@media(min-width:900px){.bnav.mob{display:none}body:has(.bnav.mob){padding-bottom:0}body:has(.bnav.mob) .foot-up{bottom:0}.bnav:not(.mob){max-width:760px;margin:0 auto;border:1px solid var(--line);border-bottom:0;border-radius:16px 16px 0 0}}
+@media(max-width:899px){.topnav.dsk{display:none}}
 .bnav{position:fixed;bottom:0;inset-inline:0;background:#fff;border-top:1px solid var(--line);display:flex;padding:2px 8px 8px;z-index:6}
 .bnav button{flex:1;border:0;background:none;font-size:12.5px;font-weight:700;color:var(--muted);padding:10px 0 4px;min-height:56px;border-top:4px solid transparent}
 .bnav button.on{color:var(--navy);border-top-color:var(--gold)}
