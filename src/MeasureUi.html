@@ -70,5 +70,6 @@ var NAV={map:[['data-svc','svc'],['data-tk','tk'],['data-pay','pay'],['data-rep'
    bt.innerHTML=(ICO[k]||'')+'<span>'+esc(m?m[1]:t)+'</span>'+(m&&+m[2]?'<b class="rb">'+m[2]+'</b>':'');rail.appendChild(bt)});
   nav.remove();var sh=document.createElement('div');sh.className='shell';wrap.parentNode.insertBefore(sh,wrap);sh.appendChild(rail);sh.appendChild(wrap);wrap.classList.add('wide')}};
 (function(){var r0=render;render=function(){r0();try{NAV.apply()}catch(e){}}})();
+(function(){var d0=W.detail;W.detail=function(o,c){return stampEnd(d0(o,c),o)}})();
 render();
 </script>
