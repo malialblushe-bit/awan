@@ -13,6 +13,19 @@ html,body{margin:0;background:var(--bg);color:var(--navy);font-family:'IBM Plex 
 button{font:inherit;cursor:pointer;color:inherit}
 input,textarea,select{font:inherit;color:var(--navy)}
 button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+/* لمسات النقر: استجابة فورية عند الضغط، وتمرير ناعم، وتوهج للمحدد */
+*{-webkit-tap-highlight-color:transparent}
+button,.chip,.opt,.job,.tile,.zc,.zf,.btn{transition:transform .12s ease,background-color .15s ease,box-shadow .15s ease,border-color .15s ease,filter .15s ease}
+button:not(:disabled):active,.chip:active,.opt:active,.job:active{transform:scale(.97);filter:brightness(.94)}
+@media(hover:hover){.job:hover,.opt:hover,.tbtn:hover,.zc:hover{box-shadow:0 0 0 2px var(--gold)}.btn:not(:disabled):hover,.chip:hover,.zf:hover{filter:brightness(1.06)}}
+.opt.on,.zc.sel,.job.on{box-shadow:0 0 0 3px var(--gold),0 0 18px rgba(179,155,110,.55)!important;outline:0!important}
+select:focus-visible,textarea:focus-visible,.chip:focus-visible,.zf:focus-visible,.zc:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.topnav button{min-height:44px}
+.is-busy{position:relative;color:transparent!important}
+.is-busy::after{content:'';position:absolute;inset:0;margin:auto;width:20px;height:20px;border-radius:50%;border:3px solid rgba(255,255,255,.45);border-top-color:#fff;animation:sp .8s linear infinite}
+.btn-o.is-busy::after,.chip.is-busy::after,.opt.is-busy::after{border-color:var(--mist);border-top-color:var(--gold)}
+.busy.quiet{background:transparent}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}button:active{transform:none!important}}
 .hdr{background:var(--navy);color:#fff;padding:14px 18px;position:sticky;top:0;z-index:5}
 .hdr-in{max-width:1240px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
 .brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700}
@@ -180,7 +193,11 @@ var LOGO = '<svg width="30" height="30" viewBox="0 0 56 56" aria-hidden="true"><
 function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function call(fn){var args=[].slice.call(arguments,1);busy(true);return new Promise(function(res,rej){google.script.run.withSuccessHandler(function(r){busy(false);res(r)}).withFailureHandler(function(e){busy(false);var m=(e&&e.message)||String(e);if(/الجلسة/.test(m)){clearTok();}toast(m,'err');rej(e)})[fn].apply(null,args)})}
-function busy(on){$('#busy').innerHTML=on?'<div class="busy"><div class="spin"></div></div>':''}
+/** أثناء الاستدعاء: الزر المضغوط يُظهر دوّاراً فوراً ويتعطل، وطبقة شفافة تمنع الضغط المكرر، والدوّار العام بعد لحظة فقط (لا وميض في الطلبات السريعة) */
+var busyT=null,busyB=null,busyN=0;
+function busy(on){busyN=Math.max(0,busyN+(on?1:-1));var el=$('#busy');
+ if(busyN>0){if(on&&busyN===1){var a=document.activeElement;if(a&&a.tagName==='BUTTON'&&!a.disabled){busyB=a;a.classList.add('is-busy');a.setAttribute('aria-busy','true')}el.innerHTML='<div class="busy quiet"></div>';clearTimeout(busyT);busyT=setTimeout(function(){var q=el.querySelector('.busy');if(q){q.classList.remove('quiet');q.innerHTML='<div class="spin"></div>'}},450)}return}
+ clearTimeout(busyT);el.innerHTML='';if(busyB){busyB.classList.remove('is-busy');busyB.removeAttribute('aria-busy');busyB=null}}
 var toastT;function toast(m,kind){clearTimeout(toastT);$('#toast').innerHTML='<div class="toast" role="status" style="background:'+(kind==='err'?'#FBEFEC;color:#8E3A2E':'#E3EFEA;color:#245244')+'">'+esc(m)+'</div>';toastT=setTimeout(function(){$('#toast').innerHTML=''},kind==='err'?6000:4000)}
 function store(k,v){try{if(v==null)sessionStorage.removeItem(k);else sessionStorage.setItem(k,v)}catch(e){}}
 function load(k){try{return sessionStorage.getItem(k)}catch(e){return null}}
