@@ -604,7 +604,7 @@ var Ops = (function () {
     var me = Db.get('Users', s.id) || {};
     var rec = Db.insert('Evaluations', { con_id: conId, type: sc.con.type, hotel_ids: sc.hotels.join(','), from: "'" + from, to: "'" + to,
       data: { type: sc.con.type, V: m.V, N: m.N, P: m.P, used: m.used, X: m.X, th: m.th, days: m.days, cls: m.cls, C: m.C, bands: m.bands, small: m.small }, score: m.score == null ? '' : m.score, decision: decision, note: String(note || '').trim(),
-      by: me.name || '', created_at: new Date() });
+      by: me.name || '', by_role: s.role, created_at: new Date() });
     return { id: rec.eval_id };
   }
 
@@ -618,7 +618,7 @@ var Ops = (function () {
       var f = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v).replace(/^'/, ''); };
       return { id: e.eval_id, con_id: e.con_id, con: cons[e.con_id] || '', type: e.type, hotels: csv(e.hotel_ids).map(function (h) { return hotels[h] || h; }),
         hotel_ids: csv(e.hotel_ids), from: f(e.from), to: f(e.to), data: d, score: e.score === '' ? null : Number(e.score), decision: e.decision, note: e.note || '',
-        by: e.by, created: ms(e.created_at) };
+        by: e.by, byRole: e.by_role || '', created: ms(e.created_at) };
     }).sort(function (a, b) { return b.created - a.created; });
   }
 

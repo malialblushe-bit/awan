@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 30;
+var SCHEMA_VERSION = 31;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -84,7 +84,7 @@ var SCHEMA = [
     ['work_from', 'بداية العمل الجاري'], ['reopens', 'مرات إعادة الفتح'],
     ['created_at', 'وقت الرفع'], ['assigned_at', 'وقت الإسناد'], ['arrived_at', 'وقت الوصول'],
     ['rescued_at', 'وقت الإنقاذ'], ['submitted_at', 'وقت التسليم'], ['decided_at', 'وقت القرار'],
-    ['paid_at', 'وقت السداد'], ['part_arrived_at', 'وقت وصول القطعة'], ['closed_at', 'وقت الإغلاق'],
+    ['paid_at', 'وقت السداد'], ['part_arrived_at', 'وقت وصول القطعة'], ['closed_at', 'وقت الإغلاق'], ['matched_by', 'طابقها'], ['matched_role', 'دوره'],
     ['down_from', 'بداية التوقف'], ['down_to', 'نهاية التوقف'],
     ['rfq_at', 'آخر طلب عرض سعر بالبريد'], ['rfq_count', 'مرات طلب العرض'], ['quote_no', 'رقم عرض السعر'], ['quote_at', 'وقت وصول العرض'],
     ['pay_pending', 'أُذن بالإصلاح قبل السداد والسداد معلّق'], ['repair_date', 'موعد الإصلاح المتفق عليه'],
@@ -171,7 +171,7 @@ var SCHEMA = [
 
   { name: 'Evaluations', cols: [
     ['eval_id', 'المعرّف'], ['con_id', 'المتعهد'], ['type', 'النوع'], ['hotel_ids', 'الفنادق'], ['from', 'من'], ['to', 'إلى'],
-    ['data', 'المؤشرات (JSON)'], ['score', 'الدرجة'], ['decision', 'القرار'], ['note', 'الملاحظة'], ['by', 'أصدره'], ['created_at', 'وقت الإصدار']] },
+    ['data', 'المؤشرات (JSON)'], ['score', 'الدرجة'], ['decision', 'القرار'], ['note', 'الملاحظة'], ['by', 'أصدره'], ['by_role', 'دوره'], ['created_at', 'وقت الإصدار']] },
 
   { name: 'KpiSummary', cols: [
     ['key', 'المتعهد|الفندق|الشهر'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر'],

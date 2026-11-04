@@ -152,7 +152,7 @@ var Pay = (function () {
         rows.push({ c: c.contract_id, key: it.key, label: it.label, due: it.due, month: it.due.slice(0, 7), expected: x && x.expected !== '' ? Number(x.expected) : it.expected,
           st: st, delay: delay, overdue: !!x && st !== 'paid' && td > from,
           claim: x ? { id: x.claim_id, amount: Number(x.amount) || 0, invoice: String(x.invoice_no || ''), att: Orders.csv(x.att), note: x.note || '', by: x.by_name || '',
-            at: ms(x.created_at), okBy: x.ok_by || '', okAt: ms(x.ok_at) || null, paid: paid, ref: x.paid_ref || '', payBy: x.paid_by || '', payNote: x.paid_note || '' } : null,
+            at: ms(x.created_at), okBy: x.ok_by || '', okRole: x.ok_role || '', okAt: ms(x.ok_at) || null, paid: paid, ref: x.paid_ref || '', payBy: x.paid_by || '', payNote: x.paid_note || '' } : null,
           lastRej: !x && rej[it.key] ? (rej[it.key].reason || '') : '' });
       });
     });

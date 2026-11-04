@@ -346,7 +346,7 @@ var Orders = (function () {
     } else if (action === 'close') {
       if (o.status !== 'matching') throw new Error('العملية ليست بانتظار المطابقة.');
       if (!d.sat) throw new Error('حدّد رضاك عن العمل.');
-      to = 'closed'; patch.closed_at = t; patch.sat = d.sat;
+      to = 'closed'; patch.closed_at = t; patch.sat = d.sat; patch.matched_by = me.name || ''; patch.matched_role = s.role;
       Quality.closeForOrder(woId);
     } else if (action === 'ca' || action === 'reopen') {
       // إجراء تصحيحي من المطابقة (بديل إعادة الفتح): يعود للمتعهد بالسبب والمطلوب، ويُسجَّل في سجل عدم المطابقة
@@ -465,7 +465,7 @@ var Orders = (function () {
       follow_of: o.follow_of || '', resp: respOf_(o, contractOf_(R, o)),
       created: ms(o.created_at), assigned: ms(o.assigned_at), arrived: ms(o.arrived_at), rescued: ms(o.rescued_at),
       submitted: ms(o.submitted_at), decided: ms(o.decided_at), paid: forCon ? null : ms(o.paid_at),
-      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), stopped: o.decision === 'stop', down_from: ms(o.down_from), down_to: ms(o.down_to),
+      part_arrived: ms(o.part_arrived_at), closed: ms(o.closed_at), matchedBy: o.matched_by || '', matchedRole: o.matched_role || '', stopped: o.decision === 'stop', down_from: ms(o.down_from), down_to: ms(o.down_to),
       claimed_by: o.claimed_by || '', claimed_at: ms(o.claimed_at), tg: !!o.tg_msg,
       pay_pending: forCon ? false : truthy(o.pay_pending), repair_date: String(o.repair_date || ''),
       rfq: forCon ? null : ms(o.rfq_at), rfq_count: forCon ? 0 : (Number(o.rfq_count) || 0), quote_no: forCon ? '' : String(o.quote_no || ''), quote_at: forCon ? null : ms(o.quote_at)
