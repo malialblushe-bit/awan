@@ -313,7 +313,7 @@ var Ops = (function () {
   function pcCon_(s, hotelId) {
     var con = Db.get('Contractors', s.id);
     if (!con || con.type !== 'pc') throw new Error('هذا الإجراء لمتعهد المكافحة.');
-    if (s.web) throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
+    if (s.lead) throw new Error('هذا الإجراء لمتعهد المكافحة.');
     if (!Orders.activeContract(hotelId, 'pc', con.con_id)) throw new Error('لا يوجد عقد ساري لك في هذا الفندق.');
     return con;
   }

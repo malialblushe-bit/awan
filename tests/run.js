@@ -799,6 +799,9 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps.length, 0);
   // متعهد التكييف لا يسجّل مكافحة
   throws(`apiPestLog('${acTok}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`, 'المكافحة');
+  // متعهد المكافحة يسجّل من الويب أيضاً (بلا باركود)
+  const wt = run(`apiPinWebLogin('${pcPin}')`).token;
+  eq(run(`apiPestLog('${wt}', { hotel_id: '${HID}', zones: ['${room.id}', '${kitchen.id}'], kind: 'inspect', finding: 'none' })`).result.flags >= 0, true);
 });
 
 t('التقييم الدوري: يصدره المختص لفترة يختارها، ويُحفظ بدرجته وقراره ويظهر في التقارير', () => {
