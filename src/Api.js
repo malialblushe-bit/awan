@@ -79,7 +79,7 @@ function hotelLayout_(hotelId) {
       rooms: rr.length, from: nums.length ? nums[0].s : null, to: nums.length ? nums[nums.length - 1].s : null,
       acPer: rr.length ? Orders.csv(rr[0].ac_units).length : 0,
       ac: rr.reduce(function (a, r) { return a + Orders.csv(r.ac_units).length; }, 0),
-      facilities: rs.filter(function (r) { return isFacility_(r, f); }).map(function (r) { return { id: r.room_id, name: String(r.number), units: Orders.csv(r.ac_units) }; })
+      facilities: rs.filter(function (r) { return isFacility_(r, f); }).map(function (r) { return { id: r.room_id, name: String(r.number), units: Orders.csv(r.ac_units), ftype: r.ftype || '' }; })
     };
   });
 }
@@ -833,17 +833,27 @@ function addFacilities_(hotelId, floorId, list) {
     names[n] = true;
     var units = [];
     for (var k = 1; k <= ac; k++) units.push(ac === 1 ? n : n + ' ' + k);
-    recs.push({ hotel_id: hotelId, floor_id: floorId, number: n, ac_units: units.join(','), kind: 'facility' });
+    recs.push({ hotel_id: hotelId, floor_id: floorId, number: n, ac_units: units.join(','), kind: 'facility', ftype: String(x.ftype || '').trim() });
   });
   Db.insertMany('Rooms', recs);
   return recs.length;
 }
 
 /** مرفق في أي دور (غرف أو خدمي): الممر، غرفة الكهرباء، المطعم… */
-function apiAdmAddFacility(token, hotelId, floorId, name, ac) {
+function apiAdmAddFacility(token, hotelId, floorId, name, ac, ftype) {
   return adm_(token, function () {
     if (!String(name || '').trim()) throw new Error('اكتب اسم المرفق.');
-    addFacilities_(hotelId, floorId, [{ name: name, ac: ac }]);
+    addFacilities_(hotelId, floorId, [{ name: name, ac: ac, ftype: ftype }]);
+    return {};
+  });
+}
+
+/** نوع المرفق (يحدد دورية الرش في المكافحة) يُعرَّف مع المرفق في الإدارة */
+function apiAdmFacilityType(token, roomId, ftype) {
+  return adm_(token, function () {
+    var r = Db.get('Rooms', roomId);
+    if (!r) throw new Error('المرفق غير موجود.');
+    Db.update('Rooms', roomId, { ftype: String(ftype || '').trim() });
     return {};
   });
 }
@@ -1237,9 +1247,9 @@ function apiOpsStatement(token, conId, hotelId, from, to) {
   var s = Auth.need(token, SVC_ROLES_.concat(['supmgr']));
   return Ops.statement(Ops.supHotels(s), conId, hotelId, from, to);
 }
-function apiPcReject(token, id, reason) {
+function apiPcReject(token, id, reason, zones) {
   var s = Auth.need(token, ['supmgr', 'admin']);
-  return Db.withLock(function () { Ops.pcReject(s, id, reason); Db.reset(); return { boot: supBoot_(s) }; });
+  return Db.withLock(function () { Ops.pcReject(s, id, reason, zones); Db.reset(); return { boot: supBoot_(s) }; });
 }
 function apiSupRate(token, conId, hotelId, score, note) {
   var s = Auth.need(token, ['supmgr', 'admin']);

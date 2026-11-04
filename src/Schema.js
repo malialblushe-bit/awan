@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 28;
+var SCHEMA_VERSION = 29;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -145,7 +145,7 @@ var SCHEMA = [
     ['kind', 'spray = رش · inspect = فحص · trap = فحص مصيدة'], ['pests', 'الآفات المستهدفة'], ['material', 'المادة'],
     ['finding', 'none · light · medium · heavy'], ['trap_id', 'المصيدة'], ['note', 'ملاحظة'], ['photos', 'الصور'], ['by_name', 'الفني'],
     ['at', 'الوقت'], ['flags_closed', 'البلاغات المنجزة بها'],
-    ['status', 'rejected = مرفوضة (لم تحدث فعلاً)'], ['rej_by', 'رفضها'], ['rej_at', 'وقت الرفض'], ['rej_reason', 'سبب الرفض']] },
+    ['status', 'rejected = مرفوضة (لم تحدث فعلاً)'], ['rej_by', 'رفضها'], ['rej_at', 'وقت الرفض'], ['rej_reason', 'سبب الرفض'], ['rej_zones', 'المناطق المرفوضة (رفض جزئي)']] },
 
   { name: 'SupRatings', cols: [
     ['rating_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر yyyy-MM'], ['score', 'الرضا: 100 راضٍ · 50 مقبول · 0 غير راضٍ'],

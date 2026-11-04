@@ -134,16 +134,30 @@ var Ops = (function () {
   }
 
   /** رفض معالجة مكافحة مسجّلة لم تحدث فعلاً: لا تُحسب في الدورية ولا المصائد، وتُنقص موثوقية المعلومات */
-  function pcReject(s, id, reason) {
+  /** رفض معالجة لم تحدث، كلها أو مناطق منها (رفض جزئي). بلاغات المناطق المرفوضة تعود مفتوحة */
+  function pcReject(s, id, reason, zones) {
     if (['supmgr', 'admin'].indexOf(s.role) === -1) throw new Error('رفض المعالجات لمدير الإشراف أو مشرف النظام.');
     reason = String(reason || '').trim();
     if (!reason) throw new Error('اكتب سبب الرفض.');
     var l = Db.get('PestLogs', id);
     if (!l || supHotels(s).indexOf(l.hotel_id) === -1) throw new Error('المعالجة ليست ضمن فنادقك.');
     if (l.status === 'rejected') return 0;
-    Db.update('PestLogs', id, { status: 'rejected', rej_by: (Db.get('Users', s.id) || {}).name || '', rej_at: new Date(), rej_reason: reason });
-    return 1;
+    var all = csv(l.zones), was = csv(l.rej_zones);
+    var pick = (zones && zones.length) ? zones.filter(function (z) { return all.indexOf(z) !== -1; }) : all;
+    if (!pick.length) throw new Error('اختر المناطق المرفوضة.');
+    var rz = was.concat(pick.filter(function (z) { return was.indexOf(z) === -1; }));
+    var full = all.every(function (z) { return rz.indexOf(z) !== -1; });
+    Db.update('PestLogs', id, { status: full ? 'rejected' : '', rej_zones: full ? '' : rz.join(','), rej_by: (Db.get('Users', s.id) || {}).name || '', rej_at: new Date(),
+      rej_reason: (l.rej_reason && !full ? l.rej_reason + ' · ' : '') + reason });
+    // ما أنجزته هذه المعالجة في المناطق المرفوضة يعود مفتوحاً
+    csv(l.flags_closed).forEach(function (fid) {
+      var f = Db.get('PestFlags', fid);
+      if (f && f.status === 'done' && rz.indexOf(f.zone) !== -1) Db.update('PestFlags', fid, { status: 'open', done_at: '', done_log: '' });
+    });
+    return pick.length;
   }
+  /** المناطق المقبولة من معالجة (بعد الرفض الكلي أو الجزئي) */
+  function okZones_(l) { if (l.status === 'rejected') return []; var rz = csv(l.rej_zones); return csv(l.zones).filter(function (z) { return rz.indexOf(z) === -1; }); }
 
   // ───────── رضا الإشراف الشهري (النفايات والمكافحة) وتقرير المكافحة الشهري ─────────
   function prevMonth_() { var d = new Date(); return Utilities.formatDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - 864e5), TZ, 'yyyy-MM'); }
@@ -205,8 +219,8 @@ var Ops = (function () {
     var rooms = Db.all('Rooms', function (r) { return r.hotel_id === hotelId; });
     var sch = schedule(hotelId), qt = quotas(hotelId), now = Date.now(), m0 = monthStart_();
     var last = {}, lastFind = {}, monthN = {};
-    Db.all('PestLogs', function (l) { return l.hotel_id === hotelId && l.kind !== 'trap'; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (l) {
-      csv(l.zones).forEach(function (z) { if (l.kind === 'spray') { last[z] = ms(l.at); if (ms(l.at) >= m0) monthN[z] = (monthN[z] || 0) + 1; } lastFind[z] = l.finding || ''; });
+    Db.all('PestLogs', function (l) { return l.hotel_id === hotelId && l.kind !== 'trap' && l.status !== 'rejected'; }).sort(function (a, b) { return ms(a.at) - ms(b.at); }).forEach(function (l) {
+      okZones_(l).forEach(function (z) { if (l.kind === 'spray') { last[z] = ms(l.at); if (ms(l.at) >= m0) monthN[z] = (monthN[z] || 0) + 1; } lastFind[z] = l.finding || ''; });
     });
     var flags = Db.all('PestFlags', function (f) { return f.hotel_id === hotelId && f.status === 'open'; });
     var traps = Db.all('Traps', function (t) { return t.hotel_id === hotelId && t.status === 'active'; });
@@ -237,6 +251,22 @@ var Ops = (function () {
     }).sort(function (a, b) { return a.next - b.next; });
   }
 
+  /** سجل المصائد: النشطة والمرفوعة خلال 60 يوماً، مع أحداث كل مصيدة (وضع، فحوص، استبدال، رفع) */
+  function trapLog(hotelId) {
+    var zones = {}, since = Date.now() - 60 * 864e5, ev = {};
+    Db.all('Rooms', function (r) { return r.hotel_id === hotelId; }).forEach(function (r) { zones[r.room_id] = String(r.number); });
+    Db.all('PestLogs', function (l) { return l.hotel_id === hotelId && l.kind === 'trap' && l.trap_id; }).forEach(function (l) {
+      (ev[l.trap_id] = ev[l.trap_id] || []).push({ at: ms(l.at), text: l.note || '', by: l.by_name || '', rejected: l.status === 'rejected' });
+    });
+    return Db.all('Traps', function (t) { return t.hotel_id === hotelId && (t.status === 'active' || ms(t.removed_at) >= since); }).map(function (t) {
+      var e = (ev[t.trap_id] || []).slice();
+      e.push({ at: ms(t.placed_at), text: 'وضع المصيدة', by: t.by_name || '' });
+      if (t.status === 'removed') e.push({ at: ms(t.removed_at), text: 'رفع المصيدة', by: '' });
+      e.sort(function (a, b) { return b.at - a.at; });
+      return { id: t.trap_id, label: t.label, kind: t.kind, zoneName: zones[t.zone] || '', status: t.status, placed: ms(t.placed_at), removed: ms(t.removed_at) || null, every: Number(t.every_days) || 7, events: e };
+    }).sort(function (a, b) { return (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || String(a.label).localeCompare(String(b.label)); });
+  }
+
   function flagsOf(hotelIds, sinceMs) {
     var zones = {};
     Db.all('Rooms').forEach(function (r) { zones[r.room_id] = String(r.number); });
@@ -252,13 +282,13 @@ var Ops = (function () {
     return Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && ms(l.at) >= sinceMs; }).map(function (l) {
       return { id: l.log_id, hotel_id: l.hotel_id, kind: l.kind, zoneIds: csv(l.zones), zones: csv(l.zones).map(function (z) { return zones[z] || z; }), pests: csv(l.pests), material: l.material || '',
         finding: l.finding || '', note: l.note || '', by: l.by_name, at: ms(l.at), trap: l.trap_id || '', flags: csv(l.flags_closed).length,
-        status: l.status || '', rejBy: l.rej_by || '', rejAt: ms(l.rej_at) || null, reason: l.rej_reason || '' };
+        status: l.status || '', rejZones: csv(l.rej_zones), rejBy: l.rej_by || '', rejAt: ms(l.rej_at) || null, reason: l.rej_reason || '' };
     }).sort(function (a, b) { return b.at - a.at; });
   }
 
   function pestBoot(hotelIds) {
     var out = {};
-    hotelIds.forEach(function (hid) { out[hid] = { floors: pestState(hid), schedule: schedule(hid), quota: quotas(hid), traps: trapsOf(hid) }; });
+    hotelIds.forEach(function (hid) { out[hid] = { floors: pestState(hid), schedule: schedule(hid), quota: quotas(hid), traps: trapsOf(hid), trapLog: trapLog(hid) }; });
     var since = Date.now() - 60 * 864e5;
     return { hotels: out, flags: flagsOf(hotelIds, since), logs: logsOf(hotelIds, since), finds: FIND, trapKinds: TRAP_KINDS };
   }
@@ -362,6 +392,13 @@ var Ops = (function () {
         finding: d.result === 'رصد آفة' ? 'light' : 'none', note: (d.result + (d.note ? ' · ' + String(d.note).trim() : '')), photos: '', by_name: c2.name, at: t, flags_closed: '' });
       return {};
     }
+    if (action === 'replace') {
+      // استبدال المصيدة (رصد حالة): تبقى بنفس الرقم ويبدأ موعد فحصها من جديد
+      Db.update('Traps', tr.trap_id, { last_check: t, last_result: 'استُبدلت' });
+      Db.insert('PestLogs', { hotel_id: tr.hotel_id, con_id: c2.con_id, zones: tr.zone, kind: 'trap', trap_id: tr.trap_id, pests: '', material: '',
+        finding: 'none', note: 'استبدال' + (d.note ? ' · ' + String(d.note).trim() : ''), photos: '', by_name: c2.name, at: t, flags_closed: '' });
+      return {};
+    }
     if (action === 'remove') { Db.update('Traps', tr.trap_id, { status: 'removed', removed_at: t }); return {}; }
     throw new Error('إجراء غير معروف.');
   }
@@ -442,7 +479,7 @@ var Ops = (function () {
       var expS = 0, gotS = 0;
       hotelIds.forEach(function (h) {
         var sch = schedule(h), sprays = {}, hd = cdays(h);
-        Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && l.status !== 'rejected' && inR(l.at); }).forEach(function (l) { csv(l.zones).forEach(function (z) { sprays[z] = (sprays[z] || 0) + 1; }); });
+        Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && l.status !== 'rejected' && inR(l.at); }).forEach(function (l) { okZones_(l).forEach(function (z) { sprays[z] = (sprays[z] || 0) + 1; }); });
         var floors = {}; Db.all('Floors', function (f) { return f.hotel_id === h; }).forEach(function (f) { floors[f.floor_id] = f; });
         Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) {
           var ft = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST), ev = sch[ft];
@@ -473,7 +510,9 @@ var Ops = (function () {
       V.flagresp = due.length ? pct_(due.filter(function (f) { return f.status === 'done' && ms(f.done_at) - ms(f.created_at) <= slaH * 36e5; }).length, due.length) : null;
       N.flagresp = due.length; N.ontime = expS; N.traps = tExp;
       var allL = Db.all('PestLogs', function (l) { return l.con_id === con.con_id && hotelIds.indexOf(l.hotel_id) !== -1 && inR(l.at); });
-      V.logsOk = allL.length ? pct_(allL.filter(function (l) { return l.status !== 'rejected'; }).length, allL.length) : null; N.logsOk = allL.length;
+      // الموثوقية لكل منطقة في المعالجة: المرفوض جزئياً يُحسب بمناطقه
+      var zAll = 0, zOk = 0; allL.forEach(function (l) { var n = l.kind === 'trap' ? 1 : (csv(l.zones).length || 1); zAll += n; zOk += l.kind === 'trap' ? (l.status === 'rejected' ? 0 : 1) : okZones_(l).length; });
+      V.logsOk = zAll ? pct_(zOk, zAll) : null; N.logsOk = zAll;
       // التقرير الشهري: لكل شهر انتهى داخل الفترة ولكل فندق كان فيه عقد
       var need = 0, got = 0, pm0 = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
       for (var mm = from.slice(0, 7); mm <= to.slice(0, 7) && mm < pm0; mm = Utilities.formatDate(new Date(new Date(mm + '-15T12:00:00+03:00').getTime() + 31 * 864e5), TZ, 'yyyy-MM')) {

@@ -1135,6 +1135,32 @@ t('المكافحة والنفايات: رفض معالجة لم تحدث، ور
   eq(m.V.rating, 100); eq(m.V.reports, 100); if (!(m.V.logsOk < 100)) throw new Error('logsOk'); eq(Object.keys(m.P).join(','), 'resp,ready,sat,info');
 });
 
+t('المكافحة: رفض جزئي لمناطق من معالجة جماعية يعيد بلاغاتها، وسجل المصائد بالاستبدال، وتصنيف المرافق من الإدارة', () => {
+  const pt = run(`apiPinWebLogin('${pcPin}')`).token;
+  const zs = run(`Db.all('Rooms').filter(r => r.hotel_id === '${HID}').slice(0, 3).map(r => r.room_id)`);
+  run(`apiPestFlag('${mgrTok}', { hotel_id: '${HID}', zones: ${JSON.stringify(zs)}, kind: 'ready' })`);
+  const lr = run(`apiPestLog('${pt}', { hotel_id: '${HID}', zones: ${JSON.stringify(zs)}, kind: 'spray', pests: ['صراصير'], material: 'جل', finding: 'none' })`).result;
+  eq(lr.flags, 3);
+  run(`apiPcReject('${mgrTok}', '${lr.id}', 'لم تُرش', ['${zs[0]}'])`);
+  const L = run(`Db.get('PestLogs', '${lr.id}')`); eq(L.status, ''); eq(L.rej_zones, zs[0]);
+  eq(run(`Db.all('PestFlags').filter(f => f.zone === '${zs[0]}' && f.status === 'open').length`), 1);
+  eq(run(`Db.all('PestFlags').filter(f => f.zone === '${zs[1]}' && f.status === 'open').length`), 0);
+  const sb = run(`apiSupBoot('${mgrTok}')`); const view = sb.pest.logs.find(l => l.id === lr.id); if (!view) throw new Error('logs ' + sb.pest.logs.length + ' ' + JSON.stringify(lr)); eq(view.rejZones.join(), zs[0]);
+  run(`apiPcReject('${mgrTok}', '${lr.id}', 'ولا هذه', ['${zs[1]}', '${zs[2]}'])`);
+  eq(run(`Db.get('PestLogs', '${lr.id}').status`), 'rejected');
+  // المصائد: وضع ثم استبدال ثم رفع، والسجل يحفظ الأحداث
+  const tp = run(`apiPestTrap('${pt}', 'place', { hotel_id: '${HID}', zone: '${zs[0]}', kind: 'مصيدة لاصقة', every_days: 7 })`).result;
+  run(`apiPestTrap('${pt}', 'replace', { trap_id: '${tp.id}' })`);
+  run(`apiPestTrap('${pt}', 'remove', { trap_id: '${tp.id}' })`);
+  const tl = run(`apiConBoot('${pt}')`).pest.hotels[HID].trapLog.find(t => t.id === tp.id);
+  eq(tl.status, 'removed'); eq(tl.events.map(e => e.text).join('|'), 'رفع المصيدة|استبدال|وضع المصيدة');
+  // تصنيف المرفق عند تعريفه في الإدارة
+  const fl = run(`floorsOf_('${HID}')[0].id`);
+  run(`apiAdmAddFacility('${adminTok}', '${HID}', '${fl}', 'المطبخ التجريبي', 0, 'المطابخ')`);
+  const fr = run(`Db.all('Rooms').find(r => String(r.number) === 'المطبخ التجريبي')`); eq(fr.ftype, 'المطابخ');
+  run(`apiAdmFacilityType('${adminTok}', '${fr.room_id}', 'المخازن')`); eq(run(`Db.get('Rooms', '${fr.room_id}').ftype`), 'المخازن');
+});
+
 t('المطالبات والسداد: طريقة السداد في العقد، المتعهد يرفع المطالبة ولا يرى السداد، مالك الخدمة يعتمد، والمالية تسدد', () => {
   const wc = run(`Db.all('Contracts').find(c => c.type === 'wa').contract_id`);
   const td = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
