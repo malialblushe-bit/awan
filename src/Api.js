@@ -826,6 +826,39 @@ function apiAdmAddServiceFloor(token, hotelId, name, facilities, tower) {
   });
 }
 
+/** تكرار دور خدمي: نسخ بأسماء جديدة (تُراجع قبل الاعتماد) ومرافقه بأنواعها ووحداتها، وما يُضاف لها؛ تأتي بعد الدور الأصل مباشرة */
+function apiAdmCopyFloor(token, floorId, d) {
+  return adm_(token, function () {
+    var src = Db.get('Floors', floorId);
+    if (!src) throw new Error('الدور غير موجود.');
+    d = d || {};
+    var tower = String(src.tower || ''), names = (d.names || []).map(function (n) { return String(n || '').trim(); });
+    if (!names.length) throw new Error('حدّد عدد النسخ.');
+    if (names.length > 30) throw new Error('30 نسخة على الأكثر في المرة الواحدة.');
+    var all = Db.all('Floors', function (f) { return f.hotel_id === src.hotel_id; }).sort(sortFloors_);
+    var taken = {}; all.forEach(function (f) { if (String(f.tower || '') === tower) taken[f.name] = true; });
+    var seen = {};
+    names.forEach(function (n, i) {
+      if (!n) throw new Error('النسخة ' + (i + 1) + ': اكتب اسم الدور.');
+      if (taken[n]) throw new Error('يوجد دور باسم «' + n + '»' + (tower ? ' في ' + towerName_(tower) : '') + '.');
+      if (seen[n]) throw new Error('الاسم «' + n + '» مكرر في النسخ.');
+      seen[n] = true;
+    });
+    var facs = (d.facs || []).filter(function (x) { return String(x.name || '').trim(); }), fs = {};
+    facs.forEach(function (x) { var n = String(x.name).trim(); if (fs[n]) throw new Error('المرفق «' + n + '» مكرر.'); fs[n] = true; });
+    // الترتيب: النسخ بعد الأصل مباشرة
+    all.forEach(function (x, i) { if (Number(x.sort) !== i + 1) Db.update('Floors', x.floor_id, { sort: i + 1 }); x.sort = i + 1; });
+    var at = all.map(function (x) { return x.floor_id; }).indexOf(src.floor_id) + 1, k = names.length;
+    all.slice(at).forEach(function (x) { Db.update('Floors', x.floor_id, { sort: Number(x.sort) + k }); });
+    var made = 0, fac = 0;
+    names.forEach(function (n, i) {
+      var f = Db.insert('Floors', { hotel_id: src.hotel_id, name: n, tower: tower, kind: 'service', sort: at + i + 1 });
+      fac += addFacilities_(src.hotel_id, f.floor_id, facs); made++;
+    });
+    return { floors: made, facilities: fac };
+  });
+}
+
 function addFacilities_(hotelId, floorId, list) {
   var names = {};
   Db.all('Rooms', function (r) { return r.floor_id === floorId; }).forEach(function (r) { names[String(r.number)] = true; });

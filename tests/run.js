@@ -1263,6 +1263,19 @@ t('تسجيل الوصول بزر: مرة للزيارة، يبقى بعد إغ�
   } finally { run('AUTO_ARRIVE = true'); }
 });
 
+t('تكرار الدور الخدمي: نسخ بأسماء مراجَعة ومرافقها وأنواعها، بعد الأصل مباشرة، ويرفض الاسم الموجود أو المكرر', () => {
+  const svc = run(`Db.all('Floors').find(f => f.hotel_id === '${HID}' && f.kind === 'service')`);
+  run(`apiAdmAddFacility('${adminTok}', '${HID}', '${svc.floor_id}', 'غرفة الكهرباء', 0, 'غرف الخدمات')`);
+  throws(`apiAdmCopyFloor('${adminTok}', '${svc.floor_id}', { names: ['${svc.name}'], facs: [] })`, 'يوجد دور');
+  throws(`apiAdmCopyFloor('${adminTok}', '${svc.floor_id}', { names: ['خدمي أ', 'خدمي أ'], facs: [] })`, 'مكرر');
+  const r = run(`apiAdmCopyFloor('${adminTok}', '${svc.floor_id}', { names: ['خدمي 2', 'خدمي 3'], facs: [{ name: 'غرفة الكهرباء', ac: 0, ftype: 'غرف الخدمات' }, { name: 'مخزن جديد', ac: 1, ftype: '' }] })`);
+  eq(r.floors, 2); eq(r.facilities, 4);
+  const fl = run(`Db.all('Floors').filter(f => f.hotel_id === '${HID}').sort((a, b) => a.sort - b.sort).map(f => f.name)`);
+  const at = fl.indexOf(svc.name); eq(fl[at + 1], 'خدمي 2'); eq(fl[at + 2], 'خدمي 3');
+  const f2 = run("Db.all('Floors').find(f => f.name === 'خدمي 2').floor_id");
+  eq(run(`Db.all('Rooms').filter(r => r.floor_id === '${f2}').map(r => r.number + ':' + (r.ftype || '')).sort().join('|')`), 'غرفة الكهرباء:غرف الخدمات|مخزن جديد:');
+});
+
 t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد والفندق والجداول، والمعاينة قبل المسح، ولا يُمس ما خارج النطاق', () => {
   const wo0 = run("Db.all('WorkOrders').length"), wt0 = run("Db.all('WaterLoads').length");
   const p1 = run(`apiAdmLaunchPlan('${adminTok}', { types: ['wt'] })`);
