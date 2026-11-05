@@ -55,7 +55,7 @@ var Pay = (function () {
       if (Math.abs(sum - value) > 1) throw new Error('مجموع الدفعات (' + sum + ') لا يساوي قيمة العقد (' + value + ').');
     } else if (mode === 'monthly') {
       var amt = round_((d.plan || {}).amount || 0);
-      if (!(amt > 0)) throw new Error('اكتب قيمة الفاتورة الشهرية.');
+      if (!(amt > 0)) throw new Error('اكتب المبلغ الشهري.');
       plan = { amount: amt };
     }
     Db.update('Contracts', contractId, { value: value || '', pay_mode: mode, pay_days: days, pay_plan: plan ? JSON.stringify(plan) : '' });

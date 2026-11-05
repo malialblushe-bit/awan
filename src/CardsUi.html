@@ -26,8 +26,10 @@ var CARDS=[
 ];
  /** صفحات A4 تُفتح في نافذة الطباعة (حفظ PDF من المتصفح): سريع ونص واضح، بلا مكتبات */
 /** أي خطأ في الواجهة يظهر نصه بدل صفحة فارغة، ليسهل الإبلاغ عنه */
-window.addEventListener('unhandledrejection',function(e){var r=e&&e.reason;window.dispatchEvent(new ErrorEvent('error',{message:'Promise: '+((r&&r.message)||String(r))+(r&&r.stack?' | '+String(r.stack).split('\n').slice(0,2).join(' | '):'')}))});
-window.addEventListener('error',function(e){try{var m=(e&&e.message)||'';if(!m)return;var d=document.getElementById('jserr');if(!d){d=document.createElement('div');d.id='jserr';d.style.cssText='position:fixed;bottom:12px;left:12px;right:12px;z-index:99;background:#FBEFEC;color:var(--redD);border:1px solid #E7B9AF;border-radius:12px;padding:10px 14px;font-size:13px;direction:ltr;text-align:left';document.body.appendChild(d)}d.textContent='⚠ '+m+(e.lineno?' (line '+e.lineno+')':'')}catch(x){}});
+// أخطاء الصفحة: أخطاء الخادم تظهر تنبيهاً أصلاً فلا تُكرَّر هنا؛ والباقي بطاقة واضحة بزر إغلاق وتفاصيل فنية مطوية
+window.addEventListener('unhandledrejection',function(e){var r=e&&e.reason;if(r&&r.shown){e.preventDefault&&e.preventDefault();return}window.dispatchEvent(new ErrorEvent('error',{message:((r&&r.message)||String(r)),error:r}))});
+window.addEventListener('error',function(e){try{var m=(e&&e.message)||'';if(!m||/^Script error/.test(m))return;var st=(e.error&&e.error.stack?String(e.error.stack).split('\n').slice(0,3).join('\n'):'')+(e.lineno?'\nline '+e.lineno:'');var d=document.getElementById('jserr');if(!d){d=document.createElement('div');d.id='jserr';d.setAttribute('role','alert');document.body.appendChild(d)}
+ d.innerHTML='<div class="je-h"><span class="ti" aria-hidden="true">!</span><b>'+T('حدث خطأ في الصفحة')+'</b><button class="tx" aria-label="'+T('إغلاق')+'" onclick="this.closest(\'#jserr\').remove()">×</button></div><p class="je-m" dir="auto"></p><details><summary>'+T('التفاصيل الفنية')+'</summary><pre dir="ltr"></pre></details><div class="je-f"><span class="small">'+T('إن تكرر، أرسل صورة هذه الرسالة لمشرف النظام.')+'</span><button class="btn btn-o sm" onclick="location.reload()">'+T('إعادة تحميل')+'</button></div>';d.querySelector('.je-m').textContent=m;d.querySelector('pre').textContent=st||m}catch(x){}});
 /** التاريخ بالسنة: 25/10/2026 */
 function dmyY(t){return t?new Date(t).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Asia/Riyadh'}):''}
 /** طباعة مستند واحد (الكشف) في نافذة مستقلة بأنماط الصفحة وهويتها، بلا صفحات فارغة */
