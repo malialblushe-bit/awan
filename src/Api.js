@@ -844,8 +844,13 @@ function apiAdmCopyFloor(token, floorId, d) {
       if (seen[n]) throw new Error('الاسم «' + n + '» مكرر في النسخ.');
       seen[n] = true;
     });
-    var facs = (d.facs || []).filter(function (x) { return String(x.name || '').trim(); }), fs = {};
-    facs.forEach(function (x) { var n = String(x.name).trim(); if (fs[n]) throw new Error('المرفق «' + n + '» مكرر.'); fs[n] = true; });
+    // المرافق: قائمة واحدة لكل النسخ، أو قائمة لكل نسخة (d.facs[i])
+    var per = Array.isArray(d.facs) && Array.isArray(d.facs[0]);
+    var lists = names.map(function (n, i) {
+      var fs = {}, l = ((per ? d.facs[i] : d.facs) || []).filter(function (x) { return x && String(x.name || '').trim(); });
+      l.forEach(function (x) { var m = String(x.name).trim(); if (fs[m]) throw new Error('«' + n + '»: المرفق «' + m + '» مكرر.'); fs[m] = true; });
+      return l;
+    });
     // الترتيب: النسخ بعد الأصل مباشرة
     all.forEach(function (x, i) { if (Number(x.sort) !== i + 1) Db.update('Floors', x.floor_id, { sort: i + 1 }); x.sort = i + 1; });
     var at = all.map(function (x) { return x.floor_id; }).indexOf(src.floor_id) + 1, k = names.length;
@@ -853,7 +858,7 @@ function apiAdmCopyFloor(token, floorId, d) {
     var made = 0, fac = 0;
     names.forEach(function (n, i) {
       var f = Db.insert('Floors', { hotel_id: src.hotel_id, name: n, tower: tower, kind: 'service', sort: at + i + 1 });
-      fac += addFacilities_(src.hotel_id, f.floor_id, facs); made++;
+      fac += addFacilities_(src.hotel_id, f.floor_id, lists[i]); made++;
     });
     return { floors: made, facilities: fac };
   });
