@@ -71,7 +71,7 @@ var Quality = (function () {
     var o = c.wo_id ? Db.get('WorkOrders', c.wo_id) : null;
     return {
       id: c.ca_id, hotel_id: c.hotel_id, hotel: (R.hotels[c.hotel_id] || {}).name || '', con_id: c.con_id, con: (R.cons[c.con_id] || {}).name || '',
-      wo_id: c.wo_id || '', title: o ? (o.symptom || '') : '', reason: c.reason || '', required: c.required || '', due: c.due ? String(c.due).slice(0, 10) : '',
+      wo_id: c.wo_id || '', log_id: c.log_id || '', title: o ? (o.symptom || '') : '', reason: c.reason || '', required: c.required || '', due: c.due ? String(c.due).slice(0, 10) : '',
       status: c.status, response: c.response || '', photos: Orders.csv(c.photos), by: c.by || '', effective: c.effective || '', note: c.verify_note || '',
       rounds: Number(c.rounds) || 0, created: Orders.ms(c.created_at), responded: Orders.ms(c.responded_at), closed: Orders.ms(c.closed_at)
     };

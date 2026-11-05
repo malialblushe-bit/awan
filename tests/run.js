@@ -185,7 +185,7 @@ function eq(a, b, msg) { if (a !== b) throw new Error((msg || '') + ` expected $
 console.log('أعوان — الفحص');
 
 t('الإعداد ينشئ كل الجداول ويحذف الورقة الافتراضية', () => {
-  run('setupAwan()');
+  run('setupAwan()'); run("Db.insert('Settings', { key: 'measure_from', value: '2000-01-01', note: 'test' })");
   const names = masterSs.getSheets().map(s => s.name);
   run('SCHEMA').forEach(tb => { if (!names.includes(tb.name)) throw new Error('ناقص: ' + tb.name); });
   if (names.includes('Sheet1')) throw new Error('الورقة الافتراضية باقية');
@@ -1168,6 +1168,33 @@ t('المكافحة: رفض جزئي لمناطق من معالجة جماعية
   run(`apiAdmAddFacility('${adminTok}', '${HID}', '${fl}', 'المطبخ التجريبي', 0, 'المطابخ')`);
   const fr = run(`Db.all('Rooms').find(r => String(r.number) === 'المطبخ التجريبي')`); eq(fr.ftype, 'المطابخ');
   run(`apiAdmFacilityType('${adminTok}', '${fr.room_id}', 'المخازن')`); eq(run(`Db.get('Rooms', '${fr.room_id}').ftype`), 'المخازن');
+});
+
+t('المكافحة: إجراء تصحيحي على المعالجة (يُنقص الجاهزية)، مواد متعددة وبند جديد للاعتماد، إلغاء متعدد، انتهاء الإتاحة يومياً، وبداية القياس', () => {
+  const pt = run(`apiPinWebLogin('${pcPin}')`).token;
+  const zs = run(`Db.all('Rooms').filter(r => r.hotel_id === '${HID}').slice(3, 6).map(r => r.room_id)`);
+  const lr = run(`apiPestLog('${pt}', { hotel_id: '${HID}', zones: ${JSON.stringify(zs)}, kind: 'spray', pests: ['هاموش النخيل'], material: ['جل', 'طعوم'], finding: 'none' })`).result;
+  eq(run(`Db.get('PestLogs', '${lr.id}').material`), 'جل,طعوم');
+  eq(run(`Db.all('Lists').filter(l => l.ar === 'هاموش النخيل' && l.status === 'pending').length`), 1);
+  run(`apiPcCA('${mgrTok}', '${lr.id}', { reason: 'رش ناقص', required: 'إعادة الرش', zones: ['${zs[0]}'] })`);
+  throws(`apiPcCA('${mgrTok}', '${lr.id}', { reason: 'x', required: 'y' })`, 'مفتوح');
+  const cb = run(`apiConBoot('${pt}')`); const ca = cb.cas.find(c => c.log_id === lr.id);
+  if (!ca) throw new Error('المتعهد لا يرى الإجراء');
+  run(`apiConCA('${pt}', '${ca.id}', 'أعدنا الرش', [])`);
+  run(`apiSupCAVerify('${mgrTok}', '${ca.id}', 'close', '')`); eq(run(`Db.get('CorrectiveActions', '${ca.id}').effective`), 'نعم');
+  const td = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  const pc = run(`Db.all('Contractors').find(c => c.type === 'pc')`);
+  const M = run(`Ops.metrics(Db.get('Contractors', '${pc.con_id}'), ['${HID}'], '2020-01-01', '${td}')`);
+  if (!(M.V.caok < 100)) throw new Error('الجاهزية لا تحسب الإجراء ' + M.V.caok);
+  // إلغاء متعدد وانتهاء الإتاحة
+  run(`apiPestFlag('${mgrTok}', { hotel_id: '${HID}', zones: ${JSON.stringify(zs)}, kind: 'ready' })`);
+  eq(run(`apiPestFlagCancelMany('${mgrTok}', '${HID}', ${JSON.stringify(zs.slice(0, 2))}, '')`).n, 2);
+  run(`Db.all('PestFlags').filter(f => f.zone === '${zs[2]}' && f.status === 'open').forEach(f => Db.update('PestFlags', f.flag_id, { created_at: new Date(Date.now() - 2 * 864e5) }))`);
+  run('Ops.expireReady()'); eq(run(`Db.all('PestFlags').filter(f => f.zone === '${zs[2]}' && f.status === 'expired').length`), 1);
+  // بداية القياس: ما قبلها لا يُحسب
+  run(`apiAdmMeasureFrom('${adminTok}', '2099-01-01')`);
+  eq(run(`Ops.metrics(Db.get('Contractors', '${pc.con_id}'), ['${HID}'], '2020-01-01', '${td}')`).V.caok, null);
+  run(`apiAdmMeasureFrom('${adminTok}', '2000-01-01')`);
 });
 
 t('المطالبات والسداد: طريقة السداد في العقد، المتعهد يرفع المطالبة ولا يرى السداد، مالك الخدمة يعتمد، والمالية تسدد', () => {

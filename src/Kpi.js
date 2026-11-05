@@ -164,7 +164,8 @@ var Kpi = (function () {
         var f = function (o) { return o.hotel_id === k.hotel; };
         byHotel[k.hotel] = Db.all('WorkOrders', f).concat(needArch ? Db.all('WorkOrdersArchive', f) : []);
       }
-      var d = compute_(k.con, k.hotel, k.month, byHotel[k.hotel], canon);
+      var lf = liveFrom(k.con, [k.hotel]);
+      var d = compute_(k.con, k.hotel, k.month, byHotel[k.hotel].filter(function (o) { return o.con_id !== k.con || Orders.ms(o.created_at) >= lf; }), canon);
       if (d.orders || Db.find('KpiSummary', function (r) { return r.key === k.con + '|' + k.hotel + '|' + k.month; })) save_(k.con, k.hotel, k.month, d);
     });
     return list.length;
@@ -189,6 +190,18 @@ var Kpi = (function () {
   }
 
   function touch(woIds) { try { return refresh(keysFor(woIds)); } catch (e) { return 0; } }
+
+  /** بداية القياس لمتعهد في فنادق: الأحدث من بداية التشغيل الفعلي (Settings.measure_from) و«بداية القياس» في عقده */
+  var LIVE_DEFAULT = '2026-11-10';
+  function day0_(v) { if (!v) return 0; if (v instanceof Date) return v.getTime(); return new Date(String(v).slice(0, 10) + 'T00:00:00+03:00').getTime() || 0; }
+  function liveFrom(conId, hotelIds) {
+    var g = day0_(Db.setting('measure_from') || LIVE_DEFAULT), best = null;
+    Db.all('Contracts', function (c) { return c.con_id === conId && Orders.csv(c.hotel_ids).some(function (h) { return (hotelIds || []).indexOf(h) !== -1; }); }).forEach(function (c) {
+      var v = day0_(c.measure_from); // بداية العقد نفسها تُراعى في حساب الأيام المطلوبة
+      if (best == null || v < best) best = v;
+    });
+    return Math.max(g, best || 0);
+  }
 
   /** إعادة حساب كل شيء (زر المشرف) */
   function rebuild() {
@@ -227,10 +240,10 @@ var Kpi = (function () {
     sf: { resp: ['resp', 'repair'], ready: ['ready'], sat: ['sat'], info: ['info'] },
     el: { resp: ['resp', 'rescue'], ready: ['ready', 'pm'], sat: ['sat'], info: ['info'] },
     wa: { resp: ['pickup'], ready: ['clean', 'wash'], sat: ['rating'], info: ['visitsOk'] },
-    pc: { resp: ['flagresp'], ready: ['ontime', 'traps'], sat: ['rating'], info: ['logsOk', 'reports'] }
+    pc: { resp: ['flagresp', 'quota'], ready: ['ontime', 'traps', 'caok'], sat: ['rating'], info: ['logsOk', 'reports'] }
   };
   var KPIS = {}; Object.keys(SUBS).forEach(function (t) { KPIS[t] = PILLARS.slice(); });
-  var EXEMPT = ['pm', 'rescue', 'rating', 'reports'];
+  var EXEMPT = ['pm', 'rescue', 'rating', 'reports', 'quota'];
   var MIN_N = 5;
   function subsOf(type) { var o = SUBS[type] || {}, a = []; PILLARS.forEach(function (p) { (o[p] || []).forEach(function (k) { a.push(k); }); }); return a; }
   function pct(a, b) { return b ? Math.round(1000 * a / b) / 10 : null; }
@@ -274,5 +287,5 @@ var Kpi = (function () {
     return { ex: Number(best && best.cls_ex) || 90, good: Number(best && best.cls_good) || 80, ok: Number(best && best.cls_ok) || 70 };
   }
 
-  return { KPIS: KPIS, PILLARS: PILLARS, SUBS: SUBS, subsOf: subsOf, pillars: pillars, MIN_N: MIN_N, values: values, score: score, cls: cls, clsOf: clsOf, refresh: refresh, touch: touch, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
+  return { KPIS: KPIS, PILLARS: PILLARS, SUBS: SUBS, subsOf: subsOf, pillars: pillars, MIN_N: MIN_N, values: values, score: score, cls: cls, clsOf: clsOf, refresh: refresh, touch: touch, liveFrom: liveFrom, LIVE_DEFAULT: LIVE_DEFAULT, keysFor: keysFor, rebuild: rebuild, rows: rows, thresholds: thresholds, month: month_ };
 })();

@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 31;
+var SCHEMA_VERSION = 32;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -57,9 +57,9 @@ var SCHEMA = [
     ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
     ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح'],
     ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])'],
-    ['sla_repair', 'زمن الإصلاح المستهدف (دقيقة عمل فعلي)'], ['sla_rescue', 'المصاعد: زمن الإنقاذ (دقيقة)'], ['sla_pest', 'المكافحة: من الإتاحة أو البلاغ إلى المعالجة (ساعة)'],
+    ['sla_repair', 'زمن الإصلاح المستهدف (دقيقة عمل فعلي)'], ['sla_rescue', 'المصاعد: زمن الإنقاذ (دقيقة)'], ['sla_pest', 'المكافحة: من بلاغ الإصابة إلى المعالجة (ساعة)'],
     ['cls_ex', 'تصنيف: ممتاز من'], ['cls_good', 'تصنيف: جيد من'], ['cls_ok', 'تصنيف: مقبول من'],
-    ['value', 'قيمة العقد (ريال)'], ['pay_mode', 'طريقة السداد: sched · monthly · stmt'], ['pay_days', 'مهلة السداد (يوم)'], ['pay_plan', 'جدول الدفعات (JSON)']] },
+    ['value', 'قيمة العقد (ريال)'], ['pay_mode', 'طريقة السداد: sched · monthly · stmt'], ['pay_days', 'مهلة السداد (يوم)'], ['pay_plan', 'جدول الدفعات (JSON)'], ['measure_from', 'بداية القياس (فارغ = بداية العقد أو التشغيل الفعلي أيهما أحدث)']] },
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
@@ -102,7 +102,7 @@ var SCHEMA = [
     ['ca_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['con_id', 'المتعهد'], ['wo_id', 'العملية (فارغ = إجراء مستقل)'],
     ['reason', 'السبب'], ['required', 'المطلوب من المتعهد'], ['due', 'الموعد'], ['status', 'open · responded · closed'],
     ['response', 'رد المتعهد'], ['photos', 'صور الرد'], ['by', 'أصدره'], ['created_at', 'وقت الإصدار'], ['responded_at', 'وقت الرد'],
-    ['closed_at', 'وقت الإغلاق'], ['effective', 'فعّال؟ نعم · لا'], ['verify_note', 'ملاحظة التحقق'], ['rounds', 'مرات الإعادة']] },
+    ['closed_at', 'وقت الإغلاق'], ['effective', 'فعّال؟ نعم · لا'], ['verify_note', 'ملاحظة التحقق'], ['rounds', 'مرات الإعادة'], ['log_id', 'معالجة المكافحة (إجراء على معالجة)']] },
 
   { name: 'Notes', cols: [
     ['note_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['service', 'ac · el · sf · wa · pc'], ['to', 'maint = مهندس الصيانة · sup = الإشراف'],
@@ -257,7 +257,7 @@ var SEED_LISTS = [
   ['el', 'leave', 'بانتظار قطعة', 'Waiting for a part'], ['el', 'leave', 'يحتاج فريقاً إضافياً', 'Needs extra crew'], ['el', 'leave', 'انتهى وقت العمل', 'End of shift'],
 
   ['pc', 'pest', 'صراصير', 'Cockroaches'], ['pc', 'pest', 'نمل', 'Ants'], ['pc', 'pest', 'فئران وقوارض', 'Rodents'], ['pc', 'pest', 'بق الفراش', 'Bed bugs'],
-  ['pc', 'pest', 'ذباب', 'Flies'], ['pc', 'pest', 'بعوض', 'Mosquitoes'], ['pc', 'pest', 'عناكب', 'Spiders'], ['pc', 'pest', 'نمل أبيض', 'Termites'],
+  ['pc', 'pest', 'ذباب', 'Flies'], ['pc', 'pest', 'بعوض', 'Mosquitoes'], ['pc', 'pest', 'عناكب', 'Spiders'], ['pc', 'pest', 'نمل أبيض', 'Termites'], ['pc', 'pest', 'هاموش', 'Gnats'],
   ['pc', 'material', 'جل', 'Gel'], ['pc', 'material', 'رش سائل', 'Liquid spray'], ['pc', 'material', 'طعوم', 'Baits'], ['pc', 'material', 'بودرة', 'Dust'], ['pc', 'material', 'تبخير', 'Fumigation'],
   ['pc', 'ftype', 'غرف النزلاء', 'Guest rooms'], ['pc', 'ftype', 'الممرات', 'Corridors'], ['pc', 'ftype', 'المطبخ', 'Kitchen'], ['pc', 'ftype', 'المطعم', 'Restaurant'],
   ['pc', 'ftype', 'المخازن', 'Stores'], ['pc', 'ftype', 'مرمى النفايات', 'Waste area'], ['pc', 'ftype', 'الساحات الخارجية', 'Outdoor yards'],

@@ -300,6 +300,14 @@ var Ops = (function () {
   }
 
   /** المشرف: «متاحة للرش» أو «بلاغ إصابة» على منطقة */
+  /** بنود المكافحة الجديدة (آفة أو مادة) تعمل فوراً وتُرسل للمشرف لاعتمادها */
+  function addPending_(list, names, by) {
+    var have = {}; Db.all('Lists', function (l) { return l.list === list && (l.type === 'pc' || l.type === 'all') && l.status !== 'rejected'; }).forEach(function (l) { have[String(l.ar).trim()] = 1; });
+    var nw = []; (names || []).forEach(function (v) { v = String(v || '').trim(); if (v && !have[v]) { have[v] = 1; nw.push(v); } });
+    if (nw.length) Db.insertMany('Lists', nw.map(function (v) { return { type: 'pc', list: list, ar: v, en: '', status: 'pending', created_by: by || '', sort: 999 }; }));
+    return nw.length;
+  }
+
   function flag(s, d) {
     if (supHotels(s).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
     if (['ready', 'infest'].indexOf(d.kind) === -1) throw new Error('اختر: متاحة للرش أو بلاغ إصابة.');
@@ -315,6 +323,7 @@ var Ops = (function () {
         by_id: s.id, by_name: me.name || '', created_at: new Date(), status: 'open', source: src };
     });
     Db.insertMany('PestFlags', recs);
+    addPending_('pest', d.pests, me.name || s.id);
     return recs.length;
   }
 
@@ -330,6 +339,36 @@ var Ops = (function () {
     var rec = Db.insert('PestFlags', { hotel_id: h.hotel_id, zone: z.room_id, kind: 'infest', pests: d.pests.join(','), note: String(d.note || '').trim(),
       photos: (d.photos || []).join(','), by_id: '', by_name: name, created_at: new Date(), status: 'open', source: 'req' });
     return { id: rec.flag_id, zone: String(z.number) };
+  }
+
+  /** إجراء تصحيحي على معالجة (بدل الرفض): تبقى محسوبة رشاً، وتُنقص الجاهزية، والمتعهد يرد ثم يتحقق مدير الإشراف */
+  function pcCA(s, logId, d) {
+    if (['supmgr', 'admin'].indexOf(s.role) === -1) throw new Error('الإجراء التصحيحي لمدير الإشراف أو مشرف النظام.');
+    var l = Db.get('PestLogs', logId);
+    if (!l || supHotels(s).indexOf(l.hotel_id) === -1) throw new Error('المعالجة ليست ضمن فنادقك.');
+    if (Db.find('CorrectiveActions', function (c) { return c.log_id === logId && c.status !== 'closed'; })) throw new Error('على هذه المعالجة إجراء تصحيحي مفتوح.');
+    var reason = String(d.reason || '').trim(), req = String(d.required || '').trim();
+    if (!reason) throw new Error('اكتب الملاحظة على المعالجة.');
+    if (!req) throw new Error('اكتب المطلوب من المتعهد.');
+    var zn = (d.zones || []).filter(function (z) { return csv(l.zones).indexOf(z) !== -1; }).map(function (z) { var r = Db.get('Rooms', z); return r ? String(r.number) : z; });
+    return Db.insert('CorrectiveActions', { hotel_id: l.hotel_id, con_id: l.con_id, wo_id: '', log_id: logId, reason: reason + (zn.length ? ' (' + zn.join('، ') + ')' : ''), required: req,
+      due: '', status: 'open', by: (Db.get('Users', s.id) || {}).name || s.id, created_at: new Date() });
+  }
+
+  /** إلغاء بلاغات مفتوحة لعدة مناطق دفعة واحدة (مثل دخول نزلاء قبل الرش) */
+  function cancelMany(s, hotelId, zones, kind) {
+    if (supHotels(s).indexOf(hotelId) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
+    var fl = Db.all('PestFlags', function (f) { return f.hotel_id === hotelId && f.status === 'open' && (zones || []).indexOf(f.zone) !== -1 && (!kind || f.kind === kind) && (s.role === 'supmgr' || s.role === 'admin' || f.by_id === s.id); });
+    if (!fl.length) throw new Error('لا بلاغات مفتوحة لك في المناطق المحددة.');
+    var t = new Date(); fl.forEach(function (f) { Db.update('PestFlags', f.flag_id, { status: 'cancelled', done_at: t }); });
+    return fl.length;
+  }
+
+  /** الإغلاق اليومي: إتاحة الرش تنتهي بنهاية يومها، وما لم يُرش يُتاح من جديد */
+  function expireReady() {
+    var d0 = new Date(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') + 'T00:00:00+03:00').getTime(), t = new Date(), n = 0;
+    Db.all('PestFlags', function (f) { return f.kind === 'ready' && f.status === 'open' && ms(f.created_at) < d0; }).forEach(function (f) { Db.update('PestFlags', f.flag_id, { status: 'expired', done_at: t }); n++; });
+    return n;
   }
 
   function cancelFlag(s, flagId) {
@@ -355,17 +394,20 @@ var Ops = (function () {
     if (!(d.zones || []).length) throw new Error('اختر منطقة واحدة على الأقل.');
     d.zones.forEach(function (z) { zoneOf_(hotelId, z); });
     if (!FIND[d.finding]) throw new Error('حدّد نتيجة المعاينة.');
-    if (d.kind === 'spray' && !String(d.material || '').trim()) throw new Error('اختر المادة المستخدمة.');
+    var mats = (Array.isArray(d.material) ? d.material : String(d.material || '').split(',')).map(function (x) { return String(x).trim(); }).filter(String);
+    if (d.kind === 'spray' && !mats.length) throw new Error('اختر المادة المستخدمة.');
     var t = new Date();
     // يُنجز: بلاغات «متاحة للرش» بالرش، وبلاغات الإصابة بأي معالجة
     var closed = Db.all('PestFlags', function (f) { return f.hotel_id === hotelId && f.status === 'open' && d.zones.indexOf(f.zone) !== -1 && (f.kind === 'infest' || d.kind === 'spray'); });
     var rec = Db.insert('PestLogs', {
-      hotel_id: hotelId, con_id: con.con_id, zones: d.zones.join(','), kind: d.kind, pests: (d.pests || []).join(','), material: String(d.material || '').trim(),
+      hotel_id: hotelId, con_id: con.con_id, zones: d.zones.join(','), kind: d.kind, pests: (d.pests || []).join(','), material: d.kind === 'spray' ? mats.join(',') : '',
       finding: d.finding, note: String(d.note || '').trim(), photos: (d.photos || []).join(','), by_name: String(d.tech || '').trim() || (s.lead_name ? s.lead_name + ' (قائد الفريق)' : con.name), at: t,
       flags_closed: closed.map(function (f) { return f.flag_id; }).join(',')
     });
     closed.forEach(function (f) { Db.update('PestFlags', f.flag_id, { status: 'done', done_at: t, done_log: rec.log_id }); });
-    return { id: rec.log_id, flags: closed.length };
+    // بنود جديدة (آفة أو مادة): تعمل فوراً وتنتظر اعتماد المشرف
+    var added = addPending_('pest', d.pests, con.name) + addPending_('material', mats, con.name);
+    return { id: rec.log_id, flags: closed.length, added: added };
   }
 
   /** المصائد. place {hotel_id, zone, kind, every_days} · check {trap_id, result, note} · remove {trap_id} */
@@ -447,6 +489,9 @@ var Ops = (function () {
   }
   /** مؤشرات المتعهد في الفترة [from, to] (تواريخ yyyy-MM-dd) لفنادق محددة */
   function metrics(con, hotelIds, from, to) {
+    // لا يُحسب ما قبل بداية القياس (تهيئة الإطلاق، أو بداية القياس في العقد)
+    var lfS = Utilities.formatDate(new Date(Kpi.liveFrom(con.con_id, hotelIds)), TZ, 'yyyy-MM-dd');
+    if (lfS > from) from = lfS;
     var a = new Date(from + 'T00:00:00').getTime(), b = new Date(to + 'T23:59:59').getTime(), days = Math.max(1, Math.round((b - a) / 864e5));
     var inR = function (t) { t = ms(t); return t >= a && t <= b; };
     var V = {}, X = {}, N = {};
@@ -487,15 +532,34 @@ var Ops = (function () {
           var e = Math.floor(hd / ev); if (!e) return; expS += e; gotS += Math.min(e, sprays[r.room_id] || 0);
         });
       });
-      // غرف النزلاء (مرات في الشهر): المطلوب = بلاغات «متاحة للرش» في الفترة (المنجز يُحسب فوراً، والمفتوح بعد 24 ساعة)، والمنجز منها؛ وغير المتاحة لا تُحسب على المتعهد
-      var avR = 0, avD = 0;
+      // غرف النزلاء (مرات في الشهر): الاستجابة = إكمال الاستحقاق الشهري (حد أدنى)، للأشهر المنتهية، بنسبة أيام العقد والقياس في الشهر
+      var qExp = 0, qGot = 0, curM = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+      var cov = function (h, s0, e0) {
+        var n = 0;
+        Db.all('Contracts', function (c) { return c.con_id === con.con_id && csv(c.hotel_ids).indexOf(h) !== -1; }).forEach(function (c) {
+          var x0 = Math.max(s0, c.start ? ms(c.start) : s0), x1 = Math.min(e0, c.end ? ms(c.end) + 864e5 - 1 : e0);
+          n += Math.max(0, (x1 - x0) / 864e5);
+        });
+        return n;
+      };
       hotelIds.forEach(function (h) {
         var qt = quotas(h); if (!Object.keys(qt).length) return;
         var zt = {}, floors = {}; Db.all('Floors', function (f) { return f.hotel_id === h; }).forEach(function (f) { floors[f.floor_id] = f; });
-        Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) { zt[r.room_id] = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST); });
-        Db.all('PestFlags', function (f) { return f.hotel_id === h && f.kind === 'ready' && f.status !== 'cancelled' && qt[zt[f.zone]] && ms(f.created_at) >= a && (f.status === 'done' ? ms(f.created_at) <= b : ms(f.created_at) <= b - 864e5); }).forEach(function (f) { avR++; if (f.status === 'done') avD++; });
+        Db.all('Rooms', function (r) { return r.hotel_id === h; }).forEach(function (r) { var t = r.ftype || (isFacility_(r, floors[r.floor_id]) ? '' : GUEST); if (qt[t]) zt[r.room_id] = Number(qt[t]) || 0; });
+        var rooms = Object.keys(zt); if (!rooms.length) return;
+        var cnt = {};
+        Db.all('PestLogs', function (l) { return l.hotel_id === h && l.kind === 'spray' && l.status !== 'rejected' && inR(l.at); }).forEach(function (l) {
+          var m = Utilities.formatDate(new Date(ms(l.at)), TZ, 'yyyy-MM'); okZones_(l).forEach(function (z) { var k = z + '|' + m; cnt[k] = (cnt[k] || 0) + 1; });
+        });
+        for (var mq = from.slice(0, 7); mq <= to.slice(0, 7) && mq < curM; mq = Utilities.formatDate(new Date(new Date(mq + '-15T12:00:00+03:00').getTime() + 31 * 864e5), TZ, 'yyyy-MM')) {
+          var m0 = new Date(mq + '-01T00:00:00+03:00').getTime(), m1 = new Date(new Date(mq + '-15T12:00:00+03:00').getTime() + 31 * 864e5);
+          m1 = new Date(Utilities.formatDate(m1, TZ, 'yyyy-MM') + '-01T00:00:00+03:00').getTime() - 1;
+          var fr = cov(h, Math.max(a, m0), Math.min(b, m1)) / ((m1 + 1 - m0) / 864e5);
+          if (fr <= 0) continue;
+          rooms.forEach(function (r) { var e = zt[r] * Math.min(1, fr); qExp += e; qGot += Math.min(e, cnt[r + '|' + mq] || 0); });
+        }
       });
-      expS += avR; gotS += avD;
+      V.quota = qExp ? Math.min(100, pct_(qGot, qExp)) : null; N.quota = Math.round(qExp);
       var fl = Db.all('PestFlags', function (f) { return hotelIds.indexOf(f.hotel_id) !== -1 && inR(f.created_at) && f.status !== 'cancelled'; });
       var dn = fl.filter(function (f) { return f.status === 'done'; });
       var tl = Db.all('PestLogs', function (l) { return hotelIds.indexOf(l.hotel_id) !== -1 && l.kind === 'trap' && l.status !== 'rejected' && inR(l.at); }).length;
@@ -506,13 +570,17 @@ var Ops = (function () {
       });
       V.ontime = expS ? pct_(gotS, expS) : null;
       var slaH = 24; Db.all('Contracts', function (c) { return c.con_id === con.con_id; }).forEach(function (c) { if (Number(c.sla_pest) > 0) slaH = Number(c.sla_pest); });
-      var due = fl.filter(function (f) { return f.status === 'done' || ms(f.created_at) + slaH * 36e5 < Date.now(); });
+      var due = fl.filter(function (f) { return f.kind === 'infest' && (f.status === 'done' || ms(f.created_at) + slaH * 36e5 < Date.now()); });
       V.flagresp = due.length ? pct_(due.filter(function (f) { return f.status === 'done' && ms(f.done_at) - ms(f.created_at) <= slaH * 36e5; }).length, due.length) : null;
       N.flagresp = due.length; N.ontime = expS; N.traps = tExp;
       var allL = Db.all('PestLogs', function (l) { return l.con_id === con.con_id && hotelIds.indexOf(l.hotel_id) !== -1 && inR(l.at); });
       // الموثوقية لكل منطقة في المعالجة: المرفوض جزئياً يُحسب بمناطقه
       var zAll = 0, zOk = 0; allL.forEach(function (l) { var n = l.kind === 'trap' ? 1 : (csv(l.zones).length || 1); zAll += n; zOk += l.kind === 'trap' ? (l.status === 'rejected' ? 0 : 1) : okZones_(l).length; });
       V.logsOk = zAll ? pct_(zOk, zAll) : null; N.logsOk = zAll;
+      // الجاهزية: المعالجات بلا إجراء تصحيحي
+      var caLog = {}; Db.all('CorrectiveActions', function (c) { return c.con_id === con.con_id && c.log_id; }).forEach(function (c) { caLog[c.log_id] = 1; });
+      var trt = allL.filter(function (l) { return l.kind !== 'trap' && l.status !== 'rejected'; });
+      V.caok = trt.length ? pct_(trt.filter(function (l) { return !caLog[l.log_id]; }).length, trt.length) : null; N.caok = trt.length;
       // التقرير الشهري: لكل شهر انتهى داخل الفترة ولكل فندق كان فيه عقد
       var need = 0, got = 0, pm0 = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
       for (var mm = from.slice(0, 7); mm <= to.slice(0, 7) && mm < pm0; mm = Utilities.formatDate(new Date(new Date(mm + '-15T12:00:00+03:00').getTime() + 31 * 864e5), TZ, 'yyyy-MM')) {
@@ -522,7 +590,7 @@ var Ops = (function () {
       var rt2 = ratingIn_(con.con_id, hotelIds, from, to); V.rating = rt2.v; N.rating = rt2.n;
       X.flagAvgH = dn.length ? Math.round(dn.reduce(function (s, f) { return s + (ms(f.done_at) - ms(f.created_at)) / 36e5; }, 0) / dn.length) : ''; X.slaH = slaH;
       V.traps = tExp ? Math.min(100, pct_(tl, tExp)) : null;
-      X = { flagAvgH: X.flagAvgH, slaH: X.slaH, sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.length - dn.length, trapChecks: tl, trapExpected: tExp, availReq: avR, availMissed: avR - avD };
+      X = { flagAvgH: X.flagAvgH, slaH: X.slaH, sprays: gotS, expected: expS, flags: fl.length, infest: fl.filter(function (f) { return f.kind === 'infest'; }).length, open: fl.filter(function (f) { return f.kind === 'infest' && f.status === 'open'; }).length, trapChecks: tl, trapExpected: tExp, quotaGot: Math.round(qGot), quotaExp: Math.round(qExp), caLogs: trt.length - (V.caok == null ? 0 : Math.round(V.caok * trt.length / 100)) };
     } else {
       var m1 = from.slice(0, 7), m2 = to.slice(0, 7);
       var z = { respSum: 0, respN: 0, respOk: 0, readyOk: 0, readyN: 0, infoOk: 0, infoN: 0, satSum: 0, satN: 0, orders: 0, closed: 0, pm: 0, trapped: 0, clSum: 0, clN: 0, repairN: 0, repairOk: 0, rescueN: 0, rescueOk: 0, rescueSum: 0 };
@@ -623,7 +691,7 @@ var Ops = (function () {
   }
 
   return {
-    statement: statement, pcReject: pcReject, ratesDue: ratesDue, rate: rate, reportsDue: reportsDue, pcReport: pcReport, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
+    statement: statement, pcReject: pcReject, pcCA: pcCA, cancelMany: cancelMany, expireReady: expireReady, ratesDue: ratesDue, rate: rate, reportsDue: reportsDue, pcReport: pcReport, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
     waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
     pestBoot: pestBoot, pestState: pestState, flag: flag, reqFlag: reqFlag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS

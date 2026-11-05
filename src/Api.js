@@ -141,6 +141,11 @@ function upgradeSchema_() {
   Db.reset();
   seedMissingLists_();
   Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
+  // v32: بداية القياس الفعلي (تهيئة الإطلاق)، وإعادة حساب الملخص دونها
+  if (Number(Db.setting('schema_version')) < 32) {
+    if (!Db.find('Settings', function (r) { return r.key === 'measure_from'; })) Db.insert('Settings', { key: 'measure_from', value: Kpi.LIVE_DEFAULT, note: 'بداية القياس الفعلي: لا يُحسب ما قبله في الأداء والتقييم' });
+    try { Kpi.rebuild(); } catch (e) { }
+  }
   // v26: المؤشر يُقاس من 100 ويُضرب في وزنه؛ أوزان التشكيلة الجديدة لكل نوع، وإعادة حساب الملخص
   // v27: المؤشرات الأربعة الثابتة لكل العقود بأوزانها، وإعادة حساب الملخص
   if (Number(Db.setting('schema_version')) < 27) {
@@ -1072,7 +1077,8 @@ function apiAdmSaveContract(token, d) {
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
       prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || '',
-      lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : ''
+      lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : '',
+      measure_from: /^\d{4}-\d{2}-\d{2}$/.test(String(d.measure_from || '')) ? d.measure_from : ''
     });
     var leadPin = ((d.type === 'el' || d.type === 'pc') && String(d.lead_name || '').trim()) ? Auth.setLeadPin(ctr.contract_id) : null;
     return { pin: pin, leadPin: leadPin };
@@ -1268,6 +1274,7 @@ function supBoot_(s) {
     waste: Ops.waVisits(hs, Date.now() - 35 * 864e5),
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
+    cas: Quality.list(R, function (c) { return c.log_id && hs.indexOf(c.hotel_id) !== -1; }),
     tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
     org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
     rates: ['supmgr', 'admin'].indexOf(s.role) !== -1 ? Ops.ratesDue(hs) : null,
@@ -1333,6 +1340,20 @@ function sup_(token, roles, fn) {
 function apiPestFlag(token, d) {
   return sup_(token, null, function (s) { d = d || {}; d.photos = savePhotos_(d.photos, 'PF'); return { n: Ops.flag(s, d) }; });
 }
+/** بداية القياس الفعلي لكل المتعهدين (تهيئة الإطلاق): يُعاد حساب الملخص */
+function apiAdmMeasureFrom(token, day) {
+  var s = Auth.need(token, ['admin']);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ''))) throw new Error('اختر التاريخ.');
+  return Db.withLock(function () {
+    var r = Db.find('Settings', function (x) { return x.key === 'measure_from'; });
+    if (r) Db.update('Settings', 'measure_from', { value: day }); else Db.insert('Settings', { key: 'measure_from', value: day, note: 'بداية القياس الفعلي' });
+    Db.reset(); try { Kpi.rebuild(); } catch (e) { }
+    return { measureFrom: day };
+  });
+}
+function apiPestFlagCancelMany(token, hotelId, zones, kind) { return sup_(token, null, function (s) { return { n: Ops.cancelMany(s, hotelId, zones, kind) }; }); }
+function apiPcCA(token, logId, d) { return sup_(token, ['supmgr', 'admin'], function (s) { Ops.pcCA(s, logId, d || {}); }); }
+function apiSupCAVerify(token, caId, action, note) { return sup_(token, ['supmgr', 'admin'], function (s) { Quality.verify(s, caId, action, note); }); }
 function apiPestFlagCancel(token, flagId) { return sup_(token, null, function (s) { Ops.cancelFlag(s, flagId); }); }
 function apiPestSchedule(token, hotelId, rows) { return sup_(token, ['supmgr'], function (s) { Ops.saveSchedule(s, hotelId, rows); }); }
 function apiPestZoneType(token, hotelId, zoneIds, ftype) { return sup_(token, ['supmgr'], function (s) { Ops.setZoneType(s, hotelId, zoneIds, ftype); }); }

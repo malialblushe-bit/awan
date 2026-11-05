@@ -38,7 +38,8 @@ var Launch = (function () {
       users: Db.all('Users').map(function (u) { return { name: u.name, role: u.role, username: u.username }; }),
       pendingLists: Db.all('Lists', function (l) { return l.status === 'pending'; }).length
     };
-    return { tables: out, review: review, cap: capacity(), clearCount: out.filter(function (x) { return x.kind === 'clear'; }).reduce(function (s, x) { return s + x.rows; }, 0) };
+    var mf = Db.setting('measure_from'); mf = mf instanceof Date ? Utilities.formatDate(mf, 'Asia/Riyadh', 'yyyy-MM-dd') : String(mf || Kpi.LIVE_DEFAULT).slice(0, 10);
+    return { tables: out, review: review, measureFrom: mf, cap: capacity(), clearCount: out.filter(function (x) { return x.kind === 'clear'; }).reduce(function (s, x) { return s + x.rows; }, 0) };
   }
 
   // ───────── النطاق: الفنادق · المتعهدون · الفئات · الجداول (فارغ = الكل) ─────────
