@@ -1263,6 +1263,25 @@ t('تسجيل الوصول بزر: مرة للزيارة، يبقى بعد إغ�
   } finally { run('AUTO_ARRIVE = true'); }
 });
 
+t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد والفندق والجداول، والمعاينة قبل المسح، ولا يُمس ما خارج النطاق', () => {
+  const wo0 = run("Db.all('WorkOrders').length"), wt0 = run("Db.all('WaterLoads').length");
+  const p1 = run(`apiAdmLaunchPlan('${adminTok}', { types: ['wt'] })`);
+  eq(p1.scoped, true); eq(p1.tables.find(x => x.table === 'WaterLoads').n, wt0); eq(p1.tables.find(x => x.table === 'WorkOrders').n, 0);
+  throws(`apiAdmLaunchReset('${adminTok}', 'إطلاق', { tables: [] })`, 'جدولاً');
+  // جدول المياه مستثنى من المسح: لا شيء يُمسح
+  const p2 = run(`apiAdmLaunchPlan('${adminTok}', { types: ['wt'], tables: ['WorkOrders'] })`); eq(p2.total, 0);
+  const r = run(`apiAdmLaunchReset('${adminTok}', 'إطلاق', { types: ['wt'] })`);
+  eq(run("Db.all('WaterLoads').length"), 0); eq(run("Db.all('WorkOrders').length"), wo0, 'أوامر العمل لا تُمس');
+  // متعهد واحد: عملياته فقط، وسجلها، ومؤشراته
+  const ac = run("Db.all('Contractors').find(c => c.type === 'ac').con_id"), acN = run(`Db.all('WorkOrders').filter(o => o.con_id === '${ac}').length`);
+  const p3 = run(`apiAdmLaunchPlan('${adminTok}', { cons: ['${ac}'], tables: ['WorkOrders','WOLog'] })`);
+  eq(p3.tables.find(x => x.table === 'WorkOrders').n, acN); if (!p3.tables.find(x => x.table === 'KpiSummary').on) throw new Error('kpi follows');
+  run(`apiAdmLaunchReset('${adminTok}', 'إطلاق', { cons: ['${ac}'], tables: ['WorkOrders','WOLog'] })`);
+  eq(run(`Db.all('WorkOrders').filter(o => o.con_id === '${ac}').length`), 0); eq(run("Db.all('WorkOrders').length"), wo0 - acN);
+  // فندق غير موجود: لا شيء
+  eq(run(`apiAdmLaunchPlan('${adminTok}', { hotels: ['NOPE'] })`).total, 0);
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   const cap = run(`apiAdmLaunchInventory('${adminTok}')`).cap; eq(cap.drive.pct, 21.3); eq(cap.cells.limit, 10000000); if (!(cap.cells.used > 0)) throw new Error('cells');
   throws(`apiAdmLaunchInventory('${engTok}')`, '');

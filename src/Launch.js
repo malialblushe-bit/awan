@@ -31,9 +31,9 @@ var Launch = (function () {
     });
     var R = Orders.refs();
     var review = {
-      hotels: Db.all('Hotels').map(function (h) { return { name: h.name, code: h.code }; }),
+      hotels: Db.all('Hotels').map(function (h) { return { id: h.hotel_id, name: h.name, code: h.code }; }),
       cons: Db.all('Contractors').map(function (c) {
-        return { name: c.name, type: c.type, contracts: Db.all('Contracts', function (x) { return x.con_id === c.con_id; }).length };
+        return { id: c.con_id, name: c.name, type: c.type, contracts: Db.all('Contracts', function (x) { return x.con_id === c.con_id; }).length };
       }),
       users: Db.all('Users').map(function (u) { return { name: u.name, role: u.role, username: u.username }; }),
       pendingLists: Db.all('Lists', function (l) { return l.status === 'pending'; }).length
@@ -41,19 +41,72 @@ var Launch = (function () {
     return { tables: out, review: review, cap: capacity(), clearCount: out.filter(function (x) { return x.kind === 'clear'; }).reduce(function (s, x) { return s + x.rows; }, 0) };
   }
 
-  /** النسخة الاحتياطية ثم المسح وتصفير الترقيم */
-  function reset(word) {
+  // ───────── النطاق: الفنادق · المتعهدون · الفئات · الجداول (فارغ = الكل) ─────────
+  // ما لا يُعرف نطاقه (فندقه أو متعهده أو فئته) لا يُمسح حين يكون ذلك المرشّح مفعّلاً: الأمان أولاً.
+  var FIXED_CAT = { WasteVisits: 'wa', WaterLoads: 'wt', PestLogs: 'pc', PestFlags: 'pc', Traps: 'pc', PcReports: 'pc' };
+  function csv_(v) { return String(v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function norm_(sc) {
+    sc = sc || {};
+    var tables = (Array.isArray(sc.tables) ? sc.tables : Object.keys(CLEAR)).filter(function (t) { return CLEAR[t]; });
+    // ملخص المؤشرات يتبع أوامر العمل دائماً حتى لا تبقى أرقام لعمليات ممسوحة
+    if (tables.indexOf('WorkOrders') !== -1 && tables.indexOf('KpiSummary') === -1) tables.push('KpiSummary');
+    return { hotels: sc.hotels || [], cons: sc.cons || [], types: sc.types || [], tables: tables };
+  }
+  function ctx_() {
+    var cons = {}, ctr = {}, wo = {};
+    Db.all('Contractors').forEach(function (c) { cons[c.con_id] = c; });
+    Db.all('Contracts').forEach(function (c) { ctr[c.contract_id] = c; });
+    ['WorkOrders', 'WorkOrdersArchive'].forEach(function (t) { try { Db.all(t).forEach(function (o) { wo[o.wo_id] = o; }); } catch (e) {} });
+    // متعهد المكافحة لكل فندق (لبلاغات المكافحة والمصائد التي لا تحمل متعهداً)
+    var pcOf = {};
+    Object.keys(ctr).forEach(function (k) { var c = ctr[k]; if (c.type !== 'pc') return; csv_(c.hotel_ids).forEach(function (h) { (pcOf[h] = pcOf[h] || []).push(c.con_id); }); });
+    return { cons: cons, ctr: ctr, wo: wo, pcOf: pcOf };
+  }
+  /** نطاق السجل: فنادقه ومتعهده وفئته (null = غير معروف) */
+  function dims_(t, r, X) {
+    var o = r.wo_id ? X.wo[r.wo_id] : null, c = r.contract_id ? X.ctr[r.contract_id] : null;
+    var hotels = r.hotel_id ? [r.hotel_id] : r.hotel_ids ? csv_(r.hotel_ids) : o ? [o.hotel_id] : c ? csv_(c.hotel_ids) : null;
+    var con = r.con_id || (o && o.con_id) || (c && c.con_id) || null;
+    var cons = con ? [con] : (FIXED_CAT[t] === 'pc' && hotels ? [].concat.apply([], hotels.map(function (h) { return X.pcOf[h] || []; })) : null);
+    var cat = FIXED_CAT[t] || ((t === 'WorkOrders' || t === 'WorkOrdersArchive' || t === 'Evaluations') ? r.type : null) || (o && o.type) || (c && c.type) || (con && X.cons[con] ? X.cons[con].type : null);
+    if (!cat && t === 'Notes') cat = r.service === 'sup' ? ['wa', 'pc'] : r.service === 'maint' ? ['ac', 'el', 'sf'] : null;
+    return { hotels: hotels, cons: cons, cats: cat == null ? null : [].concat(cat) };
+  }
+  function hit_(d, sc) {
+    var any = function (list, want) { return !want.length || (!!list && list.some(function (x) { return want.indexOf(x) !== -1; })); };
+    return any(d.hotels, sc.hotels) && any(d.cons, sc.cons) && any(d.cats, sc.types);
+  }
+  function scoped_(sc) { return sc.hotels.length || sc.cons.length || sc.types.length; }
+  /** المعاينة: كم سجلاً سيُمسح من كل جدول بهذا النطاق */
+  function plan(scope) {
+    var sc = norm_(scope), X = ctx_(), out = [], total = 0;
+    Object.keys(CLEAR).forEach(function (t) {
+      var rows = []; try { rows = Db.all(t); } catch (e) {}
+      var on = sc.tables.indexOf(t) !== -1, n = on ? rows.filter(function (r) { return hit_(dims_(t, r, X), sc); }).length : 0;
+      total += n; out.push({ table: t, label: CLEAR[t], rows: rows.length, n: n, on: on });
+    });
+    return { tables: out, total: total, scoped: !!scoped_(sc) };
+  }
+
+  /** النسخة الاحتياطية ثم المسح بالنطاق المختار؛ يُصفَّر ترقيم الجدول إذا فرغ كله فقط */
+  function reset(word, scope) {
     if (String(word || '').trim() !== 'إطلاق') throw new Error('اكتب كلمة «إطلاق» للتأكيد.');
+    var sc = norm_(scope);
+    if (!sc.tables.length) throw new Error('اختر جدولاً واحداً على الأقل للمسح.');
     var file = DriveApp.getFileById(Db.ss().getId());
     var copy = file.makeCopy('أعوان — نسخة قبل الإطلاق ' + Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
-    var props = PropertiesService.getScriptProperties(), done = [];
-    Object.keys(CLEAR).forEach(function (name) {
-      var n = 0;
-      try { n = Db.all(name).length; Db.rewrite(name, []); } catch (e) { return; }
-      props.deleteProperty('SEQ_' + name);
+    var props = PropertiesService.getScriptProperties(), done = [], X = ctx_(), part = !!scoped_(sc);
+    sc.tables.forEach(function (name) {
+      var rows; try { rows = Db.all(name); } catch (e) { return; }
+      var keep = rows.filter(function (r) { return !hit_(dims_(name, r, X), sc); }), n = rows.length - keep.length;
+      if (!n) return;
+      Db.rewrite(name, keep);
+      if (!keep.length) props.deleteProperty('SEQ_' + name);
       done.push({ table: CLEAR[name], rows: n });
     });
-    props.deleteProperty('TG_PEND');
+    if (!part && sc.tables.indexOf('WorkOrders') !== -1) props.deleteProperty('TG_PEND');
+    // مسح جزئي يمس العمليات: تُعاد المؤشرات من الباقي
+    if (part && (sc.tables.indexOf('WorkOrders') !== -1 || sc.tables.indexOf('WorkOrdersArchive') !== -1)) { try { Db.reset(); Kpi.rebuild(); } catch (e) {} }
     return { backup: copy.getName(), backupUrl: copy.getUrl(), cleared: done };
   }
 
@@ -87,11 +140,12 @@ var Launch = (function () {
     return true;
   }
 
-  return { inventory: inventory, reset: reset, capacity: capacity, capAlert: capAlert, KEEP: KEEP, CLEAR: CLEAR };
+  return { inventory: inventory, plan: plan, reset: reset, capacity: capacity, capAlert: capAlert, KEEP: KEEP, CLEAR: CLEAR };
 })();
 
 function apiAdmLaunchInventory(token) { Auth.need(token, ['admin']); return Launch.inventory(); }
-function apiAdmLaunchReset(token, word) {
+function apiAdmLaunchPlan(token, scope) { Auth.need(token, ['admin']); return Launch.plan(scope); }
+function apiAdmLaunchReset(token, word, scope) {
   Auth.need(token, ['admin']);
-  return Db.withLock(function () { var r = Launch.reset(word); Db.reset(); r.inv = Launch.inventory(); r.boot = admBoot_(); return r; });
+  return Db.withLock(function () { var r = Launch.reset(word, scope); Db.reset(); r.inv = Launch.inventory(); r.boot = admBoot_(); return r; });
 }
