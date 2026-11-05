@@ -7,7 +7,7 @@
  */
 var Pay = (function () {
   var TZ = 'Asia/Riyadh';
-  var MODES = { sched: 'دفعات مجدولة', monthly: 'فاتورة شهرية', stmt: 'حسب الكشف' };
+  var MODES = { sched: 'دفعات مجدولة', monthly: 'مبلغ شهري ثابت', stmt: 'حسب الأعمال المنفذة' };
   var LIVE = ['submitted', 'approved', 'paid'];
 
   function ms(d) { return Orders.ms(d); }
