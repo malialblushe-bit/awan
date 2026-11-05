@@ -1402,6 +1402,34 @@ function apiWtStatement(token, conId, hotelId, from, to) {
 // ───────── المطالبات والسداد ─────────
 var PAY_ROLES_ = ['fin', 'admin', 'management', 'engineer', 'gm', 'supmgr'];
 function payScope_(s) { return s.role === 'supmgr' ? Ops.supHotels(s) : scopeHotels_(s, Orders.refs()); }
+/** تاريخ العقود: سجل أداء متعهد خلال مدة عقد بعينه (الدرجة الكلية، وكل شهر، والتقييمات الصادرة) — للاطلاع، يُقرأ عند الطلب فقط */
+function apiAdmConHistory(token, contractId) {
+  var s = Auth.need(token, ['admin', 'management']);
+  var c = Db.get('Contracts', contractId);
+  if (!c) throw new Error('العقد غير موجود.');
+  var con = Db.get('Contractors', c.con_id);
+  var day = function (v) { return v ? Utilities.formatDate(new Date(v), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
+  var today = day(new Date()), from = day(c.start) || day(c.created_at) || today, to = day(c.end) || today;
+  if (to > today) to = today;
+  var hotels = Orders.csv(c.hotel_ids), out = { con: { id: con.con_id, name: con.name, type: con.type }, from: from, to: day(c.end) || '', months: [], total: null, evals: [], orders: 0 };
+  if (from > today) return out;
+  var m = Ops.metrics(con, hotels, from, to);
+  out.total = { score: m.score, cls: m.cls, small: m.small, P: m.P };
+  // كل شهر داخل المدة (آخر 24 شهراً على الأكثر)
+  var y = Number(from.slice(0, 4)), mo = Number(from.slice(5, 7)), list = [];
+  while (true) {
+    var ms0 = y + '-' + ('0' + mo).slice(-2), a = ms0 + '-01', last = new Date(y, mo, 0).getDate(), b = ms0 + '-' + last;
+    if (a > to) break;
+    list.push([ms0, a < from ? from : a, b > to ? to : b]);
+    mo++; if (mo > 12) { mo = 1; y++; }
+  }
+  list.slice(-24).forEach(function (x) { var r = Ops.metrics(con, hotels, x[1], x[2]); out.months.push({ month: x[0], score: r.score, cls: r.cls, small: r.small }); });
+  var a0 = Orders.ms(from), b0 = Orders.ms(to) + 864e5;
+  out.orders = Db.all('WorkOrders', function (o) { var t = Orders.ms(o.created_at); return o.con_id === con.con_id && hotels.indexOf(o.hotel_id) !== -1 && t >= a0 && t < b0; }).length;
+  out.evals = Ops.evalList(function (e) { return e.con_id === con.con_id; }).filter(function (e) { return !(e.to < from || e.from > to); }).map(function (e) { return { id: e.id, from: e.from, to: e.to, score: e.score, decision: e.decision, by: e.by, created: e.created }; });
+  return out;
+}
+
 function apiAdmSavePay(token, contractId, d) { return adm_(token, function () { return Pay.setup(contractId, d); }); }
 function apiConClaim(token, d) {
   var s = Auth.need(token, ['contractor']);
