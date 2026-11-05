@@ -199,6 +199,50 @@ var Ops = (function () {
     Db.insert('PcReports', { con_id: conId, hotel_id: hotelId, month: "'" + d.month, att: att.join(','), by_name: String(by || '').trim(), at: new Date() });
   }
 
+  // ───────── المكافحة: فنيو القائد، حالة من الفني لقائده، والتقرير الفني لمالك الخدمة ─────────
+  var CASE_TYPES = ['منطقة تحتاج قرار القائد', 'نقص مواد أو معدات', 'فتحات ومنافذ للآفات', 'أخرى'];
+  function pcContract_(conId) { return Db.find('Contracts', function (c) { return c.con_id === conId && c.type === 'pc'; }); }
+  function team(conId) { var c = pcContract_(conId); try { return c && c.team ? JSON.parse(c.team) : []; } catch (e) { return []; } }
+  function setTeam(s, names) {
+    if (!s.lead) throw new Error('تعريف الفنيين لقائد الفريق.');
+    var seen = {}, l = (names || []).map(function (x) { return String(x || '').trim(); }).filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
+    Db.update('Contracts', s.lead, { team: JSON.stringify(l) });
+    return l.length;
+  }
+  function pestMsg(s, d) {
+    var con = Db.get('Contractors', s.id), hid = d.hotel_id;
+    pcCon_(s, hid);
+    var zones = (d.zones || []).filter(function (z) { var r = Db.get('Rooms', z); return r && r.hotel_id === hid; });
+    var by = String(d.by || '').trim() || (s.lead_name ? s.lead_name + ' (قائد الفريق)' : con.name);
+    if (d.kind === 'case') {
+      if (s.lead) throw new Error('الحالات يرسلها الفنيون لقائدهم.');
+      var c = pcContract_(con.con_id); if (!c || !String(c.lead_name || '').trim()) throw new Error('لا قائد فريق معرّف في عقدكم.');
+      if (CASE_TYPES.indexOf(d.ctype) === -1) throw new Error('اختر نوع الحالة.');
+      if (!String(d.by || '').trim()) throw new Error('اختر اسمك.');
+      if (!String(d.note || '').trim() && !(d.att || []).length) throw new Error('اكتب الحالة أو أرفق صورة.');
+    } else if (d.kind === 'tech') {
+      if (!String(d.title || '').trim()) throw new Error('اكتب عنوان التقرير.');
+      if (!(d.att || []).length) throw new Error('أرفق التقرير الفني على كليشتكم (صورة أو PDF).');
+    } else throw new Error('نوع غير معروف.');
+    return Db.insert('PestMsgs', { kind: d.kind, hotel_id: hid, con_id: con.con_id, zones: zones.join(','), ctype: d.kind === 'case' ? d.ctype : '', title: String(d.title || '').trim(),
+      note: String(d.note || '').trim(), att: (d.att || []).join(','), by_name: by, created_at: new Date(), status: 'open' }).msg_id;
+  }
+  /** القائد يتعامل مع حالة فنيه · مالك الخدمة يؤشر «اطّلعت» على التقرير الفني */
+  function pestMsgDone(s, id, reply, sup) {
+    var m = Db.get('PestMsgs', id); if (!m) throw new Error('غير موجود.');
+    if (sup) { if (m.kind !== 'tech' || supHotels(s).indexOf(m.hotel_id) === -1) throw new Error('التقرير ليس ضمن فنادقك.'); }
+    else { if (m.kind !== 'case' || m.con_id !== s.id || !s.lead) throw new Error('الحالة لقائد الفريق.'); }
+    Db.update('PestMsgs', id, { status: 'done', done_by: sup ? ((Db.get('Users', s.id) || {}).name || '') : s.lead_name, done_at: new Date(), reply: String(reply || '').trim() });
+  }
+  function pestMsgs(filter) {
+    var since = Date.now() - 60 * 864e5, rn = {};
+    return Db.all('PestMsgs', function (m) { return filter(m) && (m.status === 'open' || ms(m.created_at) >= since); }).map(function (m) {
+      var z = csv(m.zones);
+      return { id: m.msg_id, kind: m.kind, hotel_id: m.hotel_id, con_id: m.con_id, zones: z.map(function (x) { if (!rn[x]) { var r = Db.get('Rooms', x); rn[x] = r ? String(r.number) : x; } return rn[x]; }), ctype: m.ctype || '', title: m.title || '',
+        note: m.note || '', att: csv(m.att), by: m.by_name || '', at: ms(m.created_at), status: m.status, doneBy: m.done_by || '', doneAt: ms(m.done_at) || null, reply: m.reply || '' };
+    }).sort(function (a, b) { return b.at - a.at; });
+  }
+
   // ───────── مكافحة الآفات ─────────
   function schedule(hotelId) {
     var out = {};
@@ -691,7 +735,7 @@ var Ops = (function () {
   }
 
   return {
-    statement: statement, pcReject: pcReject, pcCA: pcCA, cancelMany: cancelMany, expireReady: expireReady, ratesDue: ratesDue, rate: rate, reportsDue: reportsDue, pcReport: pcReport, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
+    statement: statement, pcReject: pcReject, pcCA: pcCA, cancelMany: cancelMany, team: team, setTeam: setTeam, pestMsg: pestMsg, pestMsgDone: pestMsgDone, pestMsgs: pestMsgs, CASE_TYPES: CASE_TYPES, expireReady: expireReady, ratesDue: ratesDue, rate: rate, reportsDue: reportsDue, pcReport: pcReport, geoCheck: geoCheck, parseGeo: parseGeo, hasGeo: hasGeo_, supHotels: supHotels,
     waLogin: waLogin, waBoot: waBoot, waSubmit: waSubmit, waVisits: waVisits, waReject: waReject, waContract: waContract,
     pestBoot: pestBoot, pestState: pestState, flag: flag, reqFlag: reqFlag, cancelFlag: cancelFlag, log: log, trap: trap, saveSchedule: saveSchedule, setZoneType: setZoneType,
     metrics: metrics, evalPreview: evalPreview, evalIssue: evalIssue, evalList: evalList, canEval: canEval_, FIND: FIND, TRAP_KINDS: TRAP_KINDS

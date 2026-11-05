@@ -296,6 +296,8 @@ function conBoot_(s) {
     tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
     claims: s.web ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
     pcReports: con.type === 'pc' ? Ops.reportsDue(con.con_id) : null,
+    pcTeam: con.type === 'pc' ? { names: Ops.team(con.con_id), hasLead: !!String((Db.find('Contracts', function (c) { return c.con_id === con.con_id && c.type === 'pc'; }) || {}).lead_name || '').trim(), types: Ops.CASE_TYPES,
+      msgs: Ops.pestMsgs(function (m) { return m.con_id === con.con_id; }) } : null,
     evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar', lead: s.lead_name || '' },
@@ -1275,6 +1277,7 @@ function supBoot_(s) {
     notes: s.role === 'supmgr' ? notesFor_(s, hs, 'sup') : [],
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
     cas: Quality.list(R, function (c) { return c.log_id && hs.indexOf(c.hotel_id) !== -1; }),
+    pestTech: Ops.pestMsgs(function (m) { return m.kind === 'tech' && hs.indexOf(m.hotel_id) !== -1; }),
     tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
     org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
     rates: ['supmgr', 'admin'].indexOf(s.role) !== -1 ? Ops.ratesDue(hs) : null,
@@ -1304,6 +1307,19 @@ function apiSupRate(token, conId, hotelId, score, note) {
   var s = Auth.need(token, ['supmgr', 'admin']);
   return Db.withLock(function () { Ops.rate(s, conId, hotelId, score, note); Db.reset(); return { boot: supBoot_(s) }; });
 }
+function apiConPestMsg(token, d) {
+  var s = Auth.need(token, ['contractor']); d = d || {};
+  return Db.withLock(function () { d.att = d.kind === 'tech' ? saveFiles_(d.att, 'PT') : savePhotos_(d.att, 'PC'); var id = Ops.pestMsg(s, d); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+}
+function apiConPestMsgDone(token, id, reply) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { Ops.pestMsgDone(s, id, reply, false); Db.reset(); return { boot: conBoot_(s) }; });
+}
+function apiConTeam(token, names) {
+  var s = Auth.need(token, ['contractor']);
+  return Db.withLock(function () { Ops.setTeam(s, names); Db.reset(); return { boot: conBoot_(s) }; });
+}
+function apiSupPestTechSeen(token, id, note) { return sup_(token, ['supmgr', 'admin'], function (s) { Ops.pestMsgDone(s, id, note, true); }); }
 function apiConPcReport(token, hotelId, att, by) {
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () { var f = saveFiles_(att, 'PR'); Ops.pcReport(s.id, hotelId, f, by); Db.reset(); return { boot: conBoot_(s) }; });

@@ -1197,6 +1197,24 @@ t('المكافحة: إجراء تصحيحي على المعالجة (يُنقص
   run(`apiAdmMeasureFrom('${adminTok}', '2000-01-01')`);
 });
 
+t('المكافحة: القائد يعرّف فنييه، الفني يرسل حالة لقائده، والتقرير الفني (ملف إلزامي) يصل لمدير الإشراف', () => {
+  const ctr = run(`Db.all('Contracts').find(c => c.type === 'pc')`);
+  if (!ctr.lead_name) run(`apiAdmLeadPin('${adminTok}', '${ctr.contract_id}', 'أبو فهد')`);
+  const lp = run(`Auth.setLeadPin('${ctr.contract_id}')`);
+  const lt = run(`apiPinWebLogin('${lp}')`).token, pt = run(`apiPinWebLogin('${pcPin}')`).token;
+  throws(`apiConTeam('${pt}', ['س'])`, 'لقائد');
+  eq(run(`apiConTeam('${lt}', ['سالم', 'ماجد', 'سالم'])`).boot.pcTeam.names.join(), 'سالم,ماجد');
+  throws(`apiConPestMsg('${pt}', { kind: 'case', hotel_id: '${HID}', ctype: 'نقص مواد أو معدات', note: 'x' })`, 'اسمك');
+  const id = run(`apiConPestMsg('${pt}', { kind: 'case', hotel_id: '${HID}', by: 'سالم', ctype: 'فتحات ومنافذ للآفات', note: 'فتحة خلف الثلاجة' })`).id;
+  const lb = run(`apiConBoot('${lt}')`); eq(lb.pcTeam.msgs.filter(m => m.kind === 'case' && m.status === 'open').length, 1);
+  run(`apiConPestMsgDone('${lt}', '${id}', 'أبلغنا الصيانة')`); eq(run(`Db.get('PestMsgs', '${id}').status`), 'done');
+  throws(`apiConPestMsg('${lt}', { kind: 'tech', hotel_id: '${HID}', title: 'تقرير' })`, 'أرفق');
+  const pdf = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.4').toString('base64');
+  const tid = run(`apiConPestMsg('${lt}', { kind: 'tech', hotel_id: '${HID}', title: 'فتحات المطبخ', att: ['${pdf}'] })`).id;
+  const sb = run(`apiSupBoot('${mgrTok}')`); eq(sb.pestTech.filter(m => m.id === tid).length, 1);
+  run(`apiSupPestTechSeen('${mgrTok}', '${tid}', 'شكراً')`); eq(run(`Db.get('PestMsgs', '${tid}').status`), 'done');
+});
+
 t('المطالبات والسداد: طريقة السداد في العقد، المتعهد يرفع المطالبة ولا يرى السداد، مالك الخدمة يعتمد، والمالية تسدد', () => {
   const wc = run(`Db.all('Contracts').find(c => c.type === 'wa').contract_id`);
   const td = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);

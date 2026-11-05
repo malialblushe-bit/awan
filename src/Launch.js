@@ -12,7 +12,7 @@ var Launch = (function () {
   var CLEAR = {
     WorkOrders: 'أوامر العمل', WorkOrdersArchive: 'أرشيف أوامر العمل', WOLog: 'سجل الإجراءات', Arrivals: 'تسجيل الوصول', KpiSummary: 'ملخص المؤشرات',
     CorrectiveActions: 'الإجراءات التصحيحية', Notes: 'الملاحظات', WasteVisits: 'زيارات النفايات', WaterLoads: 'رحلات المياه', PestLogs: 'معالجات المكافحة',
-    PestFlags: 'بلاغات المكافحة', Traps: 'المصائد', Evaluations: 'التقييمات الدورية', Tickets: 'تذاكر تجربة الأعوان', OrgEvals: 'تقييم المتعهدين لنا', Claims: 'المطالبات والسداد', SupRatings: 'رضا الإشراف الشهري', PcReports: 'تقارير المكافحة الشهرية'
+    PestFlags: 'بلاغات المكافحة', Traps: 'المصائد', Evaluations: 'التقييمات الدورية', Tickets: 'تذاكر تجربة الأعوان', OrgEvals: 'تقييم المتعهدين لنا', Claims: 'المطالبات والسداد', SupRatings: 'رضا الإشراف الشهري', PcReports: 'تقارير المكافحة الشهرية', PestMsgs: 'حالات المكافحة وتقاريرها الفنية'
   };
   var DATE_COLS = ['created_at', 'at', 'placed_at', 'arrived_at', 'updated_at'];
 
@@ -44,7 +44,7 @@ var Launch = (function () {
 
   // ───────── النطاق: الفنادق · المتعهدون · الفئات · الجداول (فارغ = الكل) ─────────
   // ما لا يُعرف نطاقه (فندقه أو متعهده أو فئته) لا يُمسح حين يكون ذلك المرشّح مفعّلاً: الأمان أولاً.
-  var FIXED_CAT = { WasteVisits: 'wa', WaterLoads: 'wt', PestLogs: 'pc', PestFlags: 'pc', Traps: 'pc', PcReports: 'pc' };
+  var FIXED_CAT = { WasteVisits: 'wa', WaterLoads: 'wt', PestLogs: 'pc', PestFlags: 'pc', Traps: 'pc', PcReports: 'pc', PestMsgs: 'pc' };
   function csv_(v) { return String(v || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
   function norm_(sc) {
     sc = sc || {};
