@@ -1,6 +1,6 @@
 /**
  * Water.js — أعوان: متعهد شاحنات المياه (نوع wt).
- *  - باركود لكل فندق ?h=CODE&m=wt: السائق يكتب الرقم السري للشركة، ثم اسمه والحجم ورقم السند وصورته (اختيارية).
+ *  - باركود لكل فندق ?h=CODE&m=wt: السائق يكتب الرقم السري للشركة، ثم اسمه والحجم، ورقم السند وصورته (اختياريان؛ المطابقة توازي السند).
  *  - الموقع إلزامي: بلا إحداثيات للفندق لا يُقبل التسجيل.
  *  - الأحجام وأسعارها في عقد المتعهد (Contracts.prices: الحجم بالمتر المكعب ← ريال). السائق لا يرى سعراً.
  *  - المطابقة من مدير الفندق أو المدير المناوب (أو مشرف النظام): اعتماد أو رفض بسبب. الكشف للمعتمد فقط بتاريخ التفريغ.
@@ -57,7 +57,6 @@ var Water = (function () {
     var size = Number(d.size);
     if (sizes_(c).indexOf(size) === -1) throw new Error('اختر حجم الرحلة.');
     var receipt = String(d.receipt || '').trim();
-    if (!receipt) throw new Error('اكتب رقم السند.');
     var mine = Db.all('WaterLoads', function (v) { return v.con_id === con.con_id; });
     if (receipt) {
       var same = mine.filter(function (v) { return String(v.receipt_no).trim() === receipt && v.status !== 'rejected'; })[0];
