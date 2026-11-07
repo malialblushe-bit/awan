@@ -1317,8 +1317,8 @@ t('تسجيل الوصول بزر: مرة للزيارة، يبقى بعد إغ�
     // إعادة فتح الصفحة: الوصول باقٍ، وتسجيل عملية أخرى لا ينشئ زيارة جديدة
     const tk2 = run(`apiConLogin('WARIF2', '${elPin}')`);
     eq(!!tk2.boot.visit, true);
-    run(`apiConAct('${tk2.token}', 'arrive', null, { ids: ['${b}'] })`);
     eq(run("Db.all('Arrivals').length"), n0 + 1, 'مرة واحدة للزيارة');
+    // عملية لم يُضغط لها الوصول والزيارة مسجّلة اليوم: يُحسب وصوله تلقائياً عند الإتمام (بلاغ 7 نوفمبر)
     run(`apiConAct('${tk2.token}', 'submit', '${a}', { outcome: 'visit', working: 'نعم', note: 'زيارة' })`);
     const left1 = run(`Orders.visitToday(Db.get('WorkOrders','${a}').con_id, '${HID}').left`); if (!left1) throw new Error('left');
     run(`apiConAct('${tk2.token}', 'submit', '${b}', { outcome: 'visit', working: 'نعم', note: 'زيارة' })`);

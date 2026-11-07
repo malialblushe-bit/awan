@@ -152,7 +152,15 @@ var Orders = (function () {
     var o = Db.get('WorkOrders', woId);
     if (!o || o.con_id !== s.id) throw new Error('العملية غير موجودة.');
     if (o.status !== 'assigned' && o.status !== 'in_progress' && o.status !== 'lead') throw new Error('هذه العملية ليست بانتظار تقريرك الآن.');
-    if (!s.web && !o.arrived_at) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
+    if (!s.web && !o.arrived_at) {
+      // وصوله مسجّل اليوم في هذا الفندق (والعملية أُسندت بعد وصوله أو لم تُختر عنده): يُحسب وصوله لها تلقائياً
+      var vt = visitToday(s.id, o.hotel_id);
+      if (!vt) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
+      var ta = new Date(Math.max(vt.at, ms(o.created_at) || 0));
+      Db.update('WorkOrders', o.wo_id, { arrived_at: ta, work_from: o.work_from || ta });
+      log_(o.wo_id, s.id, 'arrive', o.status, o.status, 'تلقائي من زيارة اليوم');
+      o = Db.get('WorkOrders', woId);
+    }
     var oc = d.outcome;
     if ((OUTCOMES[o.type] || []).indexOf(oc) === -1) throw new Error('اختر النتيجة.');
     if (oc === 'lead' && (s.web || o.status === 'lead')) throw new Error('الإرسال لقائد الفريق من الفني في الموقع.');
