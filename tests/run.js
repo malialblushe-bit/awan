@@ -908,6 +908,25 @@ t('تيليجرام: طلب التكييف يُنشر في مجموعة الفن
   eq(tgCalls.slice(n2).filter(c => c.m === 'sendMessage').length, 0);
 });
 
+t('تيليجرام: المجموعة المرقّاة يُصحَّح رقمها تلقائياً، وسبب الفشل يظهر لمشرف النظام، ونشر ما لم يصل', () => {
+  const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
+  // الإرسال يفشل (البوت خارج المجموعة): يُسجَّل السبب، والطلب يبقى غير منشور
+  tgReply.sendMessage = () => ({ ok: false, description: 'Forbidden: bot was kicked from the supergroup chat' });
+  const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '712', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  const ho = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === HID);
+  if (!ho.tgErr || !ho.tgErr.desc.includes('kicked')) throw new Error('err ' + JSON.stringify(ho.tgErr));
+  const tr = run(`apiAdmTgTest('${adminTok}', '${HID}')`); eq(tr.ok, false); if (!(tr.missing >= 1)) throw new Error('missing');
+  // رُقّيت المجموعة: الرد يحمل الرقم الجديد فيُحدَّث ويُعاد الإرسال
+  tgReply.sendMessage = (p) => String(p.chat_id) === '-100777' ? { ok: false, description: 'Bad Request: group chat was upgraded to a supergroup chat', parameters: { migrate_to_chat_id: -100999 } } : { ok: true, result: { message_id: 901 } };
+  const rp = run(`apiAdmTgRepost('${adminTok}', '${HID}')`); if (!(rp.n >= 1) || rp.left) throw new Error(JSON.stringify(rp));
+  eq(String(run(`Db.get('Hotels', '${HID}').tg_chat`)), '-100999'); eq(String(run(`Db.get('WorkOrders', '${id}').tg_msg`)), '901');
+  eq(run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === HID).tgErr, null);
+  // رسالة الترقية في التحديثات تُحدّث الرقم كذلك
+  tgQueue.push({ update_id: 50, message: { chat: { id: -100999 }, migrate_to_chat_id: -100555 } }); run('tgPoll()');
+  eq(String(run(`Db.get('Hotels', '${HID}').tg_chat`)), '-100555');
+  delete tgReply.sendMessage;
+});
+
 t('البريد الرسمي عنواناً بديلاً، وزمن الاستلام، ولا معلومات مالية لدى المتعهد', () => {
   throws(`apiAdmMailFrom('${adminTok}', 'x@')`, 'غير صحيح');
   const t0 = sentMail.length;

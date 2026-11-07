@@ -671,7 +671,7 @@ function admBoot_() {
         id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi',
         lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
         geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
-        tg: !!h.tg_chat, tg_code: h.tg_code || '', wt: !!Orders.activeContract(h.hotel_id, 'wt'),
+        tg: !!h.tg_chat, tg_code: h.tg_code || '', tgErr: h.tg_chat ? Tg.lastErr(h.hotel_id) : null, wt: !!Orders.activeContract(h.hotel_id, 'wt'),
         floors: layout, elevatorCards: elevs, elevators: elevs.map(function (e) { return e.name; }),
         totals: {
           floors: layout.length,
@@ -1147,6 +1147,8 @@ function apiAdmTgCode(token, hotelId) {
   });
 }
 function apiAdmMailFrom(token, addr) { return adm_(token, function () { return { from: Mail.setFrom(addr) }; }); }
+function apiAdmTgTest(token, hotelId) { return adm_(token, function () { var r = Tg.test(hotelId); r.missing = Tg.missing(hotelId).length; return r; }); }
+function apiAdmTgRepost(token, hotelId) { return adm_(token, function () { var n = Tg.repost(hotelId); return { n: n, left: Tg.missing(hotelId).length, err: (Tg.lastErr(hotelId) || {}).desc || '' }; }); }
 function apiAdmTgUnlink(token, hotelId) { return adm_(token, function () { Db.update('Hotels', hotelId, { tg_chat: '', tg_code: '' }); return {}; }); }
 
 // ───────── اعتماد البنود ─────────

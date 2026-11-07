@@ -49,6 +49,20 @@ var Tg = (function () {
     return { inline_keyboard: [[{ text: '✋ أستلمه', callback_data: 'c|' + o.wo_id }]] };
   }
 
+  // آخر خطأ إرسال لكل فندق (في الخصائص، بلا قراءة جداول) ليظهر لمشرف النظام
+  function errs_() { try { return JSON.parse(props_().getProperty('TG_ERR') || '{}'); } catch (e) { return {}; } }
+  function setErr_(hid, desc) { var m = errs_(); if (desc) m[hid] = { at: Date.now(), desc: String(desc).slice(0, 200) }; else delete m[hid]; props_().setProperty('TG_ERR', JSON.stringify(m)); }
+  function lastErr(hid) { return errs_()[hid] || null; }
+  /** إرسال لمجموعة الفندق: إن رُقّيت المجموعة إلى «مجموعة خارقة» تغيّر رقمها، فيُحدَّث ويُعاد الإرسال */
+  function send_(h, method, payload) {
+    payload.chat_id = String(h.tg_chat);
+    var r = api_(method, payload);
+    var nid = r && !r.ok && r.parameters && r.parameters.migrate_to_chat_id;
+    if (nid) { Db.update('Hotels', h.hotel_id, { tg_chat: String(nid) }); h.tg_chat = String(nid); payload.chat_id = String(nid); r = api_(method, payload); }
+    if (method === 'sendMessage') setErr_(h.hotel_id, r && r.ok ? '' : ((r && r.description) || 'لا رد من تيليجرام'));
+    return r;
+  }
+
   /** ينشر طلب التكييف الجديد في مجموعة فندقه */
   function post(woId) {
     try {
@@ -57,7 +71,7 @@ var Tg = (function () {
       if (!o || o.type !== 'ac' || o.tg_msg) return false;
       var h = Db.get('Hotels', o.hotel_id);
       if (!h || !h.tg_chat) return false;
-      var r = api_('sendMessage', { chat_id: String(h.tg_chat), text: text_(o), parse_mode: 'HTML', reply_markup: keyboard_(o) });
+      var r = send_(h, 'sendMessage', { text: text_(o), parse_mode: 'HTML', reply_markup: keyboard_(o) });
       if (r && r.ok) {
         Db.update('WorkOrders', woId, { tg_msg: r.result.message_id });
         // قائمة صغيرة في الخصائص لما ينتظر الاستلام، حتى لا يُقرأ جدول العمليات كل دقيقة
@@ -66,7 +80,7 @@ var Tg = (function () {
         savePend_(pd);
         return true;
       }
-    } catch (e) { /* لا يمنع العمل */ }
+    } catch (e) { try { setErr_(String((Db.get('WorkOrders', woId) || {}).hotel_id || ''), 'خطأ داخلي: ' + e.message); } catch (e2) { } }
     return false;
   }
 
@@ -86,7 +100,7 @@ var Tg = (function () {
         if (!o || !o.tg_msg) return;
         var h = Db.get('Hotels', o.hotel_id);
         if (!h || !h.tg_chat) return;
-        api_('editMessageText', { chat_id: String(h.tg_chat), message_id: Number(o.tg_msg), text: text_(o), parse_mode: 'HTML', reply_markup: keyboard_(o) });
+        send_(h, 'editMessageText', { message_id: Number(o.tg_msg), text: text_(o), parse_mode: 'HTML', reply_markup: keyboard_(o) });
         n++;
       } catch (e) { /* تجاهل */ }
     });
@@ -147,6 +161,10 @@ var Tg = (function () {
       off = Math.max(off, u.update_id + 1);
       try {
         if (u.callback_query && /^c\|/.test(u.callback_query.data || '')) claim_(u.callback_query);
+        else if (u.message && u.message.migrate_to_chat_id) {
+          var old = String(u.message.chat.id), hm = Db.find('Hotels', function (x) { return String(x.tg_chat) === old; });
+          if (hm) Db.update('Hotels', hm.hotel_id, { tg_chat: String(u.message.migrate_to_chat_id) });
+        }
         else if (u.message && u.message.text) link_(u.message);
       } catch (e) { /* تجاهل التحديث المعطوب */ }
     });
@@ -178,7 +196,18 @@ var Tg = (function () {
     return c;
   }
 
-  return { on: on, post: post, refresh: refresh, poll: poll, fetch: fetch, due: due, setup: setup, bot: bot, newCode: newCode, text: text_ };
+  /** مشرف النظام: رسالة تجريبية للمجموعة، ويعيد سبب الفشل كما أرسله تيليجرام */
+  function test(hotelId) {
+    if (!on()) throw new Error('البوت غير مربوط.');
+    var h = Db.get('Hotels', hotelId); if (!h || !h.tg_chat) throw new Error('المجموعة غير مرتبطة.');
+    var r = send_(h, 'sendMessage', { text: '🧪 رسالة تجريبية من أعوان: هذه المجموعة مرتبطة بـ ' + h.name + '.' });
+    return r && r.ok ? { ok: true } : { ok: false, err: (r && r.description) || 'لا رد من تيليجرام' };
+  }
+  /** نشر طلبات التكييف المفتوحة لهذا الفندق التي لم تصل للمجموعة */
+  function missing(hotelId) { return Db.all('WorkOrders', function (o) { return o.hotel_id === hotelId && o.type === 'ac' && !o.tg_msg && Orders.OPEN.indexOf(o.status) !== -1; }); }
+  function repost(hotelId) { var n = 0; missing(hotelId).forEach(function (o) { if (post(o.wo_id)) n++; }); return n; }
+
+  return { on: on, post: post, refresh: refresh, poll: poll, fetch: fetch, due: due, setup: setup, bot: bot, newCode: newCode, text: text_, test: test, missing: missing, repost: repost, lastErr: lastErr };
 })();
 
 /** المشغّل الزمني (كل دقيقة) */
