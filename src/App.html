@@ -817,7 +817,7 @@ var W={tab:'ops',q:'decision',sel:null,f:{},
   if(W.must)return W.mustView();
   if(!W.b)return W.err?W.errView():W.loading();
   var isAdmin=W.b.me.role==='admin';
-  var nav='<nav class="topnav">'+[['ops','العمليات'],['perf','الأداء']].concat(isAdmin?[['adm','الإدارة']]:[]).map(function(n){return '<button class="'+(W.tab===n[0]?'on':'')+'" onclick="W.tab=\''+n[0]+'\';'+(n[0]==='ops'?'W.boot()':n[0]==='perf'?'P.d=null;render()':'render()')+'">'+n[1]+'</button>'}).join('')+'</nav>';
+  var nav='<nav class="topnav">'+[['ops','العمليات'],['perf','الأداء']].concat(isAdmin?[['adm','الإدارة']]:[]).map(function(n){return '<button class="'+(W.tab===n[0]?'on':'')+'" onclick="W.tab=\''+n[0]+'\';'+(n[0]==='ops'?'W.soft()':n[0]==='perf'?'P.soft()':'render()')+'">'+n[1]+'</button>'}).join('')+'</nav>';
   var right='<div style="text-align:left"><p style="margin:0;font-size:14px;font-weight:700">'+esc(W.b.me.name)+'</p><p style="margin:0;font-size:12px;color:var(--goldL)">'+({admin:'مشرف النظام',engineer:'مهندس الصيانة',management:'الإدارة',gm:'مدير الفندق',om:'مدير التشغيل',duty:'المدير المناوب',fo:'مشرف المكاتب الأمامية'}[W.b.me.role])+'</p></div><button class="btn sm" style="background:rgba(255,255,255,.12);color:#fff" onclick="W.logout()">خروج</button>';
   $('#app').innerHTML=hdr('',right,nav)+'<div class="wrap">'+(W.tab==='adm'&&isAdmin?A.view():W.tab==='perf'?P.view('staff'):W.opsView())+'</div>'+(W.modal?W.modal():'')+(W.tab==='adm'&&isAdmin&&A.dr?A.drawer():'');
  },

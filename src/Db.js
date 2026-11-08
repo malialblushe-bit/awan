@@ -30,13 +30,63 @@ var Db = (function () {
     return sh;
   }
 
+  // ── (أ) الجداول المرجعية في ذاكرة Google المؤقتة: تتغير نادراً وتُقرأ في كل عملية.
+  // لكل جدول رقم إصدار في خصائص السكربت (RV_<الجدول>) يتجدد مع كل كتابة، فلا تُقرأ نسخة قديمة أبداً.
+  var REF = { Settings: 1, Hotels: 1, Floors: 1, Rooms: 1, Elevators: 1, Contractors: 1, Contracts: 1, Lists: 1, Users: 1, Thresholds: 1, PestSchedule: 1 };
+  var CACHE_TTL = 1800, CHUNK = 40000, vers = null;
+  function cache_() { try { return CacheService.getScriptCache(); } catch (e) { return null; } }
+  function ver_(table) {
+    if (!vers) { try { vers = PropertiesService.getScriptProperties().getProperties() || {}; } catch (e) { vers = {}; } }
+    return vers['RV_' + table] || '0';
+  }
+  function bump_(table) {
+    if (!REF[table]) return;
+    var v = String(Date.now()) + Math.floor(Math.random() * 1000);
+    try { PropertiesService.getScriptProperties().setProperty('RV_' + table, v); } catch (e) { }
+    if (vers) vers['RV_' + table] = v;
+  }
+  /** يجدد إصدار كل الجداول المرجعية (بعد تعديل يدوي في ملف البيانات أو مزامنة الهيكل) */
+  function refreshRef() { Object.keys(REF).forEach(bump_); }
+  function enc_(values) { return JSON.stringify(values, function (k, v) { var raw = this[k]; return raw instanceof Date ? { $d: raw.getTime() } : v; }); }
+  function dec_(str) { return JSON.parse(str, function (k, v) { return v && typeof v === 'object' && v.$d != null && Object.keys(v).length === 1 ? new Date(v.$d) : v; }); }
+  function cacheGet_(table) {
+    var c = cache_(); if (!c) return null;
+    try {
+      var base = 'R:' + table + ':' + ver_(table), n = Number(c.get(base) || 0);
+      if (!n) return null;
+      var keys = []; for (var i = 0; i < n; i++) keys.push(base + ':' + i);
+      var got = c.getAll(keys), str = '';
+      for (var j = 0; j < n; j++) { if (got[keys[j]] == null) return null; str += got[keys[j]]; }
+      return dec_(str);
+    } catch (e) { return null; }
+  }
+  function cachePut_(table, values) {
+    var c = cache_(); if (!c) return;
+    try {
+      var base = 'R:' + table + ':' + ver_(table), str = enc_(values), m = {}, n = Math.ceil(str.length / CHUNK) || 1;
+      if (n > 20) return; // جدول أكبر من المعقول للذاكرة المؤقتة: يُقرأ من الملف
+      for (var i = 0; i < n; i++) m[base + ':' + i] = str.slice(i * CHUNK, (i + 1) * CHUNK);
+      c.putAll(m, CACHE_TTL); c.put(base, String(n), CACHE_TTL);
+    } catch (e) { }
+  }
+
   function load_(table) {
     if (memo[table]) return memo[table];
+    if (REF[table]) {
+      var cv = cacheGet_(table);
+      if (cv && cv.length) {
+        var ch = cv[0].map(String);
+        memo[table] = { head: ch, rows: cv.slice(1).map(function (v) { return toObj_(ch, v); }) };
+        if (typeof Perf !== 'undefined') Perf.cached = (Perf.cached || 0) + 1;
+        return memo[table];
+      }
+    }
     var t0 = Date.now(), sh = sheet_(table);
     var lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
     var values = lastRow ? sh.getRange(1, 1, lastRow, Math.max(lastCol, 1)).getValues() : [[]];
     if (typeof Perf !== 'undefined') { var dt = Date.now() - t0; Perf.reads++; Perf.readMs += dt; Perf.tables[table] = (Perf.tables[table] || 0) + dt; }
     var head = values[0].map(String);
+    if (REF[table]) cachePut_(table, values);
     var rows = values.slice(1).map(function (v) { return toObj_(head, v); });
     memo[table] = { head: head, rows: rows };
     return memo[table];
@@ -59,6 +109,8 @@ var Db = (function () {
     });
   }
 
+  /** القيمة في الذاكرة كما تعود من الجدول بعد الكتابة (الكائن نصاً JSON، والفارغ نصاً فارغاً) */
+  function norm_(v) { if (v === undefined || v === null) return ''; if (typeof v === 'object' && !(v instanceof Date)) return JSON.stringify(v); return v; }
   function keyOf_(table) { return tableDef(table).cols[0][0]; }
 
   function head_(table) {
@@ -117,6 +169,7 @@ var Db = (function () {
     recs.forEach(function (r, i) { if (!r[k]) r[k] = ids[i]; });
     var rows = recs.map(function (r) { return toRow_(t.head, r); });
     sh.getRange(sh.getLastRow() + 1, 1, rows.length, t.head.length).setValues(rows);
+    bump_(table);
     if (t.rows) recs.forEach(function (r) { t.rows.push(toObj_(t.head, toRow_(t.head, r).map(function (v) { return (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v; }))); });
     return recs;
   }
@@ -127,7 +180,7 @@ var Db = (function () {
     if (INDEXED[table] && !memo[table]) {
       var x = locate_(table, id);
       if (!x) throw new Error('سجل غير موجود: ' + table + ' ' + id);
-      Object.keys(patch).forEach(function (f) { x.rec[f] = patch[f]; });
+      Object.keys(patch).forEach(function (f) { x.rec[f] = norm_(patch[f]); });
       var hd = head_(table);
       sheet_(table).getRange(x.r, 1, 1, hd.length).setValues([toRow_(hd, x.rec)]);
       return x.rec;
@@ -137,8 +190,9 @@ var Db = (function () {
     for (var i = 0; i < t.rows.length; i++) if (t.rows[i][k] === id) { idx = i; break; }
     if (idx < 0) throw new Error('سجل غير موجود: ' + table + ' ' + id);
     var rec = t.rows[idx];
-    Object.keys(patch).forEach(function (f) { rec[f] = patch[f]; });
+    Object.keys(patch).forEach(function (f) { rec[f] = norm_(patch[f]); });
     sheet_(table).getRange(idx + 2, 1, 1, t.head.length).setValues([toRow_(t.head, rec)]);
+    bump_(table);
     return rec;
   }
 
@@ -147,10 +201,11 @@ var Db = (function () {
     var t = load_(table), sh = sheet_(table), n = 0;
     t.rows.forEach(function (rec, i) {
       if (!pred(rec)) return;
-      Object.keys(patch).forEach(function (f) { rec[f] = patch[f]; });
+      Object.keys(patch).forEach(function (f) { rec[f] = norm_(patch[f]); });
       sh.getRange(i + 2, 1, 1, t.head.length).setValues([toRow_(t.head, rec)]);
       n++;
     });
+    if (n) bump_(table);
     return n;
   }
 
@@ -158,7 +213,7 @@ var Db = (function () {
   function remove(table, id) {
     var t = load_(table), k = keyOf_(table);
     for (var i = 0; i < t.rows.length; i++) {
-      if (t.rows[i][k] === id) { sheet_(table).deleteRow(i + 2); t.rows.splice(i, 1); rowMemo[table] = {}; return true; }
+      if (t.rows[i][k] === id) { sheet_(table).deleteRow(i + 2); t.rows.splice(i, 1); rowMemo[table] = {}; bump_(table); return true; }
     }
     return false;
   }
@@ -186,7 +241,7 @@ var Db = (function () {
     return r ? r.value : '';
   }
 
-  function reset() { memo = {}; ssCache = null; rowMemo = {}; heads = {}; }
+  function reset() { memo = {}; ssCache = null; rowMemo = {}; heads = {}; vers = null; }
 
   /** يستبدل كل صفوف الجدول بعملية كتابة واحدة (للأرشفة) */
   function rewrite(table, rows) {
@@ -195,7 +250,8 @@ var Db = (function () {
     if (rows.length) sh.getRange(2, 1, rows.length, t.head.length).setValues(rows.map(function (r) { return toRow_(t.head, r); }));
     t.rows = rows.map(function (r) { return toObj_(t.head, toRow_(t.head, r).map(function (v) { return (typeof v === 'string' && v.charAt(0) === "'") ? v.slice(1) : v; })); });
     rowMemo[table] = {};
+    bump_(table);
   }
 
-  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, rewrite: rewrite, withLock: withLock, afterLock: afterLock, setting: setting, reset: reset };
+  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, rewrite: rewrite, withLock: withLock, afterLock: afterLock, setting: setting, reset: reset, refreshRef: refreshRef, locked: function () { return lockDepth > 0; } };
 })();

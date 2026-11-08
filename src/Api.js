@@ -138,6 +138,7 @@ function ensureSchemaVersion_() {
 }
 function upgradeSchema_() {
   ensureTables_(Db.ss());
+  Db.refreshRef();
   Db.reset();
   seedMissingLists_();
   Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
@@ -236,7 +237,12 @@ function apiConWebLogin(pin) {
     return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
   });
 }
-function conBoot_(s) {
+/** (ج) ردّ خفيف: الإجراءات المتكررة (تُعلن BOOT_LITE_) لا تعيد التقييمات والتذاكر وتقييم المؤسسة، فتدمجها الواجهة مع ما عندها */
+var BOOT_LITE_ = false;
+function bootLite_() { return BOOT_LITE_ && Db.locked(); }
+function conBoot_(s) { var b = conBoot_raw(s); if (bootLite_()) { Object.keys(b).forEach(function (k) { if (b[k] === undefined) delete b[k]; }); b.__lite = true; } return b; }
+function conBoot_raw(s) {
+  var LT = bootLite_();
   var con = Db.get('Contractors', s.id);
   var R = Orders.refs();
   var since = Date.now() - 60 * 864e5;
@@ -293,12 +299,12 @@ function conBoot_(s) {
     pest: con.type === 'pc' ? Ops.pestBoot(Object.keys(hotels)) : null,
     waste: con.type === 'wa' ? Ops.waVisits(Object.keys(hotels), Date.now() - 35 * 864e5) : null,
     water: con.type === 'wt' ? Water.conList(con.con_id) : null,
-    tickets: Tickets.forCon(con.con_id), org: Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
+    tickets: LT ? undefined : Tickets.forCon(con.con_id), org: LT ? undefined : Tickets.pendingOrg(con.con_id), tk: { types: Tickets.TYPES, topics: Tickets.TOPICS },
     claims: s.web ? { list: Pay.conList(con.con_id), open: Pay.claimable(con.con_id) } : null,
     pcReports: con.type === 'pc' ? Ops.reportsDue(con.con_id) : null,
     pcTeam: con.type === 'pc' ? { names: Ops.team(con.con_id), hasLead: !!String((Db.find('Contracts', function (c) { return c.con_id === con.con_id && c.type === 'pc'; }) || {}).lead_name || '').trim(), types: Ops.CASE_TYPES,
       msgs: Ops.pestMsgs(function (m) { return m.con_id === con.con_id; }) } : null,
-    evals: Ops.evalList(function (e) { return e.con_id === s.id; }),
+    evals: LT ? undefined : Ops.evalList(function (e) { return e.con_id === s.id; }),
     cas: Quality.list(R, function (c) { return c.con_id === s.id; }),
     me: { id: con.con_id, name: con.name, type: con.type, lang: con.lang || 'ar', lead: s.lead_name || '' },
     hotel: { id: s.hotel_id, name: here.name || (s.web ? 'كل الفنادق' : ''), brand: s.web ? '' : (here.brand || 'nawazi') },
@@ -321,7 +327,7 @@ function conBoot_(s) {
 function apiConBoot(token) { var s = Auth.need(token, ['contractor']); ensureSchemaVersion_(); return conBoot_(s); }
 
 /** action: submit | new | rescue */
-function apiConAct(token, action, woId, d) {
+function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () {
     d = d || {};
@@ -336,7 +342,7 @@ function apiConAct(token, action, woId, d) {
     if (action === 'arrive') {
       if (s.web) throw new Error('تسجيل الوصول من باركود أعوان في الفندق.');
       var arr = Orders.arrive(s.id, s.hotel_id, Array.isArray(d.ids) ? d.ids : null);
-      Kpi.touch(arr); Tg.refresh(arr); Db.reset();
+      Kpi.touch(arr); Tg.refresh(arr);
       return { result: { ids: arr, msg: 'سُجّل وصولك' }, boot: conBoot_(s) };
     }
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
@@ -346,7 +352,7 @@ function apiConAct(token, action, woId, d) {
     else throw new Error('إجراء غير معروف.');
     Kpi.touch([woId || res.id]);
     if (woId) Tg.refresh([woId]);
-    Db.reset();
+   
     return { result: res, boot: conBoot_(s) };
   });
 }
@@ -371,7 +377,9 @@ function scopeHotels_(s, R) {
   return Orders.csv((Db.get('Users', s.id) || {}).hotel_ids);
 }
 
-function engBoot_(s) {
+function engBoot_(s) { var b = engBoot_raw(s); if (bootLite_()) { Object.keys(b).forEach(function (k) { if (b[k] === undefined) delete b[k]; }); b.__lite = true; } return b; }
+function engBoot_raw(s) {
+  var LT = bootLite_();
   if (s.must) throw new Error('غيّر كلمة المرور المؤقتة أولاً.');
   var me = Db.get('Users', s.id);
   var R = Orders.refs();
@@ -402,9 +410,9 @@ function engBoot_(s) {
     cas: Quality.list(R, function (c) { return myHotels.indexOf(c.hotel_id) !== -1; }),
     notes: notesFor_(s, myHotels, 'maint'),
     water: Water.staffBoot(s, myHotels),
-    tickets: Tickets.visibleTo(s, myHotels),
-    org: Tickets.orgResults(myHotels),
-    evals: Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
+    tickets: LT ? undefined : Tickets.visibleTo(s, myHotels),
+    org: LT ? undefined : Tickets.orgResults(myHotels),
+    evals: LT ? undefined : Ops.evalList(function (e) { var hs = Orders.csv(e.hotel_ids); return (VIEW_ROLES.indexOf(s.role) !== -1 || s.role === 'admin' || ['ac', 'el', 'sf'].indexOf(e.type) !== -1) && hs.some(function (h) { return myHotels.indexOf(h) !== -1; }); }),
     stats: {
       decidedToday: orders.filter(function (o) { return dayOf(o.decided) === today; }).length,
       closedToday: orders.filter(function (o) { return o.status === 'closed' && dayOf(o.closed) === today; }).length
@@ -419,7 +427,7 @@ function apiEngBoot(token) {
   return engBoot_(s);
 }
 
-function apiEngAct(token, woId, action, d) {
+function apiEngAct(token, woId, action, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['admin', 'engineer']);
   return Db.withLock(function () {
     d = d || {};
@@ -436,7 +444,6 @@ function apiEngAct(token, woId, action, d) {
         if (m) { Mail.send(m, me.email, o.hotel_id, me); mailed = m.to; } else mailed = 'none';
       } catch (e) { mailed = 'fail'; }
     }
-    Db.reset();
     return { to: to, mailed: mailed, created: d.created || '', boot: engBoot_(s) };
   });
 }
@@ -1255,7 +1262,9 @@ function createAdminPrompt() {
 // ───────── الإشراف: مدير الإشراف والمشرف الميداني ─────────
 var SUP_ROLES_ = ['supmgr', 'sup'];
 
-function supBoot_(s) {
+function supBoot_(s) { var b = supBoot_raw(s); if (bootLite_()) { Object.keys(b).forEach(function (k) { if (b[k] === undefined) delete b[k]; }); b.__lite = true; } return b; }
+function supBoot_raw(s) {
+  var LT = bootLite_();
   var me = Db.get('Users', s.id) || {};
   var hs = Ops.supHotels(s), R = Orders.refs();
   var conOf = function (h, t) { var c = Orders.activeContract(h, t); return c ? { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '', perWeek: Number(c.wa_per_week) || 0, start: Orders.ms(c.start) || 0 } : null; };
@@ -1280,12 +1289,12 @@ function supBoot_(s) {
     canReject: ['supmgr', 'admin'].indexOf(s.role) !== -1,
     cas: Quality.list(R, function (c) { return c.log_id && hs.indexOf(c.hotel_id) !== -1; }),
     pestTech: Ops.pestMsgs(function (m) { return m.kind === 'tech' && hs.indexOf(m.hotel_id) !== -1; }),
-    tickets: s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : [],
-    org: s.role === 'supmgr' ? Tickets.orgResults(hs) : null,
+    tickets: LT ? undefined : (s.role === 'supmgr' ? Tickets.visibleTo(s, hs) : []),
+    org: LT ? undefined : (s.role === 'supmgr' ? Tickets.orgResults(hs) : null),
     rates: ['supmgr', 'admin'].indexOf(s.role) !== -1 ? Ops.ratesDue(hs) : null,
     canFlag: ['admin', 'gm', 'duty', 'fo'].indexOf(s.role) !== -1,
     cons: cons,
-    evals: Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
+    evals: LT ? undefined : Ops.evalList(function (e) { return (e.type === 'wa' || e.type === 'pc') && Orders.csv(e.hotel_ids).some(function (h) { return hs.indexOf(h) !== -1; }); }),
     lists: { pest: L.pest, material: L.material, ftype: L.ftype },
     webUrl: webUrl_(),
     i18n: i18nPairs_()
@@ -1351,6 +1360,7 @@ function apiSupSetPin(username, pin) {
 }
 
 function sup_(token, roles, fn) {
+  BOOT_LITE_ = true;
   var s = Auth.need(token, roles || SUP_ROLES_);
   return Db.withLock(function () { var out = fn(s) || {}; Db.reset(); out.boot = supBoot_(s); return out; });
 }
@@ -1388,11 +1398,11 @@ function apiSupAddZone(token, hotelId, floorId, name, ftype) {
 }
 
 // ───────── المتعهد: المكافحة ─────────
-function apiPestLog(token, d) {
+function apiPestLog(token, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'PL'); var r = Ops.log(s, d); Db.reset(); return { result: r, boot: conBoot_(s) }; });
 }
-function apiPestTrap(token, action, d) {
+function apiPestTrap(token, action, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
   return Db.withLock(function () { var r = Ops.trap(s, action, d || {}); Db.reset(); return { result: r, boot: conBoot_(s) }; });
 }

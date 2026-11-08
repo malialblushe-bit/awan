@@ -127,8 +127,8 @@ const ctx = {
     getRootFolder: () => rootFolder,
     Access: { ANYONE_WITH_LINK: 'A' }, Permission: { VIEW: 'V' }
   },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; }, deleteProperty: k => { delete props[k]; } }) },
-  CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, getProperties: () => Object.assign({}, props), setProperty: (k, v) => { props[k] = String(v); }, deleteProperty: k => { delete props[k]; } }) },
+  CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, getAll: ks => { const o = {}; ks.forEach(k => { if (cache[k] != null) o[k] = cache[k]; }); return o; }, put: (k, v) => { cache[k] = v; }, putAll: m => { Object.assign(cache, m); }, remove: k => { delete cache[k]; } }) },
   Utilities: {
     DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
     computeDigest: (a, d) => Array.from(require('crypto').createHash('sha256').update(String(d), 'utf8').digest()),
@@ -1339,11 +1339,23 @@ t('تكرار الدور الخدمي: نسخ بأسماء مراجَعة ومر
   eq(run(`Db.all('Rooms').filter(r => r.floor_id === '${f2}').map(r => r.number + ':' + (r.ftype || '')).sort().join('|')`), 'غرفة الكهرباء:غرف الخدمات|مخزن جديد:');
 });
 
+t('السرعة: الجداول المرجعية من الذاكرة المؤقتة وتتجدد بكل كتابة، والإجراءات المتكررة ترد رداً خفيفاً', () => {
+  run('Db.reset()'); const h0 = run(`Db.get('Hotels', '${HID}').name`);
+  run('Db.reset()'); eq(run(`Db.get('Hotels', '${HID}').name`), h0);           // من الذاكرة المؤقتة
+  run(`Db.update('Hotels', '${HID}', { city: 'مكة المكرمة' })`);
+  run('Db.reset()'); eq(run(`Db.get('Hotels', '${HID}').city`), 'مكة المكرمة');   // الكتابة جددت الإصدار
+  // التاريخ يعود تاريخاً من الذاكرة المؤقتة
+  run('Db.reset()'); eq(run(`Db.all('Contracts')[0].start instanceof Date`), true);
+  // الإجراء المتكرر: رد خفيف بلا التقييمات والتذاكر، والدخول كامل
+  const tk = run(`apiConLogin('WARIF2', '${acPin}')`); if (!('evals' in tk.boot)) throw new Error('login lite');
+  const r = run(`apiConAct('${tk.token}', 'arrive', null, { ids: [] })`); eq(r.boot.__lite, true); eq('evals' in r.boot, false);
+});
+
 t('سجل البطء: كل دالة api ملفوفة بالقياس، والعملية البطيئة تُسجَّل بانتظار القفل والقراءات، وتظهر في الجرد', () => {
   eq(!!run('apiEngBoot.__perf'), true);
-  run('PERF_SLOW_MS = 0'); run(`apiEngBoot('${engTok}')`); run('PERF_SLOW_MS = 4000');
+  run('PERF_SLOW_MS = 0'); run('Db.reset()'); run(`apiEngBoot('${engTok}')`); run('PERF_SLOW_MS = 4000');
   const log = JSON.parse(run(`PropertiesService.getScriptProperties().getProperty('PERF_LOG')`));
-  const x = log[log.length - 1]; eq(x.fn, 'apiEngBoot'); if (!(x.reads > 5)) throw new Error('reads ' + x.reads);
+  const x = log[log.length - 1]; eq(x.fn, 'apiEngBoot'); if (typeof x.reads !== 'number' || typeof x.wait !== 'number') throw new Error('fields');
   eq(run(`apiAdmLaunchInventory('${adminTok}')`).perf[0].fn, 'apiEngBoot');
 });
 

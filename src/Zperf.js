@@ -6,14 +6,14 @@
  */
 var PERF_SLOW_MS = 4000;
 var Perf = { t0: 0, wait: 0, reads: 0, readMs: 0, net: 0, netMs: 0, tables: {} };
-function perfReset_() { Perf.t0 = Date.now(); Perf.wait = 0; Perf.reads = 0; Perf.readMs = 0; Perf.net = 0; Perf.netMs = 0; Perf.tables = {}; }
+function perfReset_() { if (typeof BOOT_LITE_ !== 'undefined') BOOT_LITE_ = false; Perf.t0 = Date.now(); Perf.wait = 0; Perf.reads = 0; Perf.readMs = 0; Perf.net = 0; Perf.netMs = 0; Perf.tables = {}; Perf.cached = 0; }
 function perfLog_(fn, ms) {
   try {
     var P = PropertiesService.getScriptProperties(), a = [];
     try { a = JSON.parse(P.getProperty('PERF_LOG') || '[]'); } catch (e) { a = []; }
     var top = Object.keys(Perf.tables).sort(function (x, y) { return Perf.tables[y] - Perf.tables[x]; }).slice(0, 4)
       .map(function (k) { return k + ' ' + Perf.tables[k]; }).join(' · ');
-    a.push({ fn: fn, at: Date.now(), ms: ms, wait: Perf.wait, reads: Perf.reads, readMs: Perf.readMs, net: Perf.net, netMs: Perf.netMs, top: top });
+    a.push({ fn: fn, at: Date.now(), ms: ms, wait: Perf.wait, reads: Perf.reads, cached: Perf.cached || 0, readMs: Perf.readMs, net: Perf.net, netMs: Perf.netMs, top: top });
     P.setProperty('PERF_LOG', JSON.stringify(a.slice(-40)));
   } catch (e) { /* القياس لا يعطل العمل */ }
 }

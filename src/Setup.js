@@ -27,12 +27,14 @@ function setupAwan() {
   seedIfEmpty_('Thresholds', SEED_THRESHOLDS.map(function (r) { return { type: r[0], kpi: r[1], full: r[2], half: r[3], weight: r[4] }; }));
   seedIfEmpty_('Lists', SEED_LISTS.map(function (r, i) { return { type: r[0], list: r[1], ar: r[2], en: r[3], status: 'active', created_by: 'system', sort: i + 1 }; }));
   ensurePhotosFolder_(ss);
+  Db.refreshRef();
 
   return done_('تم إعداد أعوان', report);
 }
 
 function syncSchema() {
   var report = ensureTables_(Db.ss());
+  Db.refreshRef();
   return done_('تمت مزامنة الهيكل', report);
 }
 
