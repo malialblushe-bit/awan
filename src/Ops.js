@@ -360,7 +360,7 @@ var Ops = (function () {
     if (d.kind === 'infest' && !(d.pests || []).length) throw new Error('اختر الآفة.');
     var me = Db.get('Users', s.id) || {};
     var src = Auth.isSup(s.role) ? 'sup' : 'staff';
-    if (src === 'staff' && d.kind !== 'infest') throw new Error('اختر الآفة.');
+    if (d.kind === 'ready') d.pests = [];
     var recs = zones.map(function (z) {
       zoneOf_(d.hotel_id, z);
       return { hotel_id: d.hotel_id, zone: z, kind: d.kind, pests: (d.pests || []).join(','), note: String(d.note || '').trim(), photos: (d.photos || []).join(','),

@@ -189,7 +189,7 @@ function apiReqPest(code, d) {
 /** مشرف النظام ومدير الفندق والمناوب: «طلب مكافحة» من الخدمات المساندة */
 function apiSvcPestFlag(token, d) {
   var s = Auth.need(token, ['admin', 'gm', 'duty', 'fo']);
-  return Db.withLock(function () { d = d || {}; d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF'); var n = Ops.flag(s, d); Db.reset(); return { n: n, boot: supBoot_(s) }; });
+  return Db.withLock(function () { d = d || {}; if (d.kind !== 'ready') d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF'); var n = Ops.flag(s, d); Db.reset(); return { n: n, boot: supBoot_(s) }; });
 }
 
 function apiReqSubmit(code, d) {

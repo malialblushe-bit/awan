@@ -1058,6 +1058,10 @@ t('بلاغ المكافحة: من باركود الطلبات للجميع، و
   throws(`apiSvcPestFlag('${engTok}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`, 'صلاحية');
   const r = run(`apiSvcPestFlag('${gm}', { hotel_id: '${HID}', zone: '${z}', pests: ['نمل'] })`);
   const f2 = r.boot.pest.flags.find(f => f.zone === z && f.status === 'open'); eq(f2.src, 'staff'); eq(f2.kind, 'infest');
+  // الإتاحة للرش من الفريق: بلا آفة، وتظهر «متاحة» لا «إصابة»
+  const z2 = run(`Db.find('Rooms', r => r.hotel_id === '${HID}' && String(r.number) === '707').room_id`);
+  const r2 = run(`apiSvcPestFlag('${gm}', { hotel_id: '${HID}', zone: '${z2}', kind: 'ready', pests: ['نمل'] })`);
+  const f3 = r2.boot.pest.flags.find(f => f.zone === z2 && f.status === 'open'); eq(f3.kind, 'ready'); eq(f3.pests.length, 0);
 });
 
 t('الممرات: لكل دور غرف ممر تلقائي يظهر في خريطة المكافحة بنوع الممرات، والأدوار بأبراجها', () => {
