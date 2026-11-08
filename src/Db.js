@@ -32,9 +32,10 @@ var Db = (function () {
 
   function load_(table) {
     if (memo[table]) return memo[table];
-    var sh = sheet_(table);
+    var t0 = Date.now(), sh = sheet_(table);
     var lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
     var values = lastRow ? sh.getRange(1, 1, lastRow, Math.max(lastCol, 1)).getValues() : [[]];
+    if (typeof Perf !== 'undefined') { var dt = Date.now() - t0; Perf.reads++; Perf.readMs += dt; Perf.tables[table] = (Perf.tables[table] || 0) + dt; }
     var head = values[0].map(String);
     var rows = values.slice(1).map(function (v) { return toObj_(head, v); });
     memo[table] = { head: head, rows: rows };
@@ -164,12 +165,20 @@ var Db = (function () {
 
   var lockDepth = 0;
   /** قفل واحد للكتابة؛ متداخل بأمان داخل نفس التنفيذ */
+  var afterQ = [];
+  /** ينفّذ fn بعد فك القفل الحالي (أو فوراً إن لم يكن قفل) */
+  function afterLock(fn) { if (lockDepth > 0) afterQ.push(fn); else fn(); }
   function withLock(fn) {
     if (lockDepth > 0) return fn();
-    var lock = LockService.getScriptLock();
+    var lock = LockService.getScriptLock(), w0 = Date.now();
     if (!lock.tryLock(20000)) throw new Error('النظام مشغول لحظياً، حاول مرة أخرى.');
+    if (typeof Perf !== 'undefined') Perf.wait += Date.now() - w0;
     lockDepth++;
-    try { return fn(); } finally { lockDepth--; lock.releaseLock(); }
+    try { return fn(); } finally {
+      lockDepth--; lock.releaseLock();
+      // الاتصالات الخارجية (تيليجرام) بعد فك القفل، حتى لا ينتظر بقية المستخدمين ردّ تيليجرام
+      var q = afterQ; afterQ = []; q.forEach(function (cb) { try { cb(); } catch (e) { } });
+    }
   }
 
   function setting(key) {
@@ -188,5 +197,5 @@ var Db = (function () {
     rowMemo[table] = {};
   }
 
-  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, rewrite: rewrite, withLock: withLock, setting: setting, reset: reset };
+  return { ss: ss, all: all, find: find, get: get, insert: insert, insertMany: insertMany, update: update, updateWhere: updateWhere, remove: remove, rewrite: rewrite, withLock: withLock, afterLock: afterLock, setting: setting, reset: reset };
 })();

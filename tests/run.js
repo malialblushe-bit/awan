@@ -1339,6 +1339,14 @@ t('تكرار الدور الخدمي: نسخ بأسماء مراجَعة ومر
   eq(run(`Db.all('Rooms').filter(r => r.floor_id === '${f2}').map(r => r.number + ':' + (r.ftype || '')).sort().join('|')`), 'غرفة الكهرباء:غرف الخدمات|مخزن جديد:');
 });
 
+t('سجل البطء: كل دالة api ملفوفة بالقياس، والعملية البطيئة تُسجَّل بانتظار القفل والقراءات، وتظهر في الجرد', () => {
+  eq(!!run('apiEngBoot.__perf'), true);
+  run('PERF_SLOW_MS = 0'); run(`apiEngBoot('${engTok}')`); run('PERF_SLOW_MS = 4000');
+  const log = JSON.parse(run(`PropertiesService.getScriptProperties().getProperty('PERF_LOG')`));
+  const x = log[log.length - 1]; eq(x.fn, 'apiEngBoot'); if (!(x.reads > 5)) throw new Error('reads ' + x.reads);
+  eq(run(`apiAdmLaunchInventory('${adminTok}')`).perf[0].fn, 'apiEngBoot');
+});
+
 t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد والفندق والجداول، والمعاينة قبل المسح، ولا يُمس ما خارج النطاق', () => {
   const wo0 = run("Db.all('WorkOrders').length"), wt0 = run("Db.all('WaterLoads').length");
   const p1 = run(`apiAdmLaunchPlan('${adminTok}', { types: ['wt'] })`);

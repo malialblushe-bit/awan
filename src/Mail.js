@@ -173,7 +173,8 @@ var Mail = (function () {
       m = Object.assign({}, m, { cc: cc.join(',') }); replyTo = from + (acct ? ', ' + acct : '');
     }
     var raw = Utilities.base64EncodeWebSafe(Utilities.newBlob(mime_(m, from, replyTo || m.cc || '')).getBytes());
-    try { Gmail.Users.Messages.send({ raw: raw }, 'me'); }
+    var n0 = Date.now();
+    try { Gmail.Users.Messages.send({ raw: raw }, 'me'); if (typeof Perf !== 'undefined') { Perf.net++; Perf.netMs += Date.now() - n0; } }
     catch (e) {
       var msg = String(e && e.message || e);
       if (/auth|permission|scope|not defined|insufficient/i.test(msg)) throw new Error('إرسال البريد غير مفعّل بعد: شغّل الدالة authorizeAwan مرة واحدة من محرر السكربت بحساب الصيانة ووافق على الأذونات، ثم أعد المحاولة.');

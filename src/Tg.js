@@ -14,9 +14,11 @@ var Tg = (function () {
   function api_(method, payload) {
     var t = token_();
     if (!t) return null;
+    var n0 = Date.now();
     var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + t + '/' + method, {
       method: 'post', contentType: 'application/json', payload: JSON.stringify(payload || {}), muteHttpExceptions: true
     });
+    if (typeof Perf !== 'undefined') { Perf.net++; Perf.netMs += Date.now() - n0; }
     var j = {};
     try { j = JSON.parse(res.getContentText()); } catch (e) { j = { ok: false }; }
     return j;
@@ -64,7 +66,8 @@ var Tg = (function () {
   }
 
   /** ينشر طلب التكييف الجديد في مجموعة فندقه */
-  function post(woId) {
+  function post(woId) { Db.afterLock(function () { post_(woId); }); return true; }
+  function post_(woId) {
     try {
       if (!on()) return false;
       var o = Db.get('WorkOrders', woId);
@@ -91,7 +94,8 @@ var Tg = (function () {
   function due() { var now = Date.now(); return pend_().some(function (x) { return x.due <= now; }); }
 
   /** يحدّث رسالة الطلب بحالته */
-  function refresh(woIds) {
+  function refresh(woIds) { if (!on()) return 0; Db.afterLock(function () { refresh_(woIds); }); return (woIds || []).length; }
+  function refresh_(woIds) {
     if (!on()) return 0;
     var n = 0;
     (woIds || []).forEach(function (id) {
@@ -205,7 +209,7 @@ var Tg = (function () {
   }
   /** نشر طلبات التكييف المفتوحة لهذا الفندق التي لم تصل للمجموعة */
   function missing(hotelId) { return Db.all('WorkOrders', function (o) { return o.hotel_id === hotelId && o.type === 'ac' && !o.tg_msg && Orders.OPEN.indexOf(o.status) !== -1; }); }
-  function repost(hotelId) { var n = 0; missing(hotelId).forEach(function (o) { if (post(o.wo_id)) n++; }); return n; }
+  function repost(hotelId) { var n = 0; missing(hotelId).forEach(function (o) { if (post_(o.wo_id)) n++; }); return n; }
 
   return { on: on, post: post, refresh: refresh, poll: poll, fetch: fetch, due: due, setup: setup, bot: bot, newCode: newCode, text: text_, test: test, missing: missing, repost: repost, lastErr: lastErr };
 })();
