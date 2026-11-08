@@ -709,7 +709,8 @@ function admBoot_() {
     }),
     users: Db.all('Users').map(function (u) {
       return { id: u.user_id, name: u.name, role: u.role, username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
-        pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null };
+        pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null,
+        pending: credPending_(u), sentAt: u.sent_at ? new Date(u.sent_at).getTime() : null };
     }),
     pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
     lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
@@ -1081,6 +1082,7 @@ function apiAdmSaveContract(token, d) {
       conId = c.con_id;
       pin = Auth.setPin(conId);
     }
+    var leadNm = (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : '';
     var ctr = Db.insert('Contracts', {
       con_id: conId, type: d.type, hotel_ids: d.hotel_ids.join(','), elevator_ids: (d.elevator_ids || []).join(','),
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
@@ -1089,8 +1091,10 @@ function apiAdmSaveContract(token, d) {
       lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : '',
       measure_from: /^\d{4}-\d{2}-\d{2}$/.test(String(d.measure_from || '')) ? d.measure_from : ''
     });
-    var leadPin = ((d.type === 'el' || d.type === 'pc') && String(d.lead_name || '').trim()) ? Auth.setLeadPin(ctr.contract_id) : null;
-    return { pin: pin, leadPin: leadPin };
+    var leadPin = leadNm ? Auth.setLeadPin(ctr.contract_id) : null;
+    var out = { pin: pin, leadPin: leadPin };
+    if (pin || leadPin) Object.assign(out, conMail_(conId, { pin: pin, leadPin: leadPin, leadName: leadNm }));
+    return out;
   });
 }
 
@@ -1102,19 +1106,73 @@ function apiAdmLeadPin(token, contractId, name) {
     name = String(name || c.lead_name || '').trim();
     if (!name) throw new Error('اكتب اسم قائد الفريق.');
     Db.update('Contracts', contractId, { lead_name: name });
-    return { pin: Auth.setLeadPin(contractId), name: name };
+    var lp = Auth.setLeadPin(contractId);
+    return Object.assign({ pin: lp, name: name }, conMail_(c.con_id, { leadPin: lp, leadName: name }));
   });
 }
 
 function apiAdmResetPin(token, conId) {
-  return adm_(token, function () { return { pin: Auth.setPin(conId) }; });
+  return adm_(token, function () { var p = Auth.setPin(conId); return Object.assign({ pin: p }, conMail_(conId, { pin: p })); });
+}
+
+/** يرسل أرقام المتعهد لبريده المسجل (إدارة المتعهد)، والرقم يظهر لمشرف النظام كذلك */
+function conMail_(conId, p) {
+  var c = Db.get('Contractors', conId) || {}, to = emails_(c.emails);
+  if (!to.length) return {};
+  try {
+    Mail.send(Mail.creds('con', { to: to.join(','), name: c.name, pin: p.pin, leadPin: p.leadPin, leadName: p.leadName, url: webUrl_() }), '', '', null);
+    Db.update('Contractors', conId, { pin_sent_at: new Date() });
+    return { mailTo: to.join('، ') };
+  } catch (e) { return { mailErr: String(e && e.message || e) }; }
+}
+
+/** رسالة بيانات الدخول لمستخدم: الموظف بكلمة مؤقتة جديدة، والإشراف بخطوات اختيار رقمه */
+function userCredMsg_(u, pw) {
+  var sup = Auth.isSup(u.role);
+  return Mail.creds(sup ? 'sup' : 'staff', { to: String(u.email).trim(), name: u.name, role: u.role, login: String(u.email || u.username).trim(), password: pw, url: webUrl_() });
+}
+
+/** إرسال بيانات الدخول بالبريد: ids قائمة، أو 'pending' لكل من له بريد ولم يدخل بعد. البريد يُرسل بعد فك القفل */
+function apiAdmSendCreds(token, ids) {
+  Auth.need(token, ['admin']);
+  ensureSchemaVersion_();
+  var jobs = Db.withLock(function () {
+    var us = ids === 'pending' ? Db.all('Users', function (u) { return credPending_(u); }) : (ids || []).map(function (id) { return Db.get('Users', id); }).filter(Boolean);
+    return us.map(function (u) {
+      if (!String(u.email || '').trim()) return { id: u.user_id, name: u.name, err: 'لا بريد مسجل.' };
+      if (String(u.active).toUpperCase() === 'FALSE') return { id: u.user_id, name: u.name, err: 'الحساب موقوف.' };
+      if (Auth.isSup(u.role)) {
+        if (Auth.pinSet(u)) return { id: u.user_id, name: u.name, err: 'اختار رقمه السري من قبل. لإعادة التعيين استخدم «إعادة تعيين الرقم السري».' };
+        return { id: u.user_id, name: u.name, msg: userCredMsg_(u, '') };
+      }
+      return { id: u.user_id, name: u.name, msg: userCredMsg_(u, Auth.resetUser(u.user_id)) };
+    });
+  });
+  var sent = [], failed = [];
+  jobs.forEach(function (j) {
+    if (j.err) return failed.push({ name: j.name, err: j.err });
+    try { Mail.send(j.msg, '', '', null); sent.push(j); } catch (e) { failed.push({ name: j.name, err: String(e && e.message || e) }); }
+  });
+  return Db.withLock(function () {
+    var t = new Date(); sent.forEach(function (j) { Db.update('Users', j.id, { sent_at: t }); });
+    Db.reset();
+    return { sent: sent.map(function (j) { return j.name; }), failed: failed, boot: admBoot_() };
+  });
+}
+/** لم يدخل بعد: له بريد، نشط، والموظف لم يغيّر كلمته المؤقتة، والمشرف لم يختر رقمه */
+function credPending_(u) {
+  if (!String(u.email || '').trim() || String(u.active).toUpperCase() === 'FALSE') return false;
+  return Auth.isSup(u.role) ? !Auth.pinSet(u) : Orders.truthy(u.must_change);
 }
 
 function apiAdmAddUser(token, d) {
   return adm_(token, function () {
     if (!String(d.name || '').trim()) throw new Error('اكتب الاسم.');
     var r = Auth.createUser(d.name, d.role, d.username, emails_(d.email)[0] || '', (d.hotel_ids || []).join(','));
-    return { password: r.password };
+    if (!r.user.email) return { password: r.password, sup: !r.password };
+    // له بريد: تُرسل بيانات الدخول له، ولا تظهر كلمة المرور على الشاشة إلا إن تعذّر الإرسال
+    try { Mail.send(userCredMsg_(r.user, r.password), '', '', null); Db.update('Users', r.user.user_id, { sent_at: new Date() }); return { mailTo: r.user.email, sup: !r.password }; }
+    catch (e) { return { password: r.password, sup: !r.password, mailErr: String(e && e.message || e) }; }
   });
 }
 
@@ -1123,6 +1181,7 @@ function apiAdmSaveUserEmail(token, userId, email) {
     if (!Db.get('Users', userId)) throw new Error('المستخدم غير موجود.');
     var e = emails_(email);
     if (e.length > 1) throw new Error('بريد واحد للمستخدم.');
+    if (Auth.emailTaken(e[0], userId)) throw new Error('البريد مسجل لمستخدم آخر.');
     Db.update('Users', userId, { email: e[0] || '' });
     return {};
   });

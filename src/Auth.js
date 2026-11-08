@@ -156,7 +156,7 @@ var Auth = (function () {
     var u = String(username || '').trim().toLowerCase();
     pin = String(pin || '').trim();
     guard_('sps_' + u);
-    var user = Db.find('Users', function (r) { return String(r.username).toLowerCase() === u && isSup(r.role); });
+    var user = byLogin_(u, function (r) { return isSup(r.role); });
     if (!user || String(user.active).toUpperCase() === 'FALSE') { fail_('sps_' + u); throw new Error('اسم الدخول غير معرّف للإشراف. راجع مشرف النظام.'); }
     if (pinSet_(user)) throw new Error('رقمك السري محدد من قبل. ادخل به، أو اطلب من مشرف النظام إعادة تعيينه إن نسيته.');
     if (!/^\d{6}$/.test(pin)) throw new Error('الرقم السري 6 أرقام.');
@@ -205,17 +205,33 @@ var Auth = (function () {
   }
 
   // ───────── الموظفون ─────────
+  var TEMP_HOURS = 72;
+  function tempUntil_() { return new Date(Date.now() + TEMP_HOURS * 36e5); }
+  /** اسم الدخول أو البريد (لا فرق بين الأحرف الكبيرة والصغيرة) */
+  function byLogin_(u, filter) {
+    u = String(u || '').trim().toLowerCase();
+    if (!u) return null;
+    return Db.find('Users', function (r) { return (String(r.username).toLowerCase() === u || String(r.email || '').trim().toLowerCase() === u) && (!filter || filter(r)); });
+  }
+  function emailTaken(email, exceptId) {
+    var e = String(email || '').trim().toLowerCase();
+    if (!e) return false;
+    return !!Db.find('Users', function (r) { return r.user_id !== exceptId && (String(r.email || '').trim().toLowerCase() === e || String(r.username).toLowerCase() === e); });
+  }
   function staffLogin(username, password) {
     var u = String(username || '').trim().toLowerCase();
     if (!u || !password) throw new Error('اكتب اسم الدخول وكلمة المرور.');
     guard_('usr_' + u);
-    var user = Db.find('Users', function (r) { return String(r.username).toLowerCase() === u; });
+    var user = byLogin_(u);
     if (!user || String(user.active).toUpperCase() === 'FALSE' || hash(String(password), user.salt) !== user.secret_hash) {
       fail_('usr_' + u);
       throw new Error('اسم الدخول أو كلمة المرور غير صحيح.');
     }
     clear_('usr_' + u);
     var must = user.must_change === true || String(user.must_change).toUpperCase() === 'TRUE';
+    // كلمة المرور المؤقتة صالحة 72 ساعة من إصدارها
+    var tu = user.temp_until ? new Date(user.temp_until).getTime() : 0;
+    if (must && tu && tu < Date.now()) throw new Error('انتهت صلاحية كلمة المرور المؤقتة (72 ساعة). اطلب من مشرف النظام إرسالها من جديد.');
     return { token: newSession_({ role: user.role, id: user.user_id, must: must }), user: user, must: must };
   }
 
@@ -225,7 +241,7 @@ var Auth = (function () {
     var err = validPassword(newPw);
     if (err) throw new Error(err);
     var st = salt_();
-    Db.update('Users', s.id, { secret_hash: hash(String(newPw), st), salt: st, must_change: false });
+    Db.update('Users', s.id, { secret_hash: hash(String(newPw), st), salt: st, must_change: false, temp_until: '' });
     s.must = false;
     cache_().put('S_' + token, JSON.stringify(s), SESSION_SEC);
     return true;
@@ -234,8 +250,12 @@ var Auth = (function () {
   /** ينشئ مستخدماً ويعيد كلمة مرور مؤقتة تظهر مرة واحدة */
   function createUser(name, role, username, email, hotelIds) {
     var u = String(username || '').trim().toLowerCase();
-    if (!/^[a-z0-9._-]{3,30}$/.test(u)) throw new Error('اسم الدخول بالإنجليزية بلا مسافات (3 أحرف على الأقل)، مثل: eng.ahmed');
-    if (Db.find('Users', function (r) { return String(r.username).toLowerCase() === u; })) throw new Error('اسم الدخول مستخدم من قبل.');
+    email = String(email || '').trim().toLowerCase();
+    if (!u) u = email; // البريد نفسه اسماً للدخول
+    if (!u) throw new Error('اكتب البريد أو اسم الدخول.');
+    if (!/^[a-z0-9._-]{3,30}$/.test(u) && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(u)) throw new Error('اسم الدخول بالإنجليزية بلا مسافات (3 أحرف على الأقل) مثل eng.ahmed، أو بريد.');
+    if (Db.find('Users', function (r) { return String(r.username).toLowerCase() === u || String(r.email || '').trim().toLowerCase() === u; })) throw new Error('اسم الدخول مستخدم من قبل.');
+    if (emailTaken(email, '')) throw new Error('البريد مسجل لمستخدم آخر.');
     if (['admin', 'engineer', 'management', 'gm', 'om', 'duty', 'fo', 'supmgr', 'sup', 'fin'].indexOf(role) === -1) throw new Error('دور غير معروف.');
     if (isSup(role)) {
       // الإشراف بلا كلمة مرور: يختار رقمه السري عند أول دخول
@@ -245,7 +265,7 @@ var Auth = (function () {
     var pw = tempPassword_(), st = salt_();
     var rec = Db.insert('Users', {
       name: String(name || '').trim(), role: role, username: u, email: email || '', hotel_ids: hotelIds || '',
-      secret_hash: hash(pw, st), salt: st, must_change: true, failed: 0, lang: 'ar', active: true
+      secret_hash: hash(pw, st), salt: st, must_change: true, failed: 0, lang: 'ar', active: true, temp_until: tempUntil_()
     });
     return { user: rec, password: pw };
   }
@@ -254,14 +274,14 @@ var Auth = (function () {
     var usr = Db.get('Users', userId);
     if (usr && isSup(usr.role)) { Db.update('Users', userId, { secret_hash: '', salt: '', must_change: true }); return null; }
     var pw = tempPassword_(), st = salt_();
-    Db.update('Users', userId, { secret_hash: hash(pw, st), salt: st, must_change: true });
+    Db.update('Users', userId, { secret_hash: hash(pw, st), salt: st, must_change: true, temp_until: tempUntil_() });
     return pw;
   }
 
   return {
     hash: hash, validPassword: validPassword, session: session, need: need, logout: logout,
     conLogin: conLogin, conWebLogin: conWebLogin, setPin: setPin, setLeadPin: setLeadPin, staffLogin: staffLogin, changePassword: changePassword,
-    createUser: createUser, resetUser: resetUser,
+    createUser: createUser, resetUser: resetUser, emailTaken: emailTaken, pinSet: pinSet_,
     isSup: isSup, pinTaken: pinTaken, supSetPin: supSetPin, supLogin: supLogin, pinWebLogin: pinWebLogin
   };
 })();

@@ -1375,6 +1375,36 @@ t('سجل البطء: كل دالة api ملفوفة بالقياس، والعم
   eq(run(`apiAdmLaunchInventory('${adminTok}')`).perf[0].fn, 'apiEngBoot');
 });
 
+t('الدخول بالبريد وإرسال بيانات الدخول: كلمة مؤقتة 72 ساعة بالبريد، والجماعي لمن لم يدخل، والمتعهد يصله رقمه', () => {
+  const n0 = sentMail.length;
+  const r = run(`apiAdmAddUser('${adminTok}', { name: 'م. سالم', role: 'gm', username: '', email: 'Salem@Warf.sa', hotel_ids: [] })`);
+  eq(r.password, undefined); eq(r.mailTo, 'salem@warf.sa'); eq(sentMail.length, n0 + 1);
+  const m = sentMail[n0].to; eq(m.to, 'salem@warf.sa'); eq(m.cc || '', ''); // بلا نسخة لحساب الصيانة
+  const pw = (m.html.match(/font-family:Consolas,Menlo,monospace">([A-Za-z]{5}\d{4})</) || [])[1]; if (!pw) throw new Error('no password in mail');
+  const lg = run(`apiStaffLogin('SALEM@warf.sa', '${pw}')`); eq(lg.must, true);
+  throws(`apiAdmAddUser('${adminTok}', { name: 'آخر', role: 'gm', email: 'salem@warf.sa', hotel_ids: [] })`, 'مستخدم');
+  // انتهاء الصلاحية بعد 72 ساعة
+  run(`Db.update('Users', Db.find('Users', u => u.email === 'salem@warf.sa').user_id, { temp_until: new Date(Date.now() - 1000) })`);
+  throws(`apiStaffLogin('salem@warf.sa', '${pw}')`, '72');
+  // الجماعي: يشمل من لم يدخل (ومشرف بلا رقم)، ولا يمس من غيّر كلمته
+  run(`apiAdmAddUser('${adminTok}', { name: 'مشرف بريد', role: 'sup', email: 'sup.mail@warf.sa', hotel_ids: [] })`);
+  const before = sentMail.length;
+  const b = run(`apiAdmSendCreds('${adminTok}', 'pending')`);
+  if (b.sent.indexOf('م. سالم') === -1 || b.sent.indexOf('مشرف بريد') === -1) throw new Error('bulk missing ' + JSON.stringify(b));
+  eq(sentMail.length, before + b.sent.length);
+  const pw2 = (sentMail.slice(before).find(x => x.to.to === 'salem@warf.sa').to.html.match(/monospace">([A-Za-z]{5}\d{4})</) || [])[1];
+  const tk = run(`apiStaffLogin('salem@warf.sa', '${pw2}')`).token; run(`apiChangePassword('${tk}', 'Salem2026x')`);
+  eq(run(`apiAdmSendCreds('${adminTok}', 'pending')`).sent.indexOf('م. سالم'), -1);
+  // المشرف يختار رقمه بالبريد
+  run(`apiSupSetPin('sup.mail@warf.sa', '739104')`);
+  // المتعهد: رقم جديد يُرسل لبريده المسجل
+  const con = run(`Db.find('Contractors', c => c.type === 'ac')`);
+  run(`Db.update('Contractors', '${con.con_id}', { emails: 'ops@cool.sa' })`);
+  const c0 = sentMail.length; const rp = run(`apiAdmResetPin('${adminTok}', '${con.con_id}')`);
+  eq(rp.mailTo, 'ops@cool.sa'); eq(sentMail.length, c0 + 1); if (sentMail[c0].to.html.indexOf(rp.pin) === -1) throw new Error('pin not in mail');
+  acPin = rp.pin;
+});
+
 t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد والفندق والجداول، والمعاينة قبل المسح، ولا يُمس ما خارج النطاق', () => {
   const wo0 = run("Db.all('WorkOrders').length"), wt0 = run("Db.all('WaterLoads').length");
   const p1 = run(`apiAdmLaunchPlan('${adminTok}', { types: ['wt'] })`);

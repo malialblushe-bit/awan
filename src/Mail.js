@@ -167,7 +167,8 @@ var Mail = (function () {
   function send(m, replyTo, hotelId, me) {
     var from = fromAddr_(hotelId, me), acct = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
     // الأبوية: الرد العادي يصل للمرسل الرسمي (مهندس الفندق) ولـ Gmail حساب الصيانة معاً، وGmail نسخة دائماً
-    if (from.toLowerCase() !== acct) {
+    // بيانات الدخول خاصة بصاحبها: بلا نسخة لحساب الصيانة
+    if (from.toLowerCase() !== acct && !m.private) {
       var cc = [acct].concat(String(m.cc || '').split(',')).map(function (x) { return x.trim().toLowerCase(); })
         .filter(function (x, i, a) { return x && x !== from.toLowerCase() && a.indexOf(x) === i; });
       m = Object.assign({}, m, { cc: cc.join(',') }); replyTo = from + (acct ? ', ' + acct : '');
@@ -194,7 +195,47 @@ var Mail = (function () {
     return addr;
   }
 
-  return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom };
+  /** رسالة بيانات الدخول: staff (كلمة مرور مؤقتة) · sup (يختار رقمه) · con (أرقام المتعهد) */
+  var ROLE_ = { admin: ['مشرف النظام', 'System admin'], engineer: ['مهندس الصيانة', 'Maintenance engineer'], management: ['الإدارة', 'Management'],
+    gm: ['مدير الفندق', 'Hotel manager'], om: ['مدير التشغيل', 'Operations manager'], duty: ['المدير المناوب', 'Duty manager'], fo: ['مشرف المكاتب الأمامية', 'Front office supervisor'],
+    supmgr: ['مدير الإشراف', 'Supervision manager'], sup: ['مشرف ميداني', 'Field supervisor'], fin: ['المالية', 'Finance'] };
+  function credRow_(ar, en, val, big, mono) {
+    return '<tr><td style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:38%" dir="rtl" align="right">' + esc(ar) + '<br><span dir="ltr" style="font-size:11px">' + esc(en) + '</span></td>' +
+      '<td dir="ltr" align="center" style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + NAVY + ';font-weight:bold;font-size:' + (big ? 22 : 15) + 'px;letter-spacing:' + (big ? 2 : 0) + 'px' + (mono || big ? ';font-family:Consolas,Menlo,monospace' : '') + '"' + (mono || big ? '' : ' dir="auto"') + '>' + esc(val) + '</td></tr>';
+  }
+  function creds(kind, d) {
+    var url = d.url || '', rows = '', stepsAr = [], stepsEn = [], title;
+    if (kind === 'con') {
+      title = ['بيانات دخول أعوان لشركتكم', 'Your company’s Awan access'];
+      rows = credRow_('الشركة', 'Company', d.name) + (d.pin ? credRow_('الرقم السري للشركة', 'Company PIN', d.pin, 1) : '') + (d.leadPin ? credRow_('رقم قائد الفريق: ' + (d.leadName || ''), 'Team leader PIN', d.leadPin, 1) : '');
+      stepsAr = ['امسح باركود أعوان في الفندق واكتب الرقم السري.', 'أو افتح الرابط ← «المتعهد والإشراف» ← اكتب الرقم.', 'الرقم سري: لا يُشارك إلا مع فنييكم المعتمدين، ولكل رقم صاحبه.'];
+      stepsEn = ['Scan the Awan barcode at the hotel and enter the PIN.', 'Or open the link → “Contractor & supervision” → enter the PIN.', 'Keep the PIN private: share it only with your approved technicians.'];
+    } else if (kind === 'sup') {
+      title = ['حسابك في أعوان جاهز', 'Your Awan account is ready'];
+      rows = credRow_('الاسم', 'Name', d.name) + credRow_('الوظيفة', 'Role', (ROLE_[d.role] || [d.role])[0]) + credRow_('اسم الدخول', 'Sign-in', d.login, 0, 1);
+      stepsAr = ['افتح الرابط ← «المتعهد والإشراف» ← «مشرف ودخولك الأول؟».', 'اكتب اسم الدخول أعلاه، واختر رقماً سرياً من 6 أرقام.', 'بعدها تدخل بالرقم وحده.'];
+      stepsEn = ['Open the link → “Contractor & supervision” → “Supervisor signing in for the first time?”.', 'Enter the sign-in above and choose a 6-digit PIN.', 'After that, sign in with the PIN only.'];
+    } else {
+      title = ['حسابك في أعوان جاهز', 'Your Awan account is ready'];
+      rows = credRow_('الاسم', 'Name', d.name) + credRow_('الوظيفة', 'Role', (ROLE_[d.role] || [d.role])[0]) + credRow_('اسم الدخول', 'Sign-in', d.login, 0, 1) + credRow_('كلمة المرور المؤقتة', 'Temporary password', d.password, 1);
+      stepsAr = ['افتح الرابط واكتب اسم الدخول (بريدك) وكلمة المرور المؤقتة.', 'سيُطلب منك اختيار كلمة مرور جديدة فوراً.', 'كلمة المرور المؤقتة صالحة 72 ساعة، ولا تُشارك مع أحد.'];
+      stepsEn = ['Open the link and enter your sign-in (your email) and the temporary password.', 'You will be asked to choose a new password right away.', 'The temporary password is valid for 72 hours. Do not share it.'];
+    }
+    var list = function (a, dir) { return '<ol dir="' + dir + '" style="margin:6px 0 0;padding-' + (dir === 'rtl' ? 'right' : 'left') + ':20px;font-size:13px;line-height:1.9;color:' + INK + '">' + a.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>'; };
+    var html = '<!DOCTYPE html><html><body style="margin:0;background:' + SAND + ';font-family:' + FONT + '"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px">' +
+      '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
+      '<tr><td align="center" style="background:' + NAVY + ';padding:18px 22px;color:#fff;text-align:center"><b style="font-size:20px">أعوان · Awan</b><br><span style="font-size:12px;color:' + GOLD + '">' + esc(BRAND_AR) + ' · ' + esc(BRAND_EN) + '</span></td></tr>' +
+      '<tr><td style="padding:22px"><p style="margin:0;text-align:center;color:' + NAVY + '"><b style="font-size:18px" dir="rtl">' + esc(title[0]) + '</b><br><span style="font-size:14px" dir="ltr">' + esc(title[1]) + '</span></p>' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;border:1px solid ' + BEIGE + ';border-radius:10px;border-collapse:separate">' + rows + '</table>' +
+      (url ? '<p style="text-align:center;margin:18px 0"><a href="' + esc(url) + '" style="background:' + NAVY + ';color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:bold;font-size:15px;display:inline-block">فتح أعوان · Open Awan</a></p>' : '') +
+      bi_(list(stepsAr, 'rtl'), list(stepsEn, 'ltr')) +
+      '<p style="margin:18px 0 0;font-size:11px;color:' + KHAKI + ';text-align:center">رسالة آلية من نظام أعوان، لا تُرد عليها بكلمة المرور. · Automated message from Awan.</p></td></tr></table></td></tr></table></body></html>';
+    var text = title[0] + ' / ' + title[1] + '\n' + (kind === 'con' ? (d.name + (d.pin ? '\nالرقم السري للشركة / Company PIN: ' + d.pin : '') + (d.leadPin ? '\nرقم قائد الفريق / Team leader PIN: ' + d.leadPin : ''))
+      : ('اسم الدخول / Sign-in: ' + d.login + (d.password ? '\nكلمة المرور المؤقتة / Temporary password: ' + d.password + ' (72h)' : ''))) + '\n' + url + '\n\n' + stepsAr.join('\n') + '\n\n' + stepsEn.join('\n');
+    return { to: d.to, subject: 'أعوان · ' + title[0] + ' · Awan ' + title[1], html: html, text: text, private: true };
+  }
+
+  return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom, creds: creds };
 })();
 
 /** يُشغَّل مرة واحدة من محرر السكربت بحساب الصيانة لمنح إذن إرسال البريد */

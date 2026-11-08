@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 33;
+var SCHEMA_VERSION = 34;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -40,13 +40,15 @@ var SCHEMA = [
     ['user_id', 'المعرّف'], ['name', 'الاسم'], ['role', 'admin · engineer · management · gm (مدير الفندق) · om (مدير التشغيل) · duty (المدير المناوب) · fo (مشرف المكاتب الأمامية) · supmgr (مدير الإشراف) · sup (مشرف ميداني)'],
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
-    ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
+    ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط'],
+    ['temp_until', 'صلاحية كلمة المرور المؤقتة (72 ساعة)'], ['sent_at', 'آخر إرسال لبيانات الدخول بالبريد']] },
 
   { name: 'Contractors', cols: [
     ['con_id', 'المعرّف'], ['name', 'الاسم'], ['type', 'ac = تكييف · el = مصاعد · sf = سلامة · wa = نفايات · pc = مكافحة الآفات'],
     ['phone', 'الجوال'], ['contact', 'جهة الاتصال'], ['emails', 'البريد (أكثر من عنوان مفصولة بفاصلة)'],
     ['pin_hash', 'الرقم السري مشفّراً'], ['salt', 'الملح'],
-    ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط']] },
+    ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط'],
+    ['pin_sent_at', 'آخر إرسال للرقم السري بالبريد']] },
 
   { name: 'Contracts', cols: [
     ['contract_id', 'المعرّف'], ['con_id', 'المتعهد'], ['type', 'النوع'], ['hotel_ids', 'الفنادق'],
