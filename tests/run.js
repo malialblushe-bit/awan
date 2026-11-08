@@ -813,6 +813,12 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   const zs2 = [].concat(...st.hotels[HID].floors.map(f => f.zones)).slice(0, 3).map(z => z.id);
   const tp2 = run(`apiPestTrap('${ct}', 'place', { hotel_id: '${HID}', zones: ${JSON.stringify(zs2)}, kind: 'محطة طعوم قوارض', every_days: 14 })`).result;
   eq(tp2.labels.join(','), 'T-02,T-03,T-04');
+  // دورية فحص المصائد من مدير الإشراف: 1–3 أيام، والافتراضي 3، وتطبَّق على كل مصائد الفندق
+  eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps[0].every, 3);
+  throws(`apiPestSchedule('${mgrTok}', '${HID}', { __traps: 5 })`, 'المصائد');
+  run(`apiPestSchedule('${mgrTok}', '${HID}', { __traps: 2 })`);
+  const cb2 = run(`apiConBoot('${ct}')`).pest.hotels[HID]; eq(cb2.trapEvery, 2); eq(cb2.traps[0].every, 2);
+  eq(run(`apiSupBoot('${mgrTok}')`).pest.hotels[HID].schedule.__traps, undefined);
   const tr2 = run(`apiConBoot('${ct}')`).pest.hotels[HID].traps; eq(tr2.length, 3); eq(tr2.map(t => t.zone).sort().join(), zs2.slice().sort().join());
   tr2.forEach(t => run(`apiPestTrap('${ct}', 'remove', { trap_id: '${t.id}' })`));
   // متعهد التكييف لا يسجّل مكافحة

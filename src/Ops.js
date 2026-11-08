@@ -244,9 +244,16 @@ var Ops = (function () {
   }
 
   // ───────── مكافحة الآفات ─────────
+  /** دورية فحص المصائد لكل فندق: يحددها مدير الإشراف في الجدولة، من 1 إلى 3 أيام (الافتراضي 3) */
+  var TRAP_KEY = '__traps', TRAP_MAX = 3;
+  function trapEvery(hotelId) {
+    var r = Db.find('PestSchedule', function (x) { return x.hotel_id === hotelId && x.ftype === TRAP_KEY; });
+    var n = r ? Number(r.every_days) : 0;
+    return n >= 1 ? Math.min(TRAP_MAX, n) : TRAP_MAX;
+  }
   function schedule(hotelId) {
     var out = {};
-    Db.all('PestSchedule', function (r) { return r.hotel_id === hotelId; }).forEach(function (r) { out[r.ftype] = Number(r.every_days) || 0; });
+    Db.all('PestSchedule', function (r) { return r.hotel_id === hotelId && r.ftype !== TRAP_KEY; }).forEach(function (r) { out[r.ftype] = Number(r.every_days) || 0; });
     return out;
   }
   /** غرف النزلاء: عدد مرات الرش في الشهر عند الإتاحة (بدل الدورية بالأيام) */
@@ -288,8 +295,9 @@ var Ops = (function () {
   function trapsOf(hotelId) {
     var zones = {};
     Db.all('Rooms', function (r) { return r.hotel_id === hotelId; }).forEach(function (r) { zones[r.room_id] = String(r.number); });
+    var every = trapEvery(hotelId);
     return Db.all('Traps', function (t) { return t.hotel_id === hotelId && t.status === 'active'; }).map(function (t) {
-      var lc = ms(t.last_check) || ms(t.placed_at), every = Number(t.every_days) || 7;
+      var lc = ms(t.last_check) || ms(t.placed_at);
       return { id: t.trap_id, label: t.label, kind: t.kind, zone: t.zone, zoneName: zones[t.zone] || '', placed: ms(t.placed_at), every: every,
         last: ms(t.last_check), result: t.last_result || '', next: lc + every * 864e5, late: lc + every * 864e5 < Date.now() };
     }).sort(function (a, b) { return a.next - b.next; });
@@ -307,7 +315,7 @@ var Ops = (function () {
       e.push({ at: ms(t.placed_at), text: 'وضع المصيدة', by: t.by_name || '' });
       if (t.status === 'removed') e.push({ at: ms(t.removed_at), text: 'رفع المصيدة', by: '' });
       e.sort(function (a, b) { return b.at - a.at; });
-      return { id: t.trap_id, label: t.label, kind: t.kind, zoneName: zones[t.zone] || '', status: t.status, placed: ms(t.placed_at), removed: ms(t.removed_at) || null, every: Number(t.every_days) || 7, events: e };
+      return { id: t.trap_id, label: t.label, kind: t.kind, zoneName: zones[t.zone] || '', status: t.status, placed: ms(t.placed_at), removed: ms(t.removed_at) || null, every: trapEvery(hotelId), events: e };
     }).sort(function (a, b) { return (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || String(a.label).localeCompare(String(b.label)); });
   }
 
@@ -332,7 +340,7 @@ var Ops = (function () {
 
   function pestBoot(hotelIds) {
     var out = {};
-    hotelIds.forEach(function (hid) { out[hid] = { floors: pestState(hid), schedule: schedule(hid), quota: quotas(hid), traps: trapsOf(hid), trapLog: trapLog(hid) }; });
+    hotelIds.forEach(function (hid) { out[hid] = { floors: pestState(hid), schedule: schedule(hid), quota: quotas(hid), traps: trapsOf(hid), trapLog: trapLog(hid), trapEvery: trapEvery(hid) }; });
     var since = Date.now() - 60 * 864e5;
     return { hotels: out, flags: flagsOf(hotelIds, since), logs: logsOf(hotelIds, since), finds: FIND, trapKinds: TRAP_KINDS };
   }
@@ -462,8 +470,7 @@ var Ops = (function () {
       var zs = (d.zones && d.zones.length) ? d.zones : [d.zone];
       zs.forEach(function (z) { zoneOf_(hotelId, z); });
       if (TRAP_KINDS.indexOf(d.kind) === -1) throw new Error('اختر نوع المصيدة.');
-      var every = Number(d.every_days) || 7;
-      if (every < 1 || every > 90) throw new Error('موعد الفحص بين 1 و90 يوماً.');
+      var every = trapEvery(hotelId);
       var n = Db.all('Traps', function (x) { return x.hotel_id === hotelId; }).length;
       // مصيدة في كل منطقة محددة، بترقيم متتابع
       var recs = Db.insertMany('Traps', zs.map(function (z) { n++;
@@ -497,7 +504,14 @@ var Ops = (function () {
   function saveSchedule(s, hotelId, rows) {
     if (s.role !== 'supmgr' && s.role !== 'admin') throw new Error('الجدولة لمدير الإشراف.');
     if (supHotels(s).indexOf(hotelId) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
-    Object.keys(rows || {}).forEach(function (ft) {
+    if (rows && rows[TRAP_KEY] !== undefined) {
+      var tv = String(rows[TRAP_KEY]).trim(), tn = tv === '' ? TRAP_MAX : Number(tv);
+      if (isNaN(tn) || tn < 1 || tn > TRAP_MAX || Math.floor(tn) !== tn) throw new Error('دورية فحص المصائد من يوم إلى ' + TRAP_MAX + ' أيام.');
+      var tk = hotelId + '|' + TRAP_KEY;
+      if (Db.find('PestSchedule', function (r) { return r.key === tk; })) Db.update('PestSchedule', tk, { every_days: tn, per_month: 0 });
+      else Db.insert('PestSchedule', { key: tk, hotel_id: hotelId, ftype: TRAP_KEY, every_days: tn, per_month: 0 });
+    }
+    Object.keys(rows || {}).filter(function (ft) { return ft !== TRAP_KEY; }).forEach(function (ft) {
       var raw = rows[ft], isQ = raw && typeof raw === 'object', v = String(isQ ? raw.pm : raw).trim(), n = v === '' ? 0 : Number(v);
       if (isQ && (isNaN(n) || n < 0 || n > 31)) throw new Error('مرات الرش في الشهر بين 1 و31، أو فارغة: ' + ft);
       if (!isQ && (isNaN(n) || n < 0 || n > 365)) throw new Error('الدورية بالأيام بين 1 و365، أو فارغة لغير المجدول: ' + ft);
@@ -614,7 +628,7 @@ var Ops = (function () {
       var tExp = 0;
       Db.all('Traps', function (t) { return hotelIds.indexOf(t.hotel_id) !== -1 && ms(t.placed_at) <= b && (t.status === 'active' || ms(t.removed_at) >= a); }).forEach(function (t) {
         var s0 = Math.max(a, ms(t.placed_at)), e0 = t.status === 'active' ? b : Math.min(b, ms(t.removed_at));
-        tExp += Math.floor(Math.max(0, e0 - s0) / ((Number(t.every_days) || 7) * 864e5));
+        tExp += Math.floor(Math.max(0, e0 - s0) / (trapEvery(t.hotel_id) * 864e5));
       });
       V.ontime = expS ? pct_(gotS, expS) : null;
       var slaH = 24; Db.all('Contracts', function (c) { return c.con_id === con.con_id; }).forEach(function (c) { if (Number(c.sla_pest) > 0) slaH = Number(c.sla_pest); });
