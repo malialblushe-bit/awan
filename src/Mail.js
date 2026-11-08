@@ -212,7 +212,7 @@ var Mail = (function () {
   var SUPPORT_ = 'qd@nawazi.co · 0537658576', SLOGAN_ = ['تمكين الأداء', 'Empowering performance'];
 
   function credRow_(ar, en, val, big) {
-    return '<tr><td style="padding:12px 16px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:40%;line-height:1.5" dir="rtl" align="right">' + esc(ar) + '<br><span dir="ltr" style="font-size:11px;color:#9A8A66">' + esc(en) + '</span></td>' +
+    return '<tr><td style="padding:12px 16px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:13px;width:34%;line-height:1.4" dir="rtl" align="right">' + esc(ar) + '<br><span dir="ltr" style="font-size:10px;color:#A89A7A">' + esc(en) + '</span></td>' +
       '<td dir="ltr" align="center" style="padding:12px 16px;border-bottom:1px solid ' + BEIGE + '">' + (big
         ? '<span style="display:inline-block;background:' + SAND + ';border:2px dashed ' + GOLD + ';border-radius:10px;padding:8px 16px;color:' + NAVY + ';font-weight:bold;font-size:24px;letter-spacing:3px;font-family:Consolas,Menlo,monospace">' + esc(val) + '</span>'
         : '<span style="color:' + NAVY + ';font-weight:bold;font-size:15px;font-family:Consolas,Menlo,monospace;word-break:break-all">' + esc(val) + '</span>') + '</td></tr>';
@@ -231,57 +231,42 @@ var Mail = (function () {
   }
 
   function creds(kind, d) {
-    var url = d.url || '', role = ROLE_[d.role] || [d.role || '', d.role || ''], hotels = (d.hotels || []).join('، ');
-    var hello, sub, rows, steps, note, gain;
+    var url = d.url || '', role = (ROLE_[d.role] || [d.role || ''])[0], hotels = (d.hotels || []).join('، ');
+    var first = String(d.name || '').replace(/^م\.\s*/, '').split(/\s+/)[0] || d.name;
+    var hello, line, gain, rows, cta, tip, en;
     if (kind === 'con') {
-      hello = ['أهلاً بكم، ' + d.name, 'Welcome, ' + d.name];
-      sub = ['شركاء في الإنجاز: من الطلب إلى المطابقة في تطبيق واحد', 'Partners in achievement: from request to sign-off in one app'];
-      rows = (d.pin ? credRow_('الرقم السري للشركة', 'Company PIN', d.pin, 1) : '') + (d.leadPin ? credRow_('رقم قائد الفريق' + (d.leadName ? ': ' + d.leadName : ''), 'Team leader PIN', d.leadPin, 1) : '');
-      steps = [['امسح باركود أعوان في الفندق', 'Scan the Awan barcode at the hotel'], ['اكتب الرقم السري', 'Enter the PIN'], ['سجّل وصولك وابدأ العمل', 'Check in and start']];
-      note = ['الرقم سري: لفنييكم المعتمدين فقط. ومن الويب: افتح الرابط ← «المتعهد والإشراف».', 'Keep the PIN for your approved technicians only. On the web: open the link → “Contractor & supervision”.'];
-      gain = GAIN_.con;
+      hello = 'أهلاً ' + d.name; line = 'رقمكم السري لأعوان جاهز'; gain = GAIN_.con[1][0];
+      rows = (d.pin ? credRow_('رقم الشركة', 'Company PIN', d.pin, 1) : '') + (d.leadPin ? credRow_('رقم القائد' + (d.leadName ? ' · ' + d.leadName : ''), 'Leader PIN', d.leadPin, 1) : '');
+      cta = 'افتح أعوان'; tip = 'في الفندق: امسح باركود أعوان واكتب الرقم.';
+      en = 'Your Awan PIN is above. Scan the Awan barcode at the hotel and enter it.';
     } else {
-      hello = ['أهلاً ' + d.name + '، حسابك جاهز', 'Welcome ' + d.name + ', your account is ready'];
-      sub = ['انضممت إلى أعوان بصفتك ' + role[0] + (hotels ? ' · ' + hotels : ''), 'You have joined Awan as ' + role[1]];
-      rows = credRow_('اسم الدخول', 'Sign-in', d.login) + (kind === 'sup' ? '' : credRow_('كلمة المرور المؤقتة', 'Temporary password', d.password, 1));
-      steps = kind === 'sup'
-        ? [['افتح الرابط ← «المتعهد والإشراف»', 'Open the link → “Contractor & supervision”'], ['«مشرف ودخولك الأول؟» واكتب بريدك', '“First sign-in?” and enter your email'], ['اختر رقماً سرياً من 6 أرقام', 'Choose a 6-digit PIN']]
-        : [['افتح الرابط', 'Open the link'], ['ادخل ببريدك والكلمة المؤقتة', 'Sign in with your email and the temporary password'], ['اختر كلمتك الخاصة وابدأ', 'Set your own password and start']];
-      note = kind === 'sup' ? ['بعدها تدخل بالرقم وحده، من الجوال أو الحاسب.', 'After that, sign in with the PIN only, on phone or computer.'] : ['الكلمة المؤقتة صالحة 72 ساعة، فابدأ اليوم. لا تشاركها مع أحد.', 'The temporary password is valid for 72 hours — start today. Do not share it.'];
-      gain = GAIN_[d.role] || GAIN_.gm;
+      hello = 'أهلاً ' + first; line = 'حسابك جاهز · ' + role + (hotels ? ' · ' + hotels : ''); gain = (GAIN_[d.role] || GAIN_.gm)[0][0];
+      rows = credRow_('الدخول', 'Sign-in', d.login) + (kind === 'sup' ? '' : credRow_('كلمة مؤقتة', 'Temp. password', d.password, 1));
+      cta = 'ادخل الآن';
+      tip = kind === 'sup' ? 'اختر «مشرف ودخولك الأول؟» ثم رقمك السري.' : 'صالحة 72 ساعة، وتختار كلمتك عند أول دخول.';
+      en = kind === 'sup' ? 'Your Awan account is ready. Choose “First sign-in?” and set your PIN.' : 'Your Awan account is ready. Temporary password valid for 72 hours.';
     }
-    var sec = function (ar, en) { return '<p style="margin:22px 0 10px;color:' + KHAKI + ';font-size:12px;font-weight:bold" dir="rtl" align="right">' + esc(ar) + ' · <span dir="ltr" style="font-weight:normal">' + esc(en) + '</span></p>'; };
-    var cta = url ? '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0 4px"><tr><td align="center" style="background:' + NAVY + ';border-radius:12px"><a href="' + esc(url) + '" style="display:block;padding:15px 20px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px">ابدأ الآن ← · Get started</a></td></tr></table>' : '';
+    var btn = url ? '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0"><tr><td align="center" style="background:' + NAVY + ';border-radius:12px"><a href="' + esc(url) + '" style="display:block;padding:16px 20px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:18px">' + cta + ' ←</a></td></tr></table>' : '';
     var html = '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:' + SAND + ';font-family:' + FONT + '">' +
       '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:22px 10px">' +
-      '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
-      // الرأس: الاسم والشعار
-      '<tr><td align="center" style="background:' + NAVY + ';padding:26px 22px 22px;text-align:center"><div style="color:#ffffff;font-size:30px;font-weight:bold;line-height:1.2">أعوان</div>' +
-      '<div style="color:' + GOLD + ';font-size:14px;margin-top:4px">شركاء في الإنجاز · <span dir="ltr">Partners in achievement</span></div>' +
-      '<div style="height:3px;width:56px;background:' + GOLD + ';margin:14px auto 0;border-radius:2px"></div></td></tr>' +
-      // الترحيب
-      '<tr><td style="background:' + BEIGE + ';padding:20px 24px;text-align:center"><div dir="rtl" style="color:' + NAVY + ';font-size:20px;font-weight:bold;line-height:1.5">' + esc(hello[0]) + '</div>' +
-      '<div dir="ltr" style="color:' + NAVY + ';font-size:14px;margin-top:2px">' + esc(hello[1]) + '</div>' +
-      '<div dir="rtl" style="color:' + DEEP + ';font-size:13px;margin-top:8px;line-height:1.6">' + esc(sub[0]) + '</div><div dir="ltr" style="color:' + KHAKI + ';font-size:12px">' + esc(sub[1]) + '</div></td></tr>' +
-      '<tr><td style="padding:6px 24px 24px">' +
-      sec('ما الذي ستجده', 'What you get') + gain_(gain) +
-      sec('بيانات دخولك', 'Your sign-in') +
+      '<table role="presentation" width="520" cellspacing="0" cellpadding="0" dir="rtl" style="max-width:520px;width:100%;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
+      '<tr><td align="center" style="background:' + NAVY + ';padding:22px;text-align:center"><div style="color:#ffffff;font-size:26px;font-weight:bold;line-height:1.2">أعوان</div><div style="color:' + GOLD + ';font-size:13px;margin-top:2px">شركاء في الإنجاز</div></td></tr>' +
+      '<tr><td dir="rtl" style="padding:26px 26px 8px;text-align:center">' +
+      '<div style="color:' + NAVY + ';font-size:24px;font-weight:bold;line-height:1.4">' + esc(hello) + '</div>' +
+      '<div style="color:' + KHAKI + ';font-size:13px;margin-top:4px">' + esc(line) + '</div>' +
+      '<div style="display:inline-block;margin-top:14px;background:' + BEIGE + ';color:' + DEEP + ';border-radius:20px;padding:7px 16px;font-size:13px;font-weight:bold">✓ ' + esc(gain) + '</div>' +
+      '</td></tr><tr><td style="padding:14px 26px 24px">' +
       '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:12px;border-collapse:separate;overflow:hidden">' + rows + '</table>' +
-      cta +
-      sec('ثلاث خطوات وتبدأ', 'Three steps to start') + steps3_(steps) +
-      '<p dir="rtl" style="margin:18px 0 0;background:' + SAND + ';border-radius:10px;padding:10px 14px;color:' + DEEP + ';font-size:12px;line-height:1.7;text-align:center">' + esc(note[0]) + '<br><span dir="ltr" style="color:' + KHAKI + '">' + esc(note[1]) + '</span></p>' +
+      btn + '<div dir="rtl" style="color:' + KHAKI + ';font-size:12px;text-align:center;margin-top:12px">' + esc(tip) + '</div>' +
       '</td></tr>' +
-      // التذييل
-      '<tr><td style="border-top:1px solid ' + BEIGE + ';padding:16px 24px;text-align:center;line-height:1.7">' +
-      '<div dir="rtl" style="color:' + NAVY + ';font-size:13px;font-weight:bold">«' + SLOGAN_[0] + '» · <span dir="ltr" style="font-weight:normal;color:' + KHAKI + '">' + SLOGAN_[1] + '</span></div>' +
-      '<div dir="rtl" style="color:' + KHAKI + ';font-size:11px">' + esc(BRAND_AR) + ' · <span dir="ltr">' + esc(BRAND_EN) + '</span></div>' +
-      '<div dir="rtl" style="color:' + KHAKI + ';font-size:11px">للمساعدة · <span dir="ltr">Help: ' + SUPPORT_ + '</span></div>' +
-      '<div dir="rtl" style="color:#A89A7A;font-size:10px;margin-top:4px">رسالة آلية من أعوان. لا تُرسل كلمة المرور لأحد. · Automated message from Awan.</div></td></tr>' +
+      '<tr><td style="border-top:1px solid ' + BEIGE + ';padding:14px 24px;text-align:center;line-height:1.7">' +
+      '<div dir="rtl" style="color:' + NAVY + ';font-size:12px;font-weight:bold">«' + SLOGAN_[0] + '»</div>' +
+      '<div dir="rtl" style="color:' + KHAKI + ';font-size:11px">للمساعدة: <span dir="ltr">' + SUPPORT_ + '</span></div>' +
+      '<div dir="ltr" style="color:#A89A7A;font-size:10px;margin-top:4px">' + esc(en) + '</div></td></tr>' +
       '</table></td></tr></table></body></html>';
-    var text = hello[0] + '\n' + hello[1] + '\n\n' + (kind === 'con' ? ((d.pin ? 'الرقم السري للشركة / Company PIN: ' + d.pin + '\n' : '') + (d.leadPin ? 'رقم قائد الفريق / Team leader PIN: ' + d.leadPin + '\n' : ''))
-      : ('اسم الدخول / Sign-in: ' + d.login + '\n' + (d.password ? 'كلمة المرور المؤقتة / Temporary password: ' + d.password + ' (72h)\n' : ''))) + url + '\n\n' +
-      steps.map(function (s, i) { return (i + 1) + '. ' + s[0] + ' / ' + s[1]; }).join('\n') + '\n\n' + note[0] + '\n' + 'للمساعدة / Help: ' + SUPPORT_;
-    return { to: d.to, subject: (kind === 'con' ? 'أعوان · بيانات دخول شركتكم · Your Awan access' : 'أهلاً بك في أعوان · حسابك جاهز · Welcome to Awan'), html: html, text: text, private: true };
+    var text = hello + '\n' + line + '\n\n' + (kind === 'con' ? ((d.pin ? 'رقم الشركة: ' + d.pin + '\n' : '') + (d.leadPin ? 'رقم القائد: ' + d.leadPin + '\n' : ''))
+      : ('الدخول: ' + d.login + '\n' + (d.password ? 'كلمة مؤقتة: ' + d.password + '\n' : ''))) + url + '\n' + tip + '\n\n' + en + '\nللمساعدة: ' + SUPPORT_;
+    return { to: d.to, subject: kind === 'con' ? 'أعوان · رقمكم السري جاهز' : 'أهلاً ' + first + '، حسابك في أعوان جاهز', html: html, text: text, private: true };
   }
 
   return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom, creds: creds };
