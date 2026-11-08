@@ -195,44 +195,93 @@ var Mail = (function () {
     return addr;
   }
 
-  /** رسالة بيانات الدخول: staff (كلمة مرور مؤقتة) · sup (يختار رقمه) · con (أرقام المتعهد) */
+  /** رسالة بيانات الدخول: staff (كلمة مرور مؤقتة) · sup (يختار رقمه) · con (أرقام المتعهد). بطاقة ترحيب تحفّز على البدء */
   var ROLE_ = { admin: ['مشرف النظام', 'System admin'], engineer: ['مهندس الصيانة', 'Maintenance engineer'], management: ['الإدارة', 'Management'],
     gm: ['مدير الفندق', 'Hotel manager'], om: ['مدير التشغيل', 'Operations manager'], duty: ['المدير المناوب', 'Duty manager'], fo: ['مشرف المكاتب الأمامية', 'Front office supervisor'],
     supmgr: ['مدير الإشراف', 'Supervision manager'], sup: ['مشرف ميداني', 'Field supervisor'], fin: ['المالية', 'Finance'] };
-  function credRow_(ar, en, val, big, mono) {
-    return '<tr><td style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:38%" dir="rtl" align="right">' + esc(ar) + '<br><span dir="ltr" style="font-size:11px">' + esc(en) + '</span></td>' +
-      '<td dir="ltr" align="center" style="padding:10px 14px;border-bottom:1px solid ' + BEIGE + ';color:' + NAVY + ';font-weight:bold;font-size:' + (big ? 22 : 15) + 'px;letter-spacing:' + (big ? 2 : 0) + 'px' + (mono || big ? ';font-family:Consolas,Menlo,monospace' : '') + '"' + (mono || big ? '' : ' dir="auto"') + '>' + esc(val) + '</td></tr>';
+  /** ما يجده كل دور في أعوان: ثلاث فوائد قصيرة بالعربية والإنجليزية */
+  var GAIN_ = {
+    engineer: [['كل طلبات المتعهدين وقراراتها في شاشة واحدة', 'All contractor jobs and decisions on one screen'], ['المطابقة والختم بضغطة، والكشف جاهز للطباعة', 'Match and stamp in one tap; statements ready to print'], ['أداء كل متعهد لحظياً بالأرقام', 'Live, measurable contractor performance']],
+    gm: [['عمليات فندقك وأداء متعهديه أمامك', 'Your hotel’s jobs and contractor performance at a glance'], ['ملاحظتك تصل لمالك الخدمة مباشرة', 'Your notes reach the service owner directly'], ['مطابقة رحلات المياه رحلةً رحلة', 'Approve water trips one by one']],
+    supmgr: [['خريطة المكافحة بحالة كل غرفة ومرفق', 'A pest map showing every room and facility'], ['بلاغ «متاحة» أو «إصابة» بضغطة لعدة مناطق', 'Flag “ready” or “infested” for many areas in one tap'], ['تقييم المتعهد والإجراء التصحيحي من مكانه', 'Rate the contractor and issue corrective actions in place']],
+    management: [['لوحات أداء المتعهدين لكل الفنادق', 'Contractor performance dashboards across hotels'], ['المطالبات والسداد وأعمار المستحقات', 'Claims, payments and receivables ageing'], ['التقييمات الدورية جاهزة للاطلاع والطباعة', 'Periodic evaluations ready to view and print']],
+    fin: [['المطالبات المعتمدة بانتظار السداد', 'Approved claims awaiting payment'], ['تسجيل السداد برقم الحوالة', 'Record payments with transfer number'], ['أعمار المستحقات لكل متعهد', 'Receivables ageing per contractor']],
+    con: [['أعمالك مرتبة: الطارئ أولاً ثم الدور', 'Your jobs in order: urgent first, then by floor'], ['تقريرك يصل للمهندس فوراً بلا ورق', 'Your report reaches the engineer instantly, paperless'], ['أداؤك وتقييمك واضحان، و«تواصل معنا» مفتوح', 'Clear performance and ratings, and “Contact us” is always open']]
+  };
+  GAIN_.om = GAIN_.duty = GAIN_.fo = GAIN_.gm; GAIN_.sup = GAIN_.supmgr; GAIN_.admin = GAIN_.management;
+  var SUPPORT_ = 'qd@nawazi.co · 0537658576', SLOGAN_ = ['تمكين الأداء', 'Empowering performance'];
+
+  function credRow_(ar, en, val, big) {
+    return '<tr><td style="padding:12px 16px;border-bottom:1px solid ' + BEIGE + ';color:' + KHAKI + ';font-size:12px;width:40%;line-height:1.5" dir="rtl" align="right">' + esc(ar) + '<br><span dir="ltr" style="font-size:11px;color:#9A8A66">' + esc(en) + '</span></td>' +
+      '<td dir="ltr" align="center" style="padding:12px 16px;border-bottom:1px solid ' + BEIGE + '">' + (big
+        ? '<span style="display:inline-block;background:' + SAND + ';border:2px dashed ' + GOLD + ';border-radius:10px;padding:8px 16px;color:' + NAVY + ';font-weight:bold;font-size:24px;letter-spacing:3px;font-family:Consolas,Menlo,monospace">' + esc(val) + '</span>'
+        : '<span style="color:' + NAVY + ';font-weight:bold;font-size:15px;font-family:Consolas,Menlo,monospace;word-break:break-all">' + esc(val) + '</span>') + '</td></tr>';
   }
+  function gain_(list) {
+    return '<table role="presentation" dir="rtl" width="100%" cellspacing="0" cellpadding="0">' + list.map(function (g) {
+      return '<tr><td width="34" valign="top" style="padding:7px 0 7px 0"><div style="width:26px;height:26px;border-radius:13px;background:' + GOLD + ';color:#fff;font-size:14px;line-height:26px;text-align:center;font-weight:bold">✓</div></td>' +
+        '<td dir="rtl" align="right" style="padding:7px 10px 7px 0;line-height:1.5"><b style="color:' + NAVY + ';font-size:14px">' + esc(g[0]) + '</b><br><span dir="ltr" style="color:' + INK + ';font-size:12px">' + esc(g[1]) + '</span></td></tr>';
+    }).join('') + '</table>';
+  }
+  function steps3_(st) {
+    return '<table role="presentation" dir="rtl" width="100%" cellspacing="0" cellpadding="0"><tr>' + st.map(function (s, i) {
+      return '<td width="33%" valign="top" align="center" style="padding:0 4px"><div style="width:34px;height:34px;border-radius:17px;background:' + NAVY + ';color:#fff;font-weight:bold;font-size:16px;line-height:34px;margin:0 auto 6px">' + (i + 1) + '</div>' +
+        '<div dir="rtl" style="color:' + NAVY + ';font-size:13px;font-weight:bold;line-height:1.5">' + esc(s[0]) + '</div><div dir="ltr" style="color:' + INK + ';font-size:11px;line-height:1.4;margin-top:2px">' + esc(s[1]) + '</div></td>';
+    }).join('') + '</tr></table>';
+  }
+
   function creds(kind, d) {
-    var url = d.url || '', rows = '', stepsAr = [], stepsEn = [], title;
+    var url = d.url || '', role = ROLE_[d.role] || [d.role || '', d.role || ''], hotels = (d.hotels || []).join('، ');
+    var hello, sub, rows, steps, note, gain;
     if (kind === 'con') {
-      title = ['بيانات دخول أعوان لشركتكم', 'Your company’s Awan access'];
-      rows = credRow_('الشركة', 'Company', d.name) + (d.pin ? credRow_('الرقم السري للشركة', 'Company PIN', d.pin, 1) : '') + (d.leadPin ? credRow_('رقم قائد الفريق: ' + (d.leadName || ''), 'Team leader PIN', d.leadPin, 1) : '');
-      stepsAr = ['امسح باركود أعوان في الفندق واكتب الرقم السري.', 'أو افتح الرابط ← «المتعهد والإشراف» ← اكتب الرقم.', 'الرقم سري: لا يُشارك إلا مع فنييكم المعتمدين، ولكل رقم صاحبه.'];
-      stepsEn = ['Scan the Awan barcode at the hotel and enter the PIN.', 'Or open the link → “Contractor & supervision” → enter the PIN.', 'Keep the PIN private: share it only with your approved technicians.'];
-    } else if (kind === 'sup') {
-      title = ['حسابك في أعوان جاهز', 'Your Awan account is ready'];
-      rows = credRow_('الاسم', 'Name', d.name) + credRow_('الوظيفة', 'Role', (ROLE_[d.role] || [d.role])[0]) + credRow_('اسم الدخول', 'Sign-in', d.login, 0, 1);
-      stepsAr = ['افتح الرابط ← «المتعهد والإشراف» ← «مشرف ودخولك الأول؟».', 'اكتب اسم الدخول أعلاه، واختر رقماً سرياً من 6 أرقام.', 'بعدها تدخل بالرقم وحده.'];
-      stepsEn = ['Open the link → “Contractor & supervision” → “Supervisor signing in for the first time?”.', 'Enter the sign-in above and choose a 6-digit PIN.', 'After that, sign in with the PIN only.'];
+      hello = ['أهلاً بكم، ' + d.name, 'Welcome, ' + d.name];
+      sub = ['شركاء في الإنجاز: من الطلب إلى المطابقة في تطبيق واحد', 'Partners in achievement: from request to sign-off in one app'];
+      rows = (d.pin ? credRow_('الرقم السري للشركة', 'Company PIN', d.pin, 1) : '') + (d.leadPin ? credRow_('رقم قائد الفريق' + (d.leadName ? ': ' + d.leadName : ''), 'Team leader PIN', d.leadPin, 1) : '');
+      steps = [['امسح باركود أعوان في الفندق', 'Scan the Awan barcode at the hotel'], ['اكتب الرقم السري', 'Enter the PIN'], ['سجّل وصولك وابدأ العمل', 'Check in and start']];
+      note = ['الرقم سري: لفنييكم المعتمدين فقط. ومن الويب: افتح الرابط ← «المتعهد والإشراف».', 'Keep the PIN for your approved technicians only. On the web: open the link → “Contractor & supervision”.'];
+      gain = GAIN_.con;
     } else {
-      title = ['حسابك في أعوان جاهز', 'Your Awan account is ready'];
-      rows = credRow_('الاسم', 'Name', d.name) + credRow_('الوظيفة', 'Role', (ROLE_[d.role] || [d.role])[0]) + credRow_('اسم الدخول', 'Sign-in', d.login, 0, 1) + credRow_('كلمة المرور المؤقتة', 'Temporary password', d.password, 1);
-      stepsAr = ['افتح الرابط واكتب اسم الدخول (بريدك) وكلمة المرور المؤقتة.', 'سيُطلب منك اختيار كلمة مرور جديدة فوراً.', 'كلمة المرور المؤقتة صالحة 72 ساعة، ولا تُشارك مع أحد.'];
-      stepsEn = ['Open the link and enter your sign-in (your email) and the temporary password.', 'You will be asked to choose a new password right away.', 'The temporary password is valid for 72 hours. Do not share it.'];
+      hello = ['أهلاً ' + d.name + '، حسابك جاهز', 'Welcome ' + d.name + ', your account is ready'];
+      sub = ['انضممت إلى أعوان بصفتك ' + role[0] + (hotels ? ' · ' + hotels : ''), 'You have joined Awan as ' + role[1]];
+      rows = credRow_('اسم الدخول', 'Sign-in', d.login) + (kind === 'sup' ? '' : credRow_('كلمة المرور المؤقتة', 'Temporary password', d.password, 1));
+      steps = kind === 'sup'
+        ? [['افتح الرابط ← «المتعهد والإشراف»', 'Open the link → “Contractor & supervision”'], ['«مشرف ودخولك الأول؟» واكتب بريدك', '“First sign-in?” and enter your email'], ['اختر رقماً سرياً من 6 أرقام', 'Choose a 6-digit PIN']]
+        : [['افتح الرابط', 'Open the link'], ['ادخل ببريدك والكلمة المؤقتة', 'Sign in with your email and the temporary password'], ['اختر كلمتك الخاصة وابدأ', 'Set your own password and start']];
+      note = kind === 'sup' ? ['بعدها تدخل بالرقم وحده، من الجوال أو الحاسب.', 'After that, sign in with the PIN only, on phone or computer.'] : ['الكلمة المؤقتة صالحة 72 ساعة، فابدأ اليوم. لا تشاركها مع أحد.', 'The temporary password is valid for 72 hours — start today. Do not share it.'];
+      gain = GAIN_[d.role] || GAIN_.gm;
     }
-    var list = function (a, dir) { return '<ol dir="' + dir + '" style="margin:6px 0 0;padding-' + (dir === 'rtl' ? 'right' : 'left') + ':20px;font-size:13px;line-height:1.9;color:' + INK + '">' + a.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>'; };
-    var html = '<!DOCTYPE html><html><body style="margin:0;background:' + SAND + ';font-family:' + FONT + '"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px">' +
-      '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
-      '<tr><td align="center" style="background:' + NAVY + ';padding:18px 22px;color:#fff;text-align:center"><b style="font-size:20px">أعوان · Awan</b><br><span style="font-size:12px;color:' + GOLD + '">' + esc(BRAND_AR) + ' · ' + esc(BRAND_EN) + '</span></td></tr>' +
-      '<tr><td style="padding:22px"><p style="margin:0;text-align:center;color:' + NAVY + '"><b style="font-size:18px" dir="rtl">' + esc(title[0]) + '</b><br><span style="font-size:14px" dir="ltr">' + esc(title[1]) + '</span></p>' +
-      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:16px 0;border:1px solid ' + BEIGE + ';border-radius:10px;border-collapse:separate">' + rows + '</table>' +
-      (url ? '<p style="text-align:center;margin:18px 0"><a href="' + esc(url) + '" style="background:' + NAVY + ';color:#fff;text-decoration:none;padding:12px 26px;border-radius:10px;font-weight:bold;font-size:15px;display:inline-block">فتح أعوان · Open Awan</a></p>' : '') +
-      bi_(list(stepsAr, 'rtl'), list(stepsEn, 'ltr')) +
-      '<p style="margin:18px 0 0;font-size:11px;color:' + KHAKI + ';text-align:center">رسالة آلية من نظام أعوان، لا تُرد عليها بكلمة المرور. · Automated message from Awan.</p></td></tr></table></td></tr></table></body></html>';
-    var text = title[0] + ' / ' + title[1] + '\n' + (kind === 'con' ? (d.name + (d.pin ? '\nالرقم السري للشركة / Company PIN: ' + d.pin : '') + (d.leadPin ? '\nرقم قائد الفريق / Team leader PIN: ' + d.leadPin : ''))
-      : ('اسم الدخول / Sign-in: ' + d.login + (d.password ? '\nكلمة المرور المؤقتة / Temporary password: ' + d.password + ' (72h)' : ''))) + '\n' + url + '\n\n' + stepsAr.join('\n') + '\n\n' + stepsEn.join('\n');
-    return { to: d.to, subject: 'أعوان · ' + title[0] + ' · Awan ' + title[1], html: html, text: text, private: true };
+    var sec = function (ar, en) { return '<p style="margin:22px 0 10px;color:' + KHAKI + ';font-size:12px;font-weight:bold" dir="rtl" align="right">' + esc(ar) + ' · <span dir="ltr" style="font-weight:normal">' + esc(en) + '</span></p>'; };
+    var cta = url ? '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:22px 0 4px"><tr><td align="center" style="background:' + NAVY + ';border-radius:12px"><a href="' + esc(url) + '" style="display:block;padding:15px 20px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:17px">ابدأ الآن ← · Get started</a></td></tr></table>' : '';
+    var html = '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:' + SAND + ';font-family:' + FONT + '">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:22px 10px">' +
+      '<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
+      // الرأس: الاسم والشعار
+      '<tr><td align="center" style="background:' + NAVY + ';padding:26px 22px 22px;text-align:center"><div style="color:#ffffff;font-size:30px;font-weight:bold;line-height:1.2">أعوان</div>' +
+      '<div style="color:' + GOLD + ';font-size:14px;margin-top:4px">شركاء في الإنجاز · <span dir="ltr">Partners in achievement</span></div>' +
+      '<div style="height:3px;width:56px;background:' + GOLD + ';margin:14px auto 0;border-radius:2px"></div></td></tr>' +
+      // الترحيب
+      '<tr><td style="background:' + BEIGE + ';padding:20px 24px;text-align:center"><div dir="rtl" style="color:' + NAVY + ';font-size:20px;font-weight:bold;line-height:1.5">' + esc(hello[0]) + '</div>' +
+      '<div dir="ltr" style="color:' + NAVY + ';font-size:14px;margin-top:2px">' + esc(hello[1]) + '</div>' +
+      '<div dir="rtl" style="color:' + DEEP + ';font-size:13px;margin-top:8px;line-height:1.6">' + esc(sub[0]) + '</div><div dir="ltr" style="color:' + KHAKI + ';font-size:12px">' + esc(sub[1]) + '</div></td></tr>' +
+      '<tr><td style="padding:6px 24px 24px">' +
+      sec('ما الذي ستجده', 'What you get') + gain_(gain) +
+      sec('بيانات دخولك', 'Your sign-in') +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:12px;border-collapse:separate;overflow:hidden">' + rows + '</table>' +
+      cta +
+      sec('ثلاث خطوات وتبدأ', 'Three steps to start') + steps3_(steps) +
+      '<p dir="rtl" style="margin:18px 0 0;background:' + SAND + ';border-radius:10px;padding:10px 14px;color:' + DEEP + ';font-size:12px;line-height:1.7;text-align:center">' + esc(note[0]) + '<br><span dir="ltr" style="color:' + KHAKI + '">' + esc(note[1]) + '</span></p>' +
+      '</td></tr>' +
+      // التذييل
+      '<tr><td style="border-top:1px solid ' + BEIGE + ';padding:16px 24px;text-align:center;line-height:1.7">' +
+      '<div dir="rtl" style="color:' + NAVY + ';font-size:13px;font-weight:bold">«' + SLOGAN_[0] + '» · <span dir="ltr" style="font-weight:normal;color:' + KHAKI + '">' + SLOGAN_[1] + '</span></div>' +
+      '<div dir="rtl" style="color:' + KHAKI + ';font-size:11px">' + esc(BRAND_AR) + ' · <span dir="ltr">' + esc(BRAND_EN) + '</span></div>' +
+      '<div dir="rtl" style="color:' + KHAKI + ';font-size:11px">للمساعدة · <span dir="ltr">Help: ' + SUPPORT_ + '</span></div>' +
+      '<div dir="rtl" style="color:#A89A7A;font-size:10px;margin-top:4px">رسالة آلية من أعوان. لا تُرسل كلمة المرور لأحد. · Automated message from Awan.</div></td></tr>' +
+      '</table></td></tr></table></body></html>';
+    var text = hello[0] + '\n' + hello[1] + '\n\n' + (kind === 'con' ? ((d.pin ? 'الرقم السري للشركة / Company PIN: ' + d.pin + '\n' : '') + (d.leadPin ? 'رقم قائد الفريق / Team leader PIN: ' + d.leadPin + '\n' : ''))
+      : ('اسم الدخول / Sign-in: ' + d.login + '\n' + (d.password ? 'كلمة المرور المؤقتة / Temporary password: ' + d.password + ' (72h)\n' : ''))) + url + '\n\n' +
+      steps.map(function (s, i) { return (i + 1) + '. ' + s[0] + ' / ' + s[1]; }).join('\n') + '\n\n' + note[0] + '\n' + 'للمساعدة / Help: ' + SUPPORT_;
+    return { to: d.to, subject: (kind === 'con' ? 'أعوان · بيانات دخول شركتكم · Your Awan access' : 'أهلاً بك في أعوان · حسابك جاهز · Welcome to Awan'), html: html, text: text, private: true };
   }
 
   return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom, creds: creds };

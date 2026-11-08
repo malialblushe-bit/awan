@@ -1129,7 +1129,8 @@ function conMail_(conId, p) {
 /** رسالة بيانات الدخول لمستخدم: الموظف بكلمة مؤقتة جديدة، والإشراف بخطوات اختيار رقمه */
 function userCredMsg_(u, pw) {
   var sup = Auth.isSup(u.role);
-  return Mail.creds(sup ? 'sup' : 'staff', { to: String(u.email).trim(), name: u.name, role: u.role, login: String(u.email || u.username).trim(), password: pw, url: webUrl_() });
+  var hs = Orders.csv(u.hotel_ids).map(function (h) { return (Db.get('Hotels', h) || {}).name || ''; }).filter(String);
+  return Mail.creds(sup ? 'sup' : 'staff', { to: String(u.email).trim(), name: u.name, role: u.role, login: String(u.email || u.username).trim(), password: pw, url: webUrl_(), hotels: hs });
 }
 
 /** إرسال بيانات الدخول بالبريد: ids قائمة، أو 'pending' لكل من له بريد ولم يدخل بعد. البريد يُرسل بعد فك القفل */
