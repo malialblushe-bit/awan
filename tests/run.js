@@ -809,6 +809,12 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps[0].result, 'نظيفة');
   run(`apiPestTrap('${ct}', 'remove', { trap_id: '${tp.id}' })`);
   eq(run(`apiConBoot('${ct}')`).pest.hotels[HID].traps.length, 0);
+  // مصيدة في كل منطقة محددة دفعة واحدة، بترقيم متتابع
+  const zs2 = [].concat(...st.hotels[HID].floors.map(f => f.zones)).slice(0, 3).map(z => z.id);
+  const tp2 = run(`apiPestTrap('${ct}', 'place', { hotel_id: '${HID}', zones: ${JSON.stringify(zs2)}, kind: 'محطة طعوم قوارض', every_days: 14 })`).result;
+  eq(tp2.labels.join(','), 'T-02,T-03,T-04');
+  const tr2 = run(`apiConBoot('${ct}')`).pest.hotels[HID].traps; eq(tr2.length, 3); eq(tr2.map(t => t.zone).sort().join(), zs2.slice().sort().join());
+  tr2.forEach(t => run(`apiPestTrap('${ct}', 'remove', { trap_id: '${t.id}' })`));
   // متعهد التكييف لا يسجّل مكافحة
   throws(`apiPestLog('${acTok}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`, 'المكافحة');
   // متعهد المكافحة يسجّل من الويب أيضاً (بلا باركود)

@@ -459,14 +459,18 @@ var Ops = (function () {
     var t = new Date();
     if (action === 'place') {
       var hotelId = d.hotel_id || s.hotel_id, con = pcCon_(s, hotelId);
-      zoneOf_(hotelId, d.zone);
+      var zs = (d.zones && d.zones.length) ? d.zones : [d.zone];
+      zs.forEach(function (z) { zoneOf_(hotelId, z); });
       if (TRAP_KINDS.indexOf(d.kind) === -1) throw new Error('اختر نوع المصيدة.');
       var every = Number(d.every_days) || 7;
       if (every < 1 || every > 90) throw new Error('موعد الفحص بين 1 و90 يوماً.');
-      var n = Db.all('Traps', function (x) { return x.hotel_id === hotelId; }).length + 1;
-      var rec = Db.insert('Traps', { hotel_id: hotelId, zone: d.zone, label: 'T-' + (n < 10 ? '0' : '') + n, kind: d.kind, placed_at: t, every_days: every,
-        last_check: '', last_result: '', removed_at: '', status: 'active', by_name: con.name });
-      return { id: rec.trap_id, label: rec.label };
+      var n = Db.all('Traps', function (x) { return x.hotel_id === hotelId; }).length;
+      // مصيدة في كل منطقة محددة، بترقيم متتابع
+      var recs = Db.insertMany('Traps', zs.map(function (z) { n++;
+        return { hotel_id: hotelId, zone: z, label: 'T-' + (n < 10 ? '0' : '') + n, kind: d.kind, placed_at: t, every_days: every,
+          last_check: '', last_result: '', removed_at: '', status: 'active', by_name: con.name }; }));
+      var labels = zs.map(function (z, i) { return 'T-' + (n - zs.length + i + 1 < 10 ? '0' : '') + (n - zs.length + i + 1); });
+      return { id: recs && recs[0] ? recs[0].trap_id : '', label: labels[0], labels: labels };
     }
     var tr = Db.get('Traps', d.trap_id);
     if (!tr || tr.status !== 'active') throw new Error('المصيدة غير موجودة أو مرفوعة.');
