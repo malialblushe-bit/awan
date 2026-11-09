@@ -396,6 +396,9 @@ t('المتعهد: الإصلاح بعد الاعتماد، والمتابعة �
   const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-712-A', sym: 'لا يبرد', part: 'الكمبروسر', cause: ['تآكل طبيعي'], parts: ['كمبروسر جديد'], follow: 'نعم', followNote: 'تنظيف خط التصريف', custom: [{ list: 'parts', ar: 'كمبروسر جديد' }] })`);
   eq(r.result.status, 'matching');
   if (!r.result.msg.includes('متابعة')) throw new Error('لم تُفتح المتابعة');
+  // تركيب الكمبروسر المعتمد: «استبدال كمبروسر» ثابت في الإجراء المتخذ ولو لم يُرسل
+  const rep = run(`(function (r) { r = typeof r === 'string' ? JSON.parse(r) : r; return r[r.length - 1]; })(Db.get('WorkOrders', '${AC1}').report)`);
+  eq(rep.action[0], 'استبدال كمبروسر'); eq(rep.equip, 'AC-712-A');
   eq(r.boot.jobs.length, 2);
   eq(run("Db.all('Lists', l => l.status === 'pending').length"), 1);
   eq(run(`Db.get('WorkOrders', '${AC1}').visits`), 2);

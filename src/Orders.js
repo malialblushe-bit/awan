@@ -199,6 +199,13 @@ var Orders = (function () {
     }
     var hist = parse_(o.report, null);
     var all = Array.isArray(hist) ? hist : (hist ? [hist] : []);
+    // تركيب الكمبروسر المعتمد: «استبدال كمبروسر» ثابت في الإجراء المتخذ (يُحسب في الكشف)، والمعدة والسبب من تقرير الكمبروسر
+    var compR = all.filter(function (r) { return r && r.outcome === 'comp'; }).pop();
+    if (oc === 'fix' && o.type === 'ac' && compR && (o.decision === 'con' || o.decision === 'own')) {
+      if (report.action.indexOf('استبدال كمبروسر') === -1) report.action.unshift('استبدال كمبروسر');
+      if (!report.equip) report.equip = compR.equip || o.equip || '';
+      if (!report.cause.length) report.cause = compR.cause || [];
+    }
     all.push(report);
 
     var hadCA = !!o.reject_reason;   // قبل التحديث (السجل نفسه يتغير بالتحديث)

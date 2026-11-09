@@ -650,6 +650,8 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  },
  dk:function(){return 'aw_dr_'+C.b.me.id+'_'+(C.preset?'new_'+C.preset+'_'+(C.newHotel||C.b.hotel.id):C.jobId)},
  saveDraft:function(){if(!C._dk)return;if(!C.outcome&&!Object.keys(C.sel).length)return;lstore(C._dk,{at:Date.now(),sel:C.sel,outcome:C.outcome,custom:C.custom,stp:C.stp})},
+ /** طلب كمبروسر معتمد للتركيب (بعد القرار/السداد): يُكمل بخطوات الإصلاح والكمبروسر ثابت في الإجراء */
+ isComp:function(j){return !!j&&j.type==='ac'&&(j.decision==='con'||j.decision==='own')&&(j.reports||[]).some(function(r){return r.outcome==='comp'})},
  restore:function(){var k=C.dk();if(C._dk===k)return;C._dk=k;var d=lload(k);if(d&&d.at>Date.now()-3*864e5&&!C.outcome&&!Object.keys(C.sel).length){C.sel=d.sel||{};C.outcome=d.outcome||null;C.custom=d.custom||{};C.stp=d.stp||0;C.restored=true}},
  dropDraft:function(){lstore(C.dk(),null);C.sel={};C.outcome=null;C.custom={};C.photos=[];C.stp=0;C.restored=false;render()},
  logout:function(){call('apiLogout',S.tok);store(tokKey(),null);S.tok=null;C.b=null;S.mode='';C.scr='home';render()},
@@ -675,6 +677,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   if(isNew)return [];
   var list=t==='el'?[['fix','تم الإصلاح','سجّل العطل والإجراء، وملاحظاتك للمهندس'],['diag','يحتاج قطعة','التشخيص والقطعة الموصى بها. السعر يرسله مكتبكم بعد طلب المهندس',1],['ok','سليم','فحصته ولم تجد خللاً، وتسجّل ما فحصته'],['visit','تسجيل زيارة','أغادر الآن وأعود لإكمال العمل']]
    :[['fix','إصلاح وخدمات','تسريب، فريون، مبيلة، ريموت، صوت… وتختار الإجراء المتخذ'],['ok','سليم','فحصته ولم يُلاحظ خلل'],['comp','استبدال كمبروسر فقط','الكمبروسر تالف: صورة قراءة التيار ثم قرار المهندس',1]];
+  if(C.isComp(j))return [['fix','تركيب الكمبروسر وإكمال العمل','الكمبروسر مسجّل في الإجراء المتخذ، وأضف أي خدمة أخرى نفّذتها']];
   if(j.decision==='con'||j.decision==='own')list=list.filter(function(o){return !o[3]});
   if(t==='el'){if(j.status==='lead')list=list.filter(function(o){return o[0]!=='visit'});else if(!C.b.web)list=list.concat([['lead','إنهاء وإرسال لقائد الفريق','تسجّل الإغلاق الآن، وقائد فريقك يستكمل التقرير ويرفق التقرير الفني']])}
   return list},
@@ -682,6 +685,8 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   var hotel=isNew?(C.b.hotels.filter(function(h){return h.id===(C.newHotel||C.b.hotel.id)})[0]||{}):null;
   var units=isNew?[]:(j.units||[]);
   if(!el&&!isNew&&units.length===1&&!C.sel.equip&&oc!=='pm')C.sel.equip=units[0];
+  // المعدة المسجّلة على العملية لا تُطلب من جديد
+  if(!el&&!isNew&&!C.sel.equip&&j.equip&&oc!=='pm'){C.sel.equip=j.equip;if(units.indexOf(j.equip)===-1)units=units.concat([j.equip])}
   var arr=function(a){return (a||[]).map(function(x){return x.ar})};
   var equip={k:'one',key:'equip',l:el?'المصعد':'المعدة',opts:el?(isNew?(hotel.elevators||[]):[]):units,req:el||!isNew,add:!el,hint:el?'':(isNew?'':'وحدات هذا الموقع فقط. غير موجودة؟ أضفها.')};
   var sg=(C.b.sugg||{})[C.sel.sym]||{},sfirst=function(o,top){top=(top||[]).filter(function(x){return o.indexOf(x)!==-1});return top.concat(o.filter(function(x){return top.indexOf(x)===-1}))},shint=function(top){return top&&top.length?'الأكثر تكراراً مع «'+C.sel.sym+'»: '+top.join('، '):''};
@@ -696,6 +701,9 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   var photo=function(l,req){return {k:'photo',l:l||'صورة بعد العمل',req:!!req}};
   var E=(el&&!isNew)?[]:[equip],W=el?[working]:[],f=[];
   if(oc==='ok')f=E.concat([H('الفحص'),checked,H('التسليم')],W,[note]);
+  var CMP='استبدال كمبروسر';
+  if(oc==='fix'&&C.isComp(j)){if(act.opts.indexOf(CMP)===-1)act.opts=[CMP].concat(act.opts);else act.opts=[CMP].concat(act.opts.filter(function(x){return x!==CMP}));act.fixed=CMP;if((C.sel.action||[]).indexOf(CMP)===-1)C.sel.action=[CMP].concat(C.sel.action||[]);
+   return f=[H('الإجراء المتخذ','الكمبروسر مسجّل، وأضف أي خدمة أخرى نفّذتها')].concat([act],fre,[parts,H('التسليم'),follow,photo(),note])}
   if(oc==='fix')f=E.concat([H('الملاحظة'),sym,H('العطل'),part,cause,H('الإجراء المتخذ'),act],fre,[parts,H('التسليم')],W,[follow,photo(),note]);
   if(oc==='comp')f=E.concat([H('القراءة'),photo('صورة قراءة التيار',1),H('العطل'),cause,H('التسليم'),note]);
   var att={k:'att',l:'التقرير الفني للمتعهد (صورة أو PDF)',req:true};
@@ -735,7 +743,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   if(f.k==='floor'){var hotel=C.b.hotels.filter(function(x){return x.id===(C.newHotel||C.b.hotel.id)})[0]||{floors:[]};h+='<label class="lbl" for="f'+i+'">'+f.l+' <span class="req">*</span></label><select id="f'+i+'" class="inp" onchange="C.sel.floor_id=this.value;render()"><option value="">اختر</option>'+hotel.floors.map(function(fl){return '<option value="'+fl.id+'"'+(v===fl.id?' selected':'')+'>'+esc(fl.label||fl.name)+'</option>'}).join('')+'</select>'}
   if(f.dd){var sel=v||[],cu=C.custom[f.key]||[];C._dd=C._dd||{};C._dd[f.key]=f.opts;
    h+='<label class="lbl" for="dd_'+f.key+'">'+f.l+(f.req?' <span class="req">*</span>':'')+'</label>';
-   if(sel.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+sel.map(function(o){return '<span class="fx" style="background:var(--brand);color:#fff">'+esc(o)+(cu.indexOf(o)!==-1?' · جديد':'')+'<button style="color:#fff" aria-label="حذف" data-v="'+esc(o)+'" onclick="C.pick(\''+f.key+'\',true,this.dataset.v)">×</button></span>'}).join('')+'</div>';
+   if(sel.length)h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+sel.map(function(o){return '<span class="fx" style="background:var(--brand);color:#fff">'+esc(o)+(cu.indexOf(o)!==-1?' · جديد':'')+(f.fixed===o?' 🔒':'<button style="color:#fff" aria-label="حذف" data-v="'+esc(o)+'" onclick="C.pick(\''+f.key+'\',true,this.dataset.v)">×</button>')+'</span>'}).join('')+'</div>';
    h+='<div style="display:flex;gap:8px">'+combo('dd_'+f.key,'',f.opts.filter(function(o){return sel.indexOf(o)===-1}),'C.ddIn(\''+f.key+'\',this.value)','اختر من القائمة أو اكتب')+'<button class="btn btn-o" onclick="C.ddAdd(\''+f.key+'\')">إضافة</button></div>';
    if(f.hint)h+='<p class="small muted" style="margin:6px 0 0">'+f.hint+'</p>';
    return h+'</div>'}
@@ -752,7 +760,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   return h+'</div>'},
  ddIn:function(key,v){var m=pickOf((C._dd||{})[key]||[],v);if(m&&(C.sel[key]||[]).indexOf(m)===-1){C.sel[key]=(C.sel[key]||[]).concat(m);render();var e=$('#dd_'+key);if(e)e.focus()}},
  ddAdd:function(key){var e=$('#dd_'+key),v=e?String(e.value).trim():'';if(!v)return;var m=pickOf((C._dd||{})[key]||[],v)||v;if(!pickOf((C._dd||{})[key]||[],v))C.custom[key]=(C.custom[key]||[]).concat(v);if((C.sel[key]||[]).indexOf(m)===-1)C.sel[key]=(C.sel[key]||[]).concat(m);render()},
- pick:function(key,many,o){if(key==='freon')C.sel.freonMan=true;var v=C.sel[key];if(many){v=(v||[]).slice();var i=v.indexOf(o);if(i===-1)v.push(o);else v.splice(i,1)}else v=(v===o?null:o);C.sel[key]=v;render()},
+ pick:function(key,many,o){if(key==='action'&&o==='استبدال كمبروسر'&&C.isComp(C.preset?null:C.job()))return;if(key==='freon')C.sel.freonMan=true;var v=C.sel[key];if(many){v=(v||[]).slice();var i=v.indexOf(o);if(i===-1)v.push(o);else v.splice(i,1)}else v=(v===o?null:o);C.sel[key]=v;render()},
  commit:function(key,many,list){var t=(C.draft||'').trim();C.adding=null;if(!t)return render();C.custom[key]=(C.custom[key]||[]).concat(t);if(many)C.sel[key]=(C.sel[key]||[]).concat(t);else C.sel[key]=t;render()},
  jobView:function(){var j=C.preset?null:C.job(),h='<div class="stack">';C.restore();
   if(j){
@@ -781,7 +789,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
   return h+(j?C.reportsView(j):'')+'</div>'},
  reportsView:function(j){if(!j.reports||!j.reports.length)return '';return '<details class="card"><summary style="font-weight:700;cursor:pointer">تقاريري السابقة على هذه العملية ('+j.reports.length+')</summary>'+j.reports.slice().reverse().map(W.reportHtml).join('')+'</details>'},
  /** خطوات التقرير: النتيجة ثم أقسام الحقول (كل عنوان يبدأ خطوة) */
- allSteps:function(j){var st=C.preset?[]:[{t:'النتيجة',outcome:true}],oc=C.preset||C.outcome;if(!oc)return st.concat([{t:'التفاصيل',fields:[]}]);
+ allSteps:function(j){if(C.isComp(j))C.outcome='fix';var st=(C.preset||C.isComp(j))?[]:[{t:'النتيجة',outcome:true}],oc=C.preset||C.outcome;if(!oc)return st.concat([{t:'التفاصيل',fields:[]}]);
   var gs=[{t:null,fields:[]}];C.specs(oc,j).forEach(function(f){if(f.k==='head')gs.push({t:f.l,fields:[]});else gs[gs.length-1].fields.push(f)});
   if(!gs[0].fields.length)gs.shift();else if(gs.length>1){gs[1].fields=gs[0].fields.concat(gs[1].fields);gs.shift()}
   gs.forEach(function(g){if(!g.t)g.t='التفاصيل'});return st.concat(gs)},
