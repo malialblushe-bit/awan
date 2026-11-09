@@ -502,6 +502,10 @@ t('دخول المتعهد من الويب: كل الفنادق، بلا تسج�
   throws(`apiConAct('${r.token}', 'submit', '${w2}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok' })`, 'مغادرتك');
   throws(`apiConAct('${r.token}', 'leave', null, {})`, 'من الفندق');
   const ar = run(`apiConAct('${bt}', 'arrive', null, { ids: [] })`); eq(ar.boot.visit.out, false);
+  // من الباركود: العملية الجديدة في فندق الباركود ولو أُرسل فندق آخر (بلاغ 9 نوفمبر: «سجّل وصولك» لأن الفندق المختار غير فندق الوصول)
+  const other = run(`Db.all('Hotels').filter(function (h) { return h.hotel_id !== '${hid2}'; })[0].hotel_id`);
+  const nr = run(`apiConAct('${bt}', 'new', null, { outcome: 'ok', hotel_id: '${other}', floor_id: '${floor}', room: '707', equip: 'وحدة 1', checked: ['الضاغط'] })`);
+  eq(run(`Db.get('WorkOrders','${nr.result.id}').hotel_id`), hid2);
 });
 
 t('الرقم السري: 5 محاولات خاطئة تقفل مؤقتاً', () => {

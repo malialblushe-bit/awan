@@ -763,7 +763,8 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
    if(C.b.web&&!j.arrived){C.outcome=null;return h+'<div class="alert a-tan"><b>لم يُسجَّل الوصول بعد.</b> التقرير يُرسل بعد مسح باركود أعوان في '+esc(j.hotel)+'.</div>'+C.reportsView(j)+'</div>'}
   } else {
    h+='<div class="tile"><p style="font-size:17px;font-weight:700">'+({diag:'ملاحظة عطل',report:'تقرير فني',pm:'صيانة دورية',fix:'إصلاح مباشر'}[C.preset])+'</p><p class="small muted">بمبادرتك · الآن</p></div>';
-   if(C.b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+C.b.hotels.map(function(x){var on=(C.newHotel||C.b.hotel.id)===x.id;return '<button class="chip'+(on?' on':'')+'" onclick="C.newHotel=\''+x.id+'\';C.sel={};C.stp=0;render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
+   if(!C.b.web)C.newHotel=null;
+   if(C.b.web&&C.b.hotels.length>1)h+='<div><span class="lbl">الفندق</span><div class="chips">'+C.b.hotels.map(function(x){var on=(C.newHotel||C.b.hotel.id)===x.id;return '<button class="chip'+(on?' on':'')+'" onclick="C.newHotel=\''+x.id+'\';C.sel={};C.stp=0;render()">'+esc(x.name)+'</button>'}).join('')+'</div></div>';
   }
   if(C.restored)h+='<div class="alert a-mint row" role="status" style="flex-wrap:wrap"><span>استُعيدت مسودتك المحفوظة على هذا الجهاز (عدا الصور).</span><button class="btn btn-o sm" onclick="C.dropDraft()">البدء من جديد</button></div>';
   var st=C.allSteps(j),i=C.cur(st),cs=st[i];

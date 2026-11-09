@@ -265,7 +265,8 @@ var Orders = (function () {
   /** عملية جديدة بمبادرة المتعهد: ملاحظة عطل أو تقرير فني */
   function conNew(s, d) {
     var con = Db.get('Contractors', s.id);
-    var hotelId = d.hotel_id || s.hotel_id;
+    // من الباركود: العملية الجديدة في فندق الباركود نفسه (حيث سُجّل الوصول)
+    var hotelId = s.web ? (d.hotel_id || s.hotel_id) : s.hotel_id;
     if (!activeContract(hotelId, con.type, con.con_id)) throw new Error('لا يوجد عقد ساري لك في هذا الفندق.');
     if (!s.web && !visitToday(con.con_id, hotelId)) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
     var isPm = d.outcome === 'pm';
