@@ -785,7 +785,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  move:function(d){C.stp=(C.stp||0)+d;C.adding=null;render();window.scrollTo(0,0)},
  missing:function(){var oc=C.preset||C.outcome;if(!oc)return ['النتيجة'];var j=C.preset?null:C.job();return C.specs(oc,j).filter(function(f){return f.req&&!C.filled(f)}).map(function(f){return f.l.split(' (')[0]})},
  footer:function(){
-  if(C.scr==='job'){var j=C.preset?null:C.job();if(j&&['review','matching','parts','closed','rejected'].indexOf(j.status)!==-1)return '';if(j&&!j.arrived&&(C.b.web||['assigned','in_progress'].indexOf(j.status)!==-1))return '';var oc=C.preset||C.outcome;
+  if(C.scr==='job'){var j=C.preset?null:C.job();if(j&&['review','matching','parts','closed','rejected'].indexOf(j.status)!==-1)return '';if(j&&!j.arrived&&(C.b.web||(!C.b.visit&&['assigned','in_progress'].indexOf(j.status)!==-1)))return '';var oc=C.preset||C.outcome;
    var st=C.allSteps(j),i=C.cur(st),last=i===st.length-1,m=C.stepMissing();
    var back=i>0?'<button class="btn btn-o" style="width:110px" onclick="C.move(-1)">رجوع</button>':'';
    if(!last)return '<div class="foot"><div class="foot-in" style="max-width:760px">'+back+'<button id="sb" class="btn btn-p w" onclick="C.move(1)"'+(m.length?' disabled':'')+'>'+(m.length?'أكمل: '+m.join('، '):'التالي')+'</button></div></div>';
