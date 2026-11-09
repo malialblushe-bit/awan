@@ -2,7 +2,28 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
+<script>
+/* وضع الجوال الاحتياطي: إن فُتحت الصفحة على جوال بعرض سطح المكتب (لم يُطبَّق إعداد العرض في الإطار الخارجي)،
+   تُفعَّل قواعد الجوال وتُكبَّر الصفحة لعرض الشاشة */
+(function(){
+  function need(){var sw=Math.min(screen.width||0,screen.height||9999);return sw&&sw<760&&window.innerWidth>sw*1.35&&(('ontouchstart' in window)||navigator.maxTouchPoints>0)}
+  function force(){
+    for(var k=0;k<document.styleSheets.length;k++){var ss=document.styleSheets[k],rs;try{rs=ss.cssRules}catch(e){continue}
+      for(var i=rs.length-1;i>=0;i--){var r=rs[i];if(!r.media||r.type!==4)continue;var m=r.media.mediaText;
+        if(/min-width:\s*9\d\dpx/.test(m)){ss.deleteRule(i)}
+        else if(/max-width:\s*\d+px/.test(m)&&!/print/.test(m)){var inner=[];for(var j=0;j<r.cssRules.length;j++)inner.push(r.cssRules[j].cssText);ss.deleteRule(i);for(var q=inner.length-1;q>=0;q--){try{ss.insertRule(inner[q],i)}catch(e){}}}}}
+    var z=window.innerWidth/Math.min(screen.width,screen.height),vh=window.innerHeight/z/100;
+    document.documentElement.style.zoom=z.toFixed(3);
+    // وحدات ارتفاع الشاشة (vh) تُحسب من العرض المكبّر، فتُصحَّح لارتفاع الشاشة الفعلي
+    var st=document.createElement('style');st.textContent='[data-vpfix] .lg,[data-vpfix] .pin{min-height:'+Math.round(100*vh)+'px!important}[data-vpfix] .modal>div{max-height:'+Math.round(92*vh)+'px!important}[data-vpfix] .pvf{height:'+Math.round(70*vh)+'px!important}[data-vpfix] .lbx img{max-height:'+Math.round(76*vh)+'px!important}';document.head.appendChild(st);
+    document.documentElement.setAttribute('data-vpfix','1');
+  }
+  function run(){if(need()&&!document.documentElement.getAttribute('data-vpfix'))force()}
+  document.addEventListener('DOMContentLoaded',run);window.addEventListener('load',run);
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
