@@ -249,7 +249,12 @@ function conBoot_raw(s) {
   var mine = Db.all('WorkOrders', function (o) { return o.con_id === s.id; });
   var jobs = [], archive = [];
   mine.forEach(function (o) {
-    if (Orders.OPEN.indexOf(o.status) !== -1) jobs.push(Orders.view(R, o, true));
+    if (Orders.OPEN.indexOf(o.status) !== -1) {
+      var jv = Orders.view(R, o, true);
+      // زيارة اليوم في فندق العملية (للويب: يُرسل التقرير إن سُجّل الوصول من الباركود)
+      if (!o.arrived_at) { var vt = Orders.visitToday(s.id, o.hotel_id); jv.vis = !!(vt && !vt.out); }
+      jobs.push(jv);
+    }
     else if ((Orders.ms(o.closed_at) || 0) >= since) archive.push(Orders.view(R, o, true));
   });
   jobs.sort(function (a, b) { return (b.trapped - a.trapped) || (a.created - b.created); });
@@ -333,12 +338,15 @@ function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
     d = d || {};
     if (s.web) {
       if (action !== 'submit' && action !== 'tech') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
-      var w = Db.get('WorkOrders', woId);
-      if (w && w.con_id === s.id && !w.arrived_at) throw new Error('سجّل وصولك أولاً بمسح باركود أعوان في الفندق، ثم أرسل التقرير.');
     }
     d.photos = savePhotos_(d.photos, woId || 'NEW');
     d.att = saveFiles_(d.att, 'RPT-' + (woId || 'NEW'));
     var res = { msg: '' };
+    if (action === 'leave') {
+      if (s.web) throw new Error('تسجيل المغادرة من باركود أعوان في الفندق.');
+      var lt = Orders.leave(s.id, s.hotel_id);
+      return { result: { left: lt.getTime(), msg: 'سُجّلت مغادرتك' }, boot: conBoot_(s) };
+    }
     if (action === 'arrive') {
       if (s.web) throw new Error('تسجيل الوصول من باركود أعوان في الفندق.');
       var arr = Orders.arrive(s.id, s.hotel_id, Array.isArray(d.ids) ? d.ids : null);

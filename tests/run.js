@@ -485,8 +485,23 @@ t('دخول المتعهد من الويب: كل الفنادق، بلا تسج�
   throws(`apiConAct('${r.token}', 'new', null, { outcome: 'report', title: 'x' })`, 'من الفندق فقط');
   const floor = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
   const w = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '705', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  const cid = run(`Db.get('WorkOrders','${w}').con_id`), hid2 = run(`Db.get('WorkOrders','${w}').hotel_id`);
+  // بلا زيارة اليوم: يُطلب الوصول من الباركود
+  const keep = run(`Db.all('Arrivals', function (a) { return a.con_id === '${cid}' && a.hotel_id === '${hid2}'; }).map(function (a) { Db.update('Arrivals', a.arrival_id, { at: new Date(Date.now() - 3 * 864e5) }); return a.arrival_id; })`);
   throws(`apiConAct('${r.token}', 'submit', '${w}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok' })`, 'سجّل وصولك أولاً');
-  eq(run(`apiConBoot('${r.token}')`).jobs.some(j => j.id === w), true);
+  eq(run(`apiConBoot('${r.token}')`).jobs.find(j => j.id === w).vis, false);
+  // سجّل وصوله اليوم من الباركود: يُرسل التقرير من الويب ويُحسب وصوله تلقائياً
+  run(`Db.insert('Arrivals', { hotel_id: '${hid2}', con_id: '${cid}', at: new Date() })`);
+  eq(run(`apiConBoot('${r.token}')`).jobs.find(j => j.id === w).vis, true);
+  throws(`apiConAct('${r.token}', 'submit', '${w}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok' })`, 'فحصته');
+  // زر المغادرة: ينهي الزيارة فيُطلب وصول جديد
+  const bt = run(`apiConLogin('WARIF2', '${acPin}')`).token;
+  const lv = run(`apiConAct('${bt}', 'leave', null, {})`); eq(lv.boot.visit.out, true);
+  throws(`apiConAct('${bt}', 'leave', null, {})`, 'من قبل');
+  const w2 = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${floor}', room: '706', symptom: 'لا يبرد', name: 'سالم' })`).id;
+  throws(`apiConAct('${r.token}', 'submit', '${w2}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok' })`, 'مغادرتك');
+  throws(`apiConAct('${r.token}', 'leave', null, {})`, 'من الفندق');
+  const ar = run(`apiConAct('${bt}', 'arrive', null, { ids: [] })`); eq(ar.boot.visit.out, false);
 });
 
 t('الرقم السري: 5 محاولات خاطئة تقفل مؤقتاً', () => {

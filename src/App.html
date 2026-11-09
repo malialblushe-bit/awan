@@ -759,7 +759,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
    if(j.note)h+='<div class="alert a-mint">'+esc(j.note)+'</div>';
    var locked={review:['قيد المراجعة.','سيصلك القرار هنا حين يصبح جاهزاً للتنفيذ. وعدّاد عملك متوقف.'],matching:['بانتظار مطابقة المهندس.','سيطابق تقريرك كاملاً ثم يغلق العملية أو يعيدها مع السبب.'],parts:['بانتظار القطعة من فريقنا.','سيُشعرك المهندس حين تصل. وعدّاد عملك متوقف.'],closed:['مغلقة بعد المطابقة.',''],rejected:['مرفوضة.',j.reject_reason]}[j.status];
    if(locked)return h+'<div class="alert a-tan"><b>'+locked[0]+'</b> '+esc(locked[1]||'')+'</div>'+C.reportsView(j)+(j.status==='closed'&&j.matchedBy?'<div class="dstamp">'+STAMP({label:'مطابق',name:j.matchedBy,role:j.matchedRole,date:j.closed,size:112})+'</div>':'')+'</div>';
-   if(!C.b.web&&!j.arrived&&!C.b.visit&&['assigned','in_progress'].indexOf(j.status)!==-1){C.outcome=null;return h+'<div class="card stack" style="gap:10px;border-color:var(--gold)"><b>لم يُسجَّل وصولك لهذه العملية بعد.</b><span class="small muted">'+(C.b.visit?'وصلت '+hm(C.b.visit.at)+'. اضغط لبدء عدّاد هذه العملية.':'مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة.')+'</span><button id="arrB" class="btn btn-p w" onclick="C.arrive([\''+j.id+'\'])">تسجيل الوصول</button></div>'+C.reportsView(j)+'</div>'}
+   if(!C.b.web&&!j.arrived&&!C.vis()&&['assigned','in_progress'].indexOf(j.status)!==-1){C.outcome=null;return h+'<div class="card stack" style="gap:10px;border-color:var(--gold)"><b>لم يُسجَّل وصولك لهذه العملية بعد.</b><span class="small muted">'+(C.b.visit?'وصلت '+hm(C.b.visit.at)+'. اضغط لبدء عدّاد هذه العملية.':'مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة.')+'</span><button id="arrB" class="btn btn-p w" onclick="C.arrive([\''+j.id+'\'])">تسجيل الوصول</button></div>'+C.reportsView(j)+'</div>'}
    if(C.b.web&&!j.arrived){C.outcome=null;return h+'<div class="alert a-tan"><b>لم يُسجَّل الوصول بعد.</b> التقرير يُرسل بعد مسح باركود أعوان في '+esc(j.hotel)+'.</div>'+C.reportsView(j)+'</div>'}
   } else {
    h+='<div class="tile"><p style="font-size:17px;font-weight:700">'+({diag:'ملاحظة عطل',report:'تقرير فني',pm:'صيانة دورية',fix:'إصلاح مباشر'}[C.preset])+'</p><p class="small muted">بمبادرتك · الآن</p></div>';
@@ -785,7 +785,7 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  move:function(d){C.stp=(C.stp||0)+d;C.adding=null;render();window.scrollTo(0,0)},
  missing:function(){var oc=C.preset||C.outcome;if(!oc)return ['النتيجة'];var j=C.preset?null:C.job();return C.specs(oc,j).filter(function(f){return f.req&&!C.filled(f)}).map(function(f){return f.l.split(' (')[0]})},
  footer:function(){
-  if(C.scr==='job'){var j=C.preset?null:C.job();if(j&&['review','matching','parts','closed','rejected'].indexOf(j.status)!==-1)return '';if(j&&!j.arrived&&(C.b.web||(!C.b.visit&&['assigned','in_progress'].indexOf(j.status)!==-1)))return '';var oc=C.preset||C.outcome;
+  if(C.scr==='job'){var j=C.preset?null:C.job();if(j&&['review','matching','parts','closed','rejected'].indexOf(j.status)!==-1)return '';if(j&&!j.arrived&&!j.vis&&(C.b.web||(!C.vis()&&['assigned','in_progress'].indexOf(j.status)!==-1)))return '';var oc=C.preset||C.outcome;
    var st=C.allSteps(j),i=C.cur(st),last=i===st.length-1,m=C.stepMissing();
    var back=i>0?'<button class="btn btn-o" style="width:110px" onclick="C.move(-1)">رجوع</button>':'';
    if(!last)return '<div class="foot"><div class="foot-in" style="max-width:760px">'+back+'<button id="sb" class="btn btn-p w" onclick="C.move(1)"'+(m.length?' disabled':'')+'>'+(m.length?'أكمل: '+m.join('، '):'التالي')+'</button></div></div>';
@@ -808,12 +808,16 @@ var C={pin:'',scr:'home',sel:{},custom:{},adding:null,draft:'',photos:[],outcome
  rescue:function(id){call('apiConAct',S.tok,'rescue',id,{}).then(function(r){C.b=r.boot;render()})},
  /** تسجيل الوصول: مرة للزيارة بعد مسح الباركود، ويبقى بعد إغلاق الصفحة؛ وإتمام آخر طلب = المغادرة */
  arrJobs:function(){return (C.b.jobs||[]).filter(function(j){return !j.arrived&&(j.status==='assigned'||j.status==='in_progress')})},
- arrCard:function(){var b=C.b;if(b.web||['ac','el'].indexOf(b.me.type)===-1)return '';var v=b.visit,js=C.arrJobs();C.arrOff=C.arrOff||{};
-  if(v)return '<div class="alert a-mint row" role="status" style="flex-wrap:wrap"><span><b>وصلت '+hm(v.at)+'</b>'+(v.left?' · آخر طلب أُتم '+hm(v.left):'')+'</span><span class="small muted">إتمام آخر طلب يُسجَّل مغادرة</span></div>';
+ vis:function(){var v=C.b&&C.b.visit;return v&&!v.out?v:null},
+ arrCard:function(){var b=C.b;if(b.web||['ac','el'].indexOf(b.me.type)===-1)return '';var v0=b.visit,v=C.vis(),js=C.arrJobs();C.arrOff=C.arrOff||{};
+  if(v)return '<div class="alert a-mint row" role="status" style="flex-wrap:wrap;gap:8px"><span><b>وصلت '+hm(v.at)+'</b>'+(v.left?' · آخر طلب أُتم '+hm(v.left):'')+'</span><button class="btn btn-o sm" onclick="C.leave()">تسجيل المغادرة</button></div>';
   var n=js.filter(function(j){return !C.arrOff[j.id]}).length;
-  var h='<div class="card stack" style="gap:10px;border-color:var(--gold)">'+(v?'<b>وصلت '+hm(v.at)+'. أعمال جديدة لم يُسجَّل وصولك لها:</b>':'<b>اضغط «تسجيل الوصول» قبل البدء</b><span class="small muted">مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة. وإتمام آخر طلب يُسجَّل مغادرة.</span>');
+  var h='<div class="card stack" style="gap:10px;border-color:var(--gold)">'+(v0&&v0.out?'<span class="small muted">غادرت '+hm(v0.left)+'. سجّل وصولك عند العودة.</span>':'')+(v?'<b>وصلت '+hm(v.at)+'. أعمال جديدة لم يُسجَّل وصولك لها:</b>':'<b>اضغط «تسجيل الوصول» قبل البدء</b><span class="small muted">مرة واحدة للزيارة، ويبقى مسجلاً لو أغلقت الصفحة. وإتمام آخر طلب يُسجَّل مغادرة.</span>');
   if(js.length)h+='<div class="stack" style="gap:6px">'+js.map(function(j){var on=!C.arrOff[j.id];return '<label class="row" style="justify-content:flex-start;gap:8px;cursor:pointer"><input type="checkbox"'+(on?' checked':'')+' onchange="C.arrOff[\''+j.id+'\']=!this.checked;render()"><span>'+esc(j.loc||j.equip||j.id)+' · <span class="muted small">'+esc(j.symptom||'')+'</span></span></label>'}).join('')+'</div>';
   return h+'<button id="arrB" class="btn btn-p w" onclick="C.arrive()">تسجيل الوصول'+(js.length?' ('+n+')':'')+'</button></div>'},
+ leave:function(){var open=(C.b.jobs||[]).filter(function(j){return ['assigned','in_progress'].indexOf(j.status)!==-1}).length;
+  ask({title:T('تسجيل المغادرة'),msg:open?F('لديك {0} عمل مفتوح هنا. بعد المغادرة يحتاج أي عمل تسجيل وصول جديد.',open):T('بعد المغادرة يحتاج أي عمل تسجيل وصول جديد.'),ok:T('تسجيل المغادرة'),fn:function(){
+   call('apiConAct',S.tok,'leave',null,{}).then(function(r){C.b=r.boot;toast(T('سُجّلت مغادرتك')+' '+hm(r.result.left));render()})}})},
  arrive:function(ids){var b=$('#arrB');if(b)b.disabled=true;if(!ids)ids=C.arrJobs().filter(function(j){return !C.arrOff[j.id]}).map(function(j){return j.id});
   call('apiConAct',S.tok,'arrive',null,{ids:ids}).then(function(r){C.b=r.boot;C.arrOff={};toast('سُجّل وصولك '+hm(r.boot.visit&&r.boot.visit.at||Date.now()));render()}).catch(function(){if(b)b.disabled=false})},
  submit:function(){if(C.missing().length)return;var oc=C.preset||C.outcome,d={outcome:oc,photos:C.photos,att:C.att||[],custom:[]};

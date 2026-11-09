@@ -82,14 +82,24 @@ var Orders = (function () {
     Db.all('Arrivals', function (a) { return a.con_id === conId && a.hotel_id === hotelId && a.at && dayStr_(new Date(a.at)) === today; }).forEach(function (a) {
       if (!best || ms(a.at) > ms(best.at)) best = a;
     });
-    return best ? { id: best.arrival_id, at: ms(best.at), left: ms(best.left_at) || null } : null;
+    return best ? { id: best.arrival_id, at: ms(best.at), left: ms(best.left_at) || null, out: String(best.out) === '1' } : null;
+  }
+
+  /** زر «تسجيل المغادرة»: ينهي زيارة اليوم، وأي عمل بعده يحتاج وصولاً جديداً */
+  function leave(conId, hotelId) {
+    var v = visitToday(conId, hotelId);
+    if (!v) throw new Error('لم يُسجَّل وصولك اليوم.');
+    if (v.out) throw new Error('سُجّلت مغادرتك من قبل.');
+    var t = now_();
+    Db.update('Arrivals', v.id, { left_at: t, out: 1 });
+    return t;
   }
 
   /** يسجّل الوصول مرة واحدة للزيارة، ويبدأ عدّاد العمليات المختارة (ids غير محدد = كل المفتوحة، [] = الزيارة فقط) */
   function arrive(conId, hotelId, ids) {
     var t = now_(), v = visitToday(conId, hotelId);
     if (!v || v.left) Db.insert('Arrivals', { hotel_id: hotelId, con_id: conId, at: t });
-    else Db.update('Arrivals', v.id, { left_at: '' });
+    else Db.update('Arrivals', v.id, { left_at: '', out: '' });
     var pick = Array.isArray(ids) ? ids : null, done = [];
     Db.all('WorkOrders', function (o) {
       return o.con_id === conId && o.hotel_id === hotelId && (o.status === 'assigned' || o.status === 'in_progress') && (!pick || pick.indexOf(o.wo_id) !== -1);
@@ -152,10 +162,11 @@ var Orders = (function () {
     var o = Db.get('WorkOrders', woId);
     if (!o || o.con_id !== s.id) throw new Error('العملية غير موجودة.');
     if (o.status !== 'assigned' && o.status !== 'in_progress' && o.status !== 'lead') throw new Error('هذه العملية ليست بانتظار تقريرك الآن.');
-    if (!s.web && !o.arrived_at) {
-      // وصوله مسجّل اليوم في هذا الفندق (والعملية أُسندت بعد وصوله أو لم تُختر عنده): يُحسب وصوله لها تلقائياً
+    if (!o.arrived_at && o.status !== 'lead') {
+      // وصوله مسجّل اليوم في هذا الفندق (من الباركود، ولو أرسل التقرير من الويب): يُحسب وصوله للعملية تلقائياً
       var vt = visitToday(s.id, o.hotel_id);
-      if (!vt) throw new Error('سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
+      if (!vt) throw new Error(s.web ? 'سجّل وصولك أولاً بمسح باركود أعوان في الفندق، ثم أرسل التقرير.' : 'سجّل وصولك أولاً: اضغط «تسجيل الوصول».');
+      if (vt.out) throw new Error('سُجّلت مغادرتك اليوم: سجّل وصولك من جديد، ثم أرسل التقرير.');
       var ta = new Date(Math.max(vt.at, ms(o.created_at) || 0));
       Db.update('WorkOrders', o.wo_id, { arrived_at: ta, work_from: o.work_from || ta });
       log_(o.wo_id, s.id, 'arrive', o.status, o.status, 'تلقائي من زيارة اليوم');
@@ -482,7 +493,7 @@ var Orders = (function () {
 
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
-    create: create, arrive: arrive, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
+    create: create, arrive: arrive, leave: leave, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
     engAct: engAct, engCreate: engCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();
