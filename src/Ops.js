@@ -308,13 +308,15 @@ var Ops = (function () {
     var zones = {}, since = Date.now() - 60 * 864e5, ev = {};
     Db.all('Rooms', function (r) { return r.hotel_id === hotelId; }).forEach(function (r) { zones[r.room_id] = String(r.number); });
     Db.all('PestLogs', function (l) { return l.hotel_id === hotelId && l.kind === 'trap' && l.trap_id; }).forEach(function (l) {
-      (ev[l.trap_id] = ev[l.trap_id] || []).push({ at: ms(l.at), text: l.note || '', by: l.by_name || '', rejected: l.status === 'rejected' });
+      var q = ev[l.trap_id] = ev[l.trap_id] || [];
+      q.push({ at: ms(l.at), text: l.note || '', by: l.by_name || '', rejected: l.status === 'rejected', seq: q.length + 1 });
     });
     return Db.all('Traps', function (t) { return t.hotel_id === hotelId && (t.status === 'active' || ms(t.removed_at) >= since); }).map(function (t) {
       var e = (ev[t.trap_id] || []).slice();
-      e.push({ at: ms(t.placed_at), text: 'وضع المصيدة', by: t.by_name || '' });
-      if (t.status === 'removed') e.push({ at: ms(t.removed_at), text: 'رفع المصيدة', by: '' });
-      e.sort(function (a, b) { return b.at - a.at; });
+      e.push({ at: ms(t.placed_at), text: 'وضع المصيدة', by: t.by_name || '', seq: 0 });
+      if (t.status === 'removed') e.push({ at: ms(t.removed_at), text: 'رفع المصيدة', by: '', seq: 1e9 });
+      // الأحدث أولاً، والأحداث في اللحظة نفسها بترتيب وقوعها (الوضع ← الأحداث ← الرفع)
+      e.sort(function (a, b) { return (b.at - a.at) || (b.seq - a.seq); });
       return { id: t.trap_id, label: t.label, kind: t.kind, zoneName: zones[t.zone] || '', status: t.status, placed: ms(t.placed_at), removed: ms(t.removed_at) || null, every: trapEvery(hotelId), events: e };
     }).sort(function (a, b) { return (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || String(a.label).localeCompare(String(b.label)); });
   }

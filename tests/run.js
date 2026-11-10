@@ -12,6 +12,7 @@ const newId = (p) => p + '_' + (++idSeq);
 const files = {};      // id → Spreadsheet
 const folders = {};    // id → Folder
 const log = [];
+const lockStat = { held: false, lockedReads: 0 }; // قراءات الورقة أثناء حمل القفل
 
 class Range {
   constructor(sh, r, c, nr, nc) { Object.assign(this, { sh, r, c, nr: nr || 1, nc: nc || 1 }); }
@@ -74,7 +75,7 @@ class Sheet {
   }
   getRange(r, c, nr, nc) {
     if (r < 1 || c < 1 || nr === 0 || nc === 0) throw new Error(`bad range ${r},${c},${nr},${nc}`);
-    this.ss.reads++;
+    this.ss.reads++; if (lockStat.held) lockStat.lockedReads++;
     return new Range(this, r, c, nr, nc);
   }
   setFrozenRows() {} setRightToLeft() {} setTabColor() {}
@@ -157,7 +158,7 @@ const ctx = {
   GmailApp: { getAliases: () => ['maint@nawazi.sa'], sendEmail: (to, subj, body, o) => { sentMail.push({ to: Object.assign({ to: to, subject: subj }, o), gmail: true }); } },
   MailApp: { sendEmail: (to, subj, body) => { sentMail.push({ to, subj, body }); } },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'nawazimai@gmail.com' }) },
-  LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+  LockService: { getScriptLock: () => ({ tryLock: () => { lockStat.held = true; return true; }, releaseLock: () => { lockStat.held = false; } }) },
   ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }), getProjectTriggers: () => triggers, deleteTrigger: () => {}, newTrigger: (fn) => ({ timeBased: () => ({ everyMinutes: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }), everyDays: () => ({ atHour: () => ({ create: () => { triggers.push({ getHandlerFunction: () => fn }); } }) }), onMonthDay: () => ({ atHour: () => ({ create: () => {} }) }) }) }) },
   UrlFetchApp: { getRequest: () => ({}), fetch: (url, o) => { const m = url.split('/').pop(), p = JSON.parse(o.payload || '{}'); tgCalls.push({ m, p }); const r = tgReply[m] ? tgReply[m](p) : { ok: true, result: { message_id: 500 + tgCalls.length } }; return { getContentText: () => JSON.stringify(r) }; } }
 };
@@ -1395,6 +1396,24 @@ t('سجل البطء: كل دالة api ملفوفة بالقياس، والعم
   const log = JSON.parse(run(`PropertiesService.getScriptProperties().getProperty('PERF_LOG')`));
   const x = log[log.length - 1]; eq(x.fn, 'apiEngBoot'); if (typeof x.reads !== 'number' || typeof x.wait !== 'number') throw new Error('fields');
   eq(run(`apiAdmLaunchInventory('${adminTok}')`).perf[0].fn, 'apiEngBoot');
+});
+
+t('القفل للكتابة فقط: الدخول بلا قفل، والإقلاع يُبنى بعد فك القفل برد خفيف وبلا إعادة قراءة ما قُرئ', () => {
+  const ss = run(`Db.ss()`);
+  // الدخول بالرقم: لا قراءة واحدة تحت القفل
+  run(`Db.reset()`); let l0 = lockStat.lockedReads;
+  const lg = run(`apiPinWebLogin('135792')`); eq(lg.kind, 'sup'); if (!lg.boot.me) throw new Error('boot');
+  eq(lockStat.lockedReads - l0, 0, 'login reads under lock');
+  // بلاغ إشراف: الكتابة تحت القفل، والإقلاع بعده (أغلب القراءات خارج القفل)، والرد خفيف
+  const zone = run(`Db.all('Rooms').find(r => r.hotel_id === '${HID}').room_id`);
+  run(`Db.reset()`); l0 = lockStat.lockedReads; const r0 = ss.reads;
+  const f = run(`apiPestFlag('${supTok}', { hotel_id: '${HID}', zone: '${zone}', kind: 'ready' })`);
+  const locked = lockStat.lockedReads - l0, total = ss.reads - r0;
+  if (!f.boot || !f.boot.__lite) throw new Error('lite boot');
+  if (!(locked < total / 2)) throw new Error('boot under lock: ' + locked + '/' + total);
+  if (lockStat.held) throw new Error('lock not released');
+  // ما كُتب ظاهر في الإقلاع دون Db.reset()
+  if (!f.boot.pest || !JSON.stringify(f.boot.pest).includes(zone)) throw new Error('written flag missing from boot');
 });
 
 t('الدخول بالبريد وإرسال بيانات الدخول: كلمة مؤقتة 72 ساعة بالبريد، والجماعي لمن لم يدخل، والمتعهد يصله رقمه', () => {

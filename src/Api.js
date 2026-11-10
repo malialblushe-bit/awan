@@ -189,7 +189,8 @@ function apiReqPest(code, d) {
 /** مشرف النظام ومدير الفندق والمناوب: «طلب مكافحة» من الخدمات المساندة */
 function apiSvcPestFlag(token, d) {
   var s = Auth.need(token, ['admin', 'gm', 'duty', 'fo']);
-  return Db.withLock(function () { d = d || {}; if (d.kind !== 'ready') d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF'); var n = Ops.flag(s, d); Db.reset(); return { n: n, boot: supBoot_(s) }; });
+  d = d || {}; if (d.kind !== 'ready') d.kind = 'infest'; d.photos = savePhotos_(d.photos, 'PF');
+  return act_(function () { var n = Ops.flag(s, d); return { n: n }; }, function () { return supBoot_(s); });
 }
 
 function apiReqSubmit(code, d) {
@@ -216,30 +217,41 @@ function apiReqSubmit(code, d) {
 }
 
 // ───────── المتعهد ─────────
+// الدخول بلا قفل: لا يكتب في ملف البيانات (الجلسة ومحاولات الخطأ في CacheService)، والترقية تأخذ قفلها بنفسها
 function apiConLogin(code, pin, geo) {
-  return Db.withLock(function () {
-    ensureSchemaVersion_();
-    var h = Orders.hotelByCode(code);
-    var r = Auth.conLogin(h, pin);
-    if (!Orders.activeContract(h.hotel_id, r.con.type, r.con.con_id)) {
-      Auth.logout(r.token);
-      throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
-    }
-    if (Orders.truthy(h.geo_con)) { try { Ops.geoCheck(h, geo); } catch (e) { Auth.logout(r.token); throw e; } }
-    return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
-  });
+  ensureSchemaVersion_();
+  var h = Orders.hotelByCode(code);
+  var r = Auth.conLogin(h, pin);
+  if (!Orders.activeContract(h.hotel_id, r.con.type, r.con.con_id)) {
+    Auth.logout(r.token);
+    throw new Error('لا يوجد عقد ساري لك في ' + h.name + '. راجع مهندس الصيانة.');
+  }
+  if (Orders.truthy(h.geo_con)) { try { Ops.geoCheck(h, geo); } catch (e) { Auth.logout(r.token); throw e; } }
+  return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
 }
 
 function apiConWebLogin(pin) {
-  return Db.withLock(function () {
-    ensureSchemaVersion_();
-    var r = Auth.conWebLogin(pin);
-    return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
-  });
+  ensureSchemaVersion_();
+  var r = Auth.conWebLogin(pin);
+  return { token: r.token, boot: conBoot_(Auth.session(r.token)) };
 }
 /** (ج) ردّ خفيف: الإجراءات المتكررة (تُعلن BOOT_LITE_) لا تعيد التقييمات والتذاكر وتقييم المؤسسة، فتدمجها الواجهة مع ما عندها */
 var BOOT_LITE_ = false;
-function bootLite_() { return BOOT_LITE_ && Db.locked(); }
+var LITE_NOW_ = false;
+function bootLite_() { return LITE_NOW_ || (BOOT_LITE_ && Db.locked()); }
+/**
+ * الكتابة تحت القفل، ثم بناء الإقلاع بعد فكّه: القراءة لا تحتاج قفلاً، فلا ينتظر بقية المستخدمين
+ * قراءات هذا المستخدم. بلا Db.reset(): ذاكرة Db متسقة بعد الكتابة (norm_)، فلا يُعاد قراءة ما قُرئ.
+ * lite: الرد الخفيف (ج) كما كان داخل القفل (BOOT_LITE_ عند الإجراءات المتكررة).
+ */
+function act_(write, boot) {
+  var out = Db.withLock(write) || {};
+  if (boot) {
+    var prev = LITE_NOW_; LITE_NOW_ = !!BOOT_LITE_;
+    try { out.boot = boot(); } finally { LITE_NOW_ = prev; }
+  }
+  return out;
+}
 function conBoot_(s) { var b = conBoot_raw(s); if (bootLite_()) { Object.keys(b).forEach(function (k) { if (b[k] === undefined) delete b[k]; }); b.__lite = true; } return b; }
 function conBoot_raw(s) {
   var LT = bootLite_();
@@ -334,24 +346,25 @@ function apiConBoot(token) { var s = Auth.need(token, ['contractor']); ensureSch
 /** action: submit | new | rescue */
 function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () {
-    d = d || {};
-    if (s.web) {
-      if (action !== 'submit' && action !== 'tech') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
-    }
-    d.photos = savePhotos_(d.photos, woId || 'NEW');
-    d.att = saveFiles_(d.att, 'RPT-' + (woId || 'NEW'));
+  d = d || {};
+  if (s.web) {
+    if (action !== 'submit' && action !== 'tech') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
+  }
+  // حفظ الملفات في Drive قبل القفل
+  d.photos = savePhotos_(d.photos, woId || 'NEW');
+  d.att = saveFiles_(d.att, 'RPT-' + (woId || 'NEW'));
+  return act_(function () {
     var res = { msg: '' };
     if (action === 'leave') {
       if (s.web) throw new Error('تسجيل المغادرة من باركود أعوان في الفندق.');
       var lt = Orders.leave(s.id, s.hotel_id);
-      return { result: { left: lt.getTime(), msg: 'سُجّلت مغادرتك' }, boot: conBoot_(s) };
+      return { result: { left: lt.getTime(), msg: 'سُجّلت مغادرتك' } };
     }
     if (action === 'arrive') {
       if (s.web) throw new Error('تسجيل الوصول من باركود أعوان في الفندق.');
       var arr = Orders.arrive(s.id, s.hotel_id, Array.isArray(d.ids) ? d.ids : null);
       Kpi.touch(arr); Tg.refresh(arr);
-      return { result: { ids: arr, msg: 'سُجّل وصولك' }, boot: conBoot_(s) };
+      return { result: { ids: arr, msg: 'سُجّل وصولك' } };
     }
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
     else if (action === 'new') res = Orders.conNew(s, d);
@@ -361,8 +374,8 @@ function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
     Kpi.touch([woId || res.id]);
     if (woId) Tg.refresh([woId]);
    
-    return { result: res, boot: conBoot_(s) };
-  });
+    return { result: res };
+  }, function () { return conBoot_(s); });
 }
 
 // ───────── الموظفون ─────────
@@ -437,7 +450,7 @@ function apiEngBoot(token) {
 
 function apiEngAct(token, woId, action, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['admin', 'engineer']);
-  return Db.withLock(function () {
+  return act_(function () {
     d = d || {};
     var to = Orders.engAct(s, woId, action, d);
     Kpi.touch(d.created ? [woId, d.created] : [woId]);
@@ -452,22 +465,21 @@ function apiEngAct(token, woId, action, d) { BOOT_LITE_ = true;
         if (m) { Mail.send(m, me.email, o.hotel_id, me); mailed = m.to; } else mailed = 'none';
       } catch (e) { mailed = 'fail'; }
     }
-    return { to: to, mailed: mailed, created: d.created || '', boot: engBoot_(s) };
-  });
+    return { to: to, mailed: mailed, created: d.created || '' };
+  }, function () { return engBoot_(s); });
 }
 
 /** مطابقة جماعية: إغلاق عدة عمليات بتقييم واحد */
 function apiEngBulkClose(token, ids, sat) {
   var s = Auth.need(token, ['admin', 'engineer']);
-  return Db.withLock(function () {
+  return act_(function () {
     if (!(ids || []).length) throw new Error('حدّد العمليات.');
     var n = 0;
     ids.forEach(function (id) { Orders.engAct(s, id, 'close', { sat: sat }); n++; });
     Kpi.touch(ids);
     Tg.refresh(ids);
-    Db.reset();
-    return { n: n, boot: engBoot_(s) };
-  });
+    return { n: n };
+  }, function () { return engBoot_(s); });
 }
 
 /** طلب عرض سعر بالبريد بهوية نوازي، بعد مراجعة المهندس للتشخيص. preview=true للمعاينة فقط */
@@ -479,12 +491,11 @@ function apiEngRfq(token, woId, preview) {
   if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
   var m = Mail.rfq(o, me);
   if (preview) return { from: Mail.fromOf(o.hotel_id, me), to: m.to, cc: m.cc, subject: m.subject, html: m.html };
-  return Db.withLock(function () {
-    var from = Mail.send(m, me.email, o.hotel_id, me);
+  var from = Mail.send(m, me.email, o.hotel_id, me); // البريد قبل القفل
+  return act_(function () {
     Orders.engAct(s, woId, 'rfq', {});
-    Db.reset();
-    return { to: m.to, from: from, boot: engBoot_(s) };
-  });
+    return { to: m.to, from: from };
+  }, function () { return engBoot_(s); });
 }
 
 /** فتح عملية برقمها، من النشط أو الأرشيف */
@@ -501,14 +512,13 @@ function apiEngFind(token, woId) {
 
 function apiEngCreate(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
-  return Db.withLock(function () {
-    d.photos = savePhotos_(d.photos, 'ENG');
+  d.photos = savePhotos_(d.photos, 'ENG');
+  return act_(function () {
     var id = Orders.engCreate(s, d);
     Kpi.touch([id]);
     Tg.post(id);
-    Db.reset();
-    return { id: id, boot: engBoot_(s) };
-  });
+    return { id: id };
+  }, function () { return engBoot_(s); });
 }
 
 // ───────── ملاحظات الإدارة ومدير الفندق ومدير التشغيل ─────────
@@ -528,7 +538,7 @@ function notesFor_(s, hotels, to) {
 /** d: {wo_id?} أو {hotel_id, service} + text. التكييف والمصاعد والسلامة ← مهندس الصيانة؛ النفايات والآفات ← الإشراف */
 function apiNote(token, d) {
   var s = Auth.need(token, VIEW_ROLES);
-  return Db.withLock(function () {
+  return act_(function () {
     var me = Db.get('Users', s.id), R = Orders.refs(), scope = scopeHotels_(s, R);
     var text = String(d.text || '').trim();
     if (!text) throw new Error('اكتب الملاحظة.');
@@ -538,36 +548,35 @@ function apiNote(token, d) {
     if (['ac', 'el', 'sf', 'wa', 'pc'].indexOf(service) === -1) throw new Error('اختر الخدمة.');
     Db.insert('Notes', { hotel_id: hotelId, service: service, to: (service === 'wa' || service === 'pc') ? 'sup' : 'maint', wo_id: woId, text: text,
       by_id: s.id, by_name: me ? me.name : '', by_role: s.role, created_at: new Date() });
-    Db.reset();
-    return { boot: engBoot_(s) };
-  });
+    return {};
+  }, function () { return engBoot_(s); });
 }
 
 function apiNoteSeen(token, noteId) {
   var s = Auth.need(token, ['admin', 'engineer', 'supmgr']);
-  return Db.withLock(function () {
+  return act_(function () {
     var n = Db.get('Notes', noteId), me = Db.get('Users', s.id);
     if (!n) throw new Error('الملاحظة غير موجودة.');
     if (s.role === 'supmgr' && (n.to !== 'sup' || Ops.supHotels(s).indexOf(n.hotel_id) === -1)) throw new Error('لا تملك صلاحية هذا الإجراء.');
     if (!n.seen_at) Db.update('Notes', noteId, { seen_at: new Date(), seen_by: me ? me.name : '' });
-    Db.reset();
-    return { boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
-  });
+    return {};
+  }, function () { return s.role === 'supmgr' ? supBoot_(s) : engBoot_(s); });
 }
 
 // ───────── الإجراء التصحيحي ─────────
 function apiEngCA(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
-  return Db.withLock(function () { var c = Quality.create(s, d || {}); Db.reset(); return { id: c.ca_id, boot: engBoot_(s) }; });
+  return act_(function () { var c = Quality.create(s, d || {}); return { id: c.ca_id }; }, function () { return engBoot_(s); });
 }
 /** action: close (فعّال) · return (غير فعّال، يُعاد للمتعهد) */
 function apiEngCAAct(token, caId, action, note) {
   var s = Auth.need(token, ['admin', 'engineer']);
-  return Db.withLock(function () { Quality.verify(s, caId, action, note); Db.reset(); return { boot: engBoot_(s) }; });
+  return act_(function () { Quality.verify(s, caId, action, note); return {}; }, function () { return engBoot_(s); });
 }
 function apiConCA(token, caId, text, photos) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { Quality.respond(s, caId, text, savePhotos_(photos, caId)); Db.reset(); return { boot: conBoot_(s) }; });
+  var ph = savePhotos_(photos, caId);
+  return act_(function () { Quality.respond(s, caId, text, ph); return {}; }, function () { return conBoot_(s); });
 }
 
 // ───────── لوحات الأداء (تقرأ من KpiSummary فقط) ─────────
@@ -736,12 +745,7 @@ function adm_(token, fn) {
   Auth.need(token, ['admin']);
   ensureSchemaVersion_();
   try { ensureTriggers_(); } catch (e) { /* يُنشأ عند تشغيل authorizeAwan */ }
-  return Db.withLock(function () {
-    var out = fn() || {};
-    Db.reset();
-    out.boot = admBoot_();
-    return out;
-  });
+  return act_(function () { return fn() || {}; }, function () { return admBoot_(); });
 }
 
 function apiAdmSaveHotel(token, d) {
@@ -1162,11 +1166,10 @@ function apiAdmSendCreds(token, ids) {
     if (j.err) return failed.push({ name: j.name, err: j.err });
     try { Mail.send(j.msg, '', '', null); sent.push(j); } catch (e) { failed.push({ name: j.name, err: String(e && e.message || e) }); }
   });
-  return Db.withLock(function () {
+  return act_(function () {
     var t = new Date(); sent.forEach(function (j) { Db.update('Users', j.id, { sent_at: t }); });
-    Db.reset();
-    return { sent: sent.map(function (j) { return j.name; }), failed: failed, boot: admBoot_() };
-  });
+    return { sent: sent.map(function (j) { return j.name; }), failed: failed };
+  }, function () { return admBoot_(); });
 }
 /** لم يدخل بعد: له بريد، نشط، والموظف لم يغيّر كلمته المؤقتة، والمشرف لم يختر رقمه */
 function credPending_(u) {
@@ -1380,61 +1383,61 @@ function apiOpsStatement(token, conId, hotelId, from, to) {
 }
 function apiPcReject(token, id, reason, zones) {
   var s = Auth.need(token, ['supmgr', 'admin']);
-  return Db.withLock(function () { Ops.pcReject(s, id, reason, zones); Db.reset(); return { boot: supBoot_(s) }; });
+  return act_(function () { Ops.pcReject(s, id, reason, zones); return {}; }, function () { return supBoot_(s); });
 }
 function apiSupRate(token, conId, hotelId, score, note) {
   var s = Auth.need(token, ['supmgr', 'admin']);
-  return Db.withLock(function () { Ops.rate(s, conId, hotelId, score, note); Db.reset(); return { boot: supBoot_(s) }; });
+  return act_(function () { Ops.rate(s, conId, hotelId, score, note); return {}; }, function () { return supBoot_(s); });
 }
 function apiConPestMsg(token, d) {
   var s = Auth.need(token, ['contractor']); d = d || {};
-  return Db.withLock(function () { d.att = d.kind === 'tech' ? saveFiles_(d.att, 'PT') : savePhotos_(d.att, 'PC'); var id = Ops.pestMsg(s, d); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+  d.att = d.kind === 'tech' ? saveFiles_(d.att, 'PT') : savePhotos_(d.att, 'PC');
+  return act_(function () { var id = Ops.pestMsg(s, d); return { id: id }; }, function () { return conBoot_(s); });
 }
 function apiConPestMsgDone(token, id, reply) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { Ops.pestMsgDone(s, id, reply, false); Db.reset(); return { boot: conBoot_(s) }; });
+  return act_(function () { Ops.pestMsgDone(s, id, reply, false); return {}; }, function () { return conBoot_(s); });
 }
 function apiConTeam(token, names) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { Ops.setTeam(s, names); Db.reset(); return { boot: conBoot_(s) }; });
+  return act_(function () { Ops.setTeam(s, names); return {}; }, function () { return conBoot_(s); });
 }
 function apiSupPestTechSeen(token, id, note) { return sup_(token, ['supmgr', 'admin'], function (s) { Ops.pestMsgDone(s, id, note, true); }); }
 function apiConPcReport(token, hotelId, att, by) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { var f = saveFiles_(att, 'PR'); Ops.pcReport(s.id, hotelId, f, by); Db.reset(); return { boot: conBoot_(s) }; });
+  var f = saveFiles_(att, 'PR');
+  return act_(function () { Ops.pcReport(s.id, hotelId, f, by); return {}; }, function () { return conBoot_(s); });
 }
 function apiWaReject(token, id, reason) {
   var s = Auth.need(token, ['supmgr', 'admin']);
-  return Db.withLock(function () { Ops.waReject(s, id, reason); Db.reset(); return { boot: supBoot_(s) }; });
+  return act_(function () { Ops.waReject(s, id, reason); return {}; }, function () { return supBoot_(s); });
 }
 
 /** صفحة الويب: الرقم السري لمتعهد أو مشرف */
 function apiPinWebLogin(pin) {
-  return Db.withLock(function () {
-    ensureSchemaVersion_();
-    var r = Auth.pinWebLogin(pin);
-    if (r.kind === 'sup') return { kind: 'sup', token: r.token, boot: supBoot_(Auth.session(r.token)) };
-    return { kind: 'con', token: r.token, boot: conBoot_(Auth.session(r.token)) };
-  });
+  // بلا قفل: الدخول لا يكتب في ملف البيانات (الجلسة ومحاولات الخطأ في CacheService)، والترقية تأخذ قفلها بنفسها
+  ensureSchemaVersion_();
+  var r = Auth.pinWebLogin(pin);
+  if (r.kind === 'sup') return { kind: 'sup', token: r.token, boot: supBoot_(Auth.session(r.token)) };
+  return { kind: 'con', token: r.token, boot: conBoot_(Auth.session(r.token)) };
 }
 
 /** أول دخول للمشرف: اسم الدخول + رقم يختاره (يُرفض المحجوز) */
 function apiSupSetPin(username, pin) {
-  return Db.withLock(function () {
-    ensureSchemaVersion_();
-    var r = Auth.supSetPin(username, pin);
-    return { token: r.token, boot: supBoot_(Auth.session(r.token)) };
-  });
+  ensureSchemaVersion_();
+  var r = Db.withLock(function () { return Auth.supSetPin(username, pin); });
+  return { token: r.token, boot: supBoot_(Auth.session(r.token)) };
 }
 
 function sup_(token, roles, fn) {
   BOOT_LITE_ = true;
   var s = Auth.need(token, roles || SUP_ROLES_);
-  return Db.withLock(function () { var out = fn(s) || {}; Db.reset(); out.boot = supBoot_(s); return out; });
+  return act_(function () { return fn(s) || {}; }, function () { return supBoot_(s); });
 }
 
 function apiPestFlag(token, d) {
-  return sup_(token, null, function (s) { d = d || {}; d.photos = savePhotos_(d.photos, 'PF'); return { n: Ops.flag(s, d) }; });
+  d = d || {}; d.photos = savePhotos_(d.photos, 'PF');
+  return sup_(token, null, function (s) { return { n: Ops.flag(s, d) }; });
 }
 /** بداية القياس الفعلي لكل المتعهدين (تهيئة الإطلاق): يُعاد حساب الملخص */
 function apiAdmMeasureFrom(token, day) {
@@ -1468,11 +1471,12 @@ function apiSupAddZone(token, hotelId, floorId, name, ftype) {
 // ───────── المتعهد: المكافحة ─────────
 function apiPestLog(token, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'PL'); var r = Ops.log(s, d); Db.reset(); return { result: r, boot: conBoot_(s) }; });
+  d = d || {}; d.photos = savePhotos_(d.photos, 'PL');
+  return act_(function () { var r = Ops.log(s, d); return { result: r }; }, function () { return conBoot_(s); });
 }
 function apiPestTrap(token, action, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { var r = Ops.trap(s, action, d || {}); Db.reset(); return { result: r, boot: conBoot_(s) }; });
+  return act_(function () { var r = Ops.trap(s, action, d || {}); return { result: r }; }, function () { return conBoot_(s); });
 }
 
 // ───────── النفايات: باركود منطقة النفايات ─────────
@@ -1489,13 +1493,12 @@ function apiWaLogin(code, pin, geo) {
 }
 function apiWaSubmit(token, code, d, geo) {
   var s = Auth.session(token);
-  return Db.withLock(function () {
-    d = d || {};
-    d.photos = savePhotos_(d.photos, 'WA');
+  d = d || {};
+  d.photos = savePhotos_(d.photos, 'WA');
+  return act_(function () {
     var r = Ops.waSubmit(s, code, d, geo);
-    Db.reset();
-    return { id: r.id, boot: Ops.waBoot(Orders.hotelByCode(code)) };
-  });
+    return { id: r.id };
+  }, function () { return Ops.waBoot(Orders.hotelByCode(code)); });
 }
 
 // ───────── التقييم الدوري ─────────
@@ -1503,11 +1506,10 @@ var EVAL_ROLES_ = ['admin', 'engineer', 'supmgr'];
 function apiEvalPreview(token, conId, from, to) { var s = Auth.need(token, EVAL_ROLES_); return Ops.evalPreview(s, conId, from, to); }
 function apiEvalIssue(token, conId, from, to, decision, note) {
   var s = Auth.need(token, EVAL_ROLES_);
-  return Db.withLock(function () {
+  return act_(function () {
     var r = Ops.evalIssue(s, conId, from, to, decision, note);
-    Db.reset();
-    return { id: r.id, boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
-  });
+    return { id: r.id };
+  }, function () { return s.role === 'supmgr' ? supBoot_(s) : engBoot_(s); });
 }
 
 // ───────── شاحنات المياه ─────────
@@ -1532,21 +1534,19 @@ function apiWtLogin(code, pin, geo) {
 }
 function apiWtSubmit(token, code, d, geo) {
   var s = Auth.session(token);
-  return Db.withLock(function () {
-    d = d || {};
-    d.photos = savePhotos_(d.photos, 'WT');
+  d = d || {};
+  d.photos = savePhotos_(d.photos, 'WT');
+  return act_(function () {
     var r = Water.submit(s, code, d, geo);
-    Db.reset();
-    return { id: r.id, dup: r.dup, boot: Water.boot(Orders.hotelByCode(code)) };
-  });
+    return { id: r.id, dup: r.dup };
+  }, function () { return Water.boot(Orders.hotelByCode(code)); });
 }
 function apiWtMatch(token, ids, ok, reason) {
   var s = Auth.need(token, Water.MATCH_ROLES);
-  return Db.withLock(function () {
+  return act_(function () {
     var n = Water.match(s, ids, !!ok, reason, scopeHotels_(s, Orders.refs()));
-    Db.reset();
-    return { n: n, boot: engBoot_(s) };
-  });
+    return { n: n };
+  }, function () { return engBoot_(s); });
 }
 function apiWtStatement(token, conId, hotelId, from, to) {
   var s = Auth.need(token, STAFF_ROLES);
@@ -1589,7 +1589,8 @@ function apiAdmSavePay(token, contractId, d) { return adm_(token, function () { 
 function apiConClaim(token, d) {
   var s = Auth.need(token, ['contractor']);
   if (!s.web) throw new Error('المطالبات من صفحة المتعهد على الويب.');
-  return Db.withLock(function () { d = d || {}; d.att = saveFiles_(d.att, 'CLM'); var id = Pay.submit(s.id, d); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+  d = d || {}; d.att = saveFiles_(d.att, 'CLM');
+  return act_(function () { var id = Pay.submit(s.id, d); return { id: id }; }, function () { return conBoot_(s); });
 }
 function apiPayBoot(token) { var s = Auth.need(token, PAY_ROLES_); return Pay.board(s, payScope_(s)); }
 function apiClaimDecide(token, id, ok, reason) {
@@ -1603,21 +1604,22 @@ function apiFinPay(token, id, d) {
 
 function apiConTicket(token, d) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { d = d || {}; d.photos = savePhotos_(d.photos, 'TK'); var id = Tickets.create(s.id, d, d.by); Db.reset(); return { id: id, boot: conBoot_(s) }; });
+  d = d || {}; d.photos = savePhotos_(d.photos, 'TK');
+  return act_(function () { var id = Tickets.create(s.id, d, d.by); return { id: id }; }, function () { return conBoot_(s); });
 }
 function apiConTicketRate(token, id, sat, note) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { var r = Tickets.rate(s.id, id, sat, note); Db.reset(); return { r: r, boot: conBoot_(s) }; });
+  return act_(function () { var r = Tickets.rate(s.id, id, sat, note); return { r: r }; }, function () { return conBoot_(s); });
 }
 function apiConOrgEval(token, hotelId, scores, note, by) {
   var s = Auth.need(token, ['contractor']);
-  return Db.withLock(function () { Tickets.orgSubmit(s.id, hotelId, scores, note, by); Db.reset(); return { boot: conBoot_(s) }; });
+  return act_(function () { Tickets.orgSubmit(s.id, hotelId, scores, note, by); return {}; }, function () { return conBoot_(s); });
 }
 function apiTicketAct(token, id, action, d) {
   var s = Auth.need(token, STAFF_ROLES.concat(['supmgr']));
-  return Db.withLock(function () {
+  return act_(function () {
     var hs = s.role === 'supmgr' ? Ops.supHotels(s) : scopeHotels_(s, Orders.refs());
-    Tickets.act(s, id, action, d || {}, hs); Db.reset();
-    return { boot: s.role === 'supmgr' ? supBoot_(s) : engBoot_(s) };
-  });
+    Tickets.act(s, id, action, d || {}, hs);
+    return {};
+  }, function () { return s.role === 'supmgr' ? supBoot_(s) : engBoot_(s); });
 }
