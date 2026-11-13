@@ -734,7 +734,7 @@ var Ops = (function () {
     var slaH = 24; Db.all('Contracts', function (c) { return c.con_id === conId; }).forEach(function (c) { if (Number(c.sla_pest) > 0) slaH = Number(c.sla_pest); });
     var flagsOk = fl.filter(function (f) { return f.status === 'done' && ms(f.done_at) - ms(f.created_at) <= slaH * 36e5; }).length;
     var req = function (ft) { if (qt[ft]) return Math.max(1, Math.ceil(qt[ft] * ratio)); var e = sch[ft]; return e ? Math.max(1, Math.floor(S.days / e)) : 0; };
-    var out = [], types = {}, perFloor = {};
+    var out = [], types = {}, resT = {}, svcT = {};
     floors.forEach(function (f) {
       var row = { id: f.floor_id, name: f.name, tower: String(f.tower || ''), towerName: f.tower ? towerName_(f.tower) : '', rooms: [], fac: {} };
       rooms.filter(function (r) { return r.floor_id === f.floor_id; }).forEach(function (r) {
@@ -742,18 +742,19 @@ var Ops = (function () {
         if (!q) return; // غير مجدولة: لا تدخل التقرير
         var z = { id: r.room_id, n: String(r.number), done: Math.min(q, got[r.room_id] || 0), req: q, inf: !!inf[r.room_id], last: lastAt[r.room_id] || null };
         if (!fac && ft === GUEST) row.rooms.push(z);
-        else { (row.fac[ft] = row.fac[ft] || []).push(z); types[ft] = 1; perFloor[ft] = Math.max(perFloor[ft] || 0, row.fac[ft].length); }
+        else { (row.fac[ft] = row.fac[ft] || []).push(z); types[ft] = 1; }
       });
+      // التقسيم بنوع الدور: سكني (غرف) أو خدمي؛ وبلا نوع يُستدل بوجود غرف نزلاء
+      row.svc = f.kind ? f.kind === 'service' : !row.rooms.length;
+      Object.keys(row.fac).forEach(function (t) { (row.svc ? svcT : resT)[t] = 1; });
       if (row.rooms.length || Object.keys(row.fac).length) out.push(row);
     });
-    var tl = Object.keys(types);
-    // الأنواع القليلة (نوع أو نوعان، وحدة واحدة في الدور مثل الممر) تُدمج أعمدةً في جدول الغرف
-    var merge = tl.length && tl.length <= 2 && tl.every(function (t) { return perFloor[t] <= 1; }) ? tl : [];
     var ord = Db.all('Lists', function (l) { return l.list === 'ftype'; }).map(function (l) { return l.ar; });
-    tl.sort(function (x, y) { var i = ord.indexOf(x), j = ord.indexOf(y); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j) || String(x).localeCompare(String(y)); });
+    var srt = function (o) { return Object.keys(o).sort(function (x, y) { var i = ord.indexOf(x), j = ord.indexOf(y); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j) || String(x).localeCompare(String(y)); }); };
+    var tl = srt(types);
     var rD = 0, rT = 0, fD = 0, fT = 0;
     out.forEach(function (r) { r.rooms.forEach(function (z) { rT++; if (z.done >= z.req) rD++; }); tl.forEach(function (t) { (r.fac[t] || []).forEach(function (z) { fT++; if (z.done >= z.req) fD++; }); }); });
-    S.head.types = tl; S.head.merge = merge;
+    S.head.types = tl; S.head.resTypes = srt(resT); S.head.svcTypes = srt(svcT);
     return { head: S.head, floors: out, sum: { rooms: [rD, rT], fac: [fD, fT], flags: [flagsOk, fl.length], slaH: slaH } };
   }
 

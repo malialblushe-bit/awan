@@ -851,6 +851,9 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   const allZ = [].concat(...cr.floors.map(f => f.rooms.concat(...Object.values(f.fac))));
   if (!allZ.every(z => z.req >= 1 && z.done <= z.req)) throw new Error('completion: req/done');
   eq(cr.sum.rooms[1], [].concat(...cr.floors.map(f => f.rooms)).length);
+  if (!cr.floors.every(f => typeof f.svc === 'boolean')) throw new Error('completion: floor svc');
+  const tset = new Set(cr.head.resTypes.concat(cr.head.svcTypes)); if (!cr.head.types.every(t => tset.has(t))) throw new Error('completion: types split');
+  cr.floors.forEach(f => Object.keys(f.fac).forEach(t => { if (!(f.svc ? cr.head.svcTypes : cr.head.resTypes).includes(t)) throw new Error('completion: type in wrong part'); }));
   const trp = run(`apiPcTrapReport('${ct}', '${pcCid}', '${HID}', '${mon}')`);
   eq(trp.head.every, 2); if (trp.rows.length < 3) throw new Error('trap report rows ' + trp.rows.length);
   throws(`apiPcCompletion('${acTok}', '${pcCid}', '${HID}', '${mon}')`, 'مصرح');
