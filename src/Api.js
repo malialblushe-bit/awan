@@ -1381,6 +1381,19 @@ function apiOpsStatement(token, conId, hotelId, from, to) {
   var s = Auth.need(token, SVC_ROLES_.concat(['supmgr']));
   return Ops.statement(Ops.supHotels(s), conId, hotelId, from, to);
 }
+/** تقرير إتمام المكافحة وتقرير المصائد الشهريان (للاطلاع والطباعة، بلا كتابة) */
+function apiPcCompletion(token, conId, hotelId, month) {
+  var s = Auth.need(token, SVC_ROLES_.concat(['supmgr', 'contractor']));
+  return Ops.completion(pcScope_(s, conId), conId, hotelId, month);
+}
+function apiPcTrapReport(token, conId, hotelId, month) {
+  var s = Auth.need(token, SVC_ROLES_.concat(['supmgr', 'contractor']));
+  return Ops.trapReport(pcScope_(s, conId), conId, hotelId, month);
+}
+function pcScope_(s, conId) {
+  if (s.role === 'contractor') { if (s.id !== conId) throw new Error('غير مصرح.'); return Db.all('Contracts', function (c) { return c.con_id === conId; }).reduce(function (a, c) { return a.concat(Orders.csv(c.hotel_ids)); }, []); }
+  return Ops.supHotels(s);
+}
 function apiPcReject(token, id, reason, zones) {
   var s = Auth.need(token, ['supmgr', 'admin']);
   return act_(function () { Ops.pcReject(s, id, reason, zones); return {}; }, function () { return supBoot_(s); });

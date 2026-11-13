@@ -844,6 +844,16 @@ t('المكافحة: دورية لكل نوع مرفق، بلاغ المشرف،
   eq(run(`apiSupBoot('${mgrTok}')`).pest.hotels[HID].schedule.__traps, undefined);
   const tr2 = run(`apiConBoot('${ct}')`).pest.hotels[HID].traps; eq(tr2.length, 3); eq(tr2.map(t => t.zone).sort().join(), zs2.slice().sort().join());
   tr2.forEach(t => run(`apiPestTrap('${ct}', 'remove', { trap_id: '${t.id}' })`));
+  // تقرير إتمام المكافحة وتقرير المصائد الشهريان (للإشراف والمتعهد)
+  const pcCid = run(`Auth.session('${ct}').id`), mon = run(`Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM')`);
+  const cr = run(`apiPcCompletion('${mgrTok}', '${pcCid}', '${HID}', '${mon}')`);
+  if (!cr.floors.length) throw new Error('completion: no floors'); eq(cr.head.hotelId, HID);
+  const allZ = [].concat(...cr.floors.map(f => f.rooms.concat(...Object.values(f.fac))));
+  if (!allZ.every(z => z.req >= 1 && z.done <= z.req)) throw new Error('completion: req/done');
+  eq(cr.sum.rooms[1], [].concat(...cr.floors.map(f => f.rooms)).length);
+  const trp = run(`apiPcTrapReport('${ct}', '${pcCid}', '${HID}', '${mon}')`);
+  eq(trp.head.every, 2); if (trp.rows.length < 3) throw new Error('trap report rows ' + trp.rows.length);
+  throws(`apiPcCompletion('${acTok}', '${pcCid}', '${HID}', '${mon}')`, 'مصرح');
   // متعهد التكييف لا يسجّل مكافحة
   throws(`apiPestLog('${acTok}', { hotel_id: '${HID}', zones: ['${room.id}'], kind: 'inspect', finding: 'none' })`, 'المكافحة');
   // متعهد المكافحة يسجّل من الويب أيضاً (بلا باركود)
