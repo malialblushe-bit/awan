@@ -231,7 +231,7 @@ var Mail = (function () {
   }
 
   function creds(kind, d) {
-    var url = d.url || '', role = (ROLE_[d.role] || [d.role || ''])[0], hotels = (d.hotels || []).join('، ');
+    var url = d.url || '', role = (d.laundry && { gm: 'مدير المغسلة', fo: 'مشرف المغسلة' }[d.role]) || (ROLE_[d.role] || [d.role || ''])[0], hotels = (d.hotels || []).join('، ');
     var first = String(d.name || '').replace(/^م\.\s*/, '').split(/\s+/)[0] || d.name;
     var hello, line, gain, rows, cta, tip, en;
     if (kind === 'con') {
@@ -240,7 +240,7 @@ var Mail = (function () {
       cta = 'افتح أعوان'; tip = 'في الفندق: امسح باركود أعوان واكتب الرقم.';
       en = 'Your Awan PIN is above. Scan the Awan barcode at the hotel and enter it.';
     } else {
-      hello = 'أهلاً ' + first; line = 'حسابك جاهز · ' + role + (hotels ? ' · ' + hotels : ''); gain = (GAIN_[d.role] || GAIN_.gm)[0][0];
+      hello = 'أهلاً ' + first; line = 'حسابك جاهز · ' + role + (hotels ? ' · ' + hotels : ''); gain = d.laundry ? 'رحلات شاحنات المياه ومطابقتها رحلةً رحلة، والكشف جاهز للطباعة' : (GAIN_[d.role] || GAIN_.gm)[0][0];
       rows = credRow_('الدخول', 'Sign-in', d.login) + (kind === 'sup' ? '' : credRow_('كلمة مؤقتة', 'Temp. password', d.password, 1));
       cta = 'ادخل الآن';
       tip = kind === 'sup' ? 'اختر «مشرف ودخولك الأول؟» ثم رقمك السري.' : 'صالحة 72 ساعة، وتختار كلمتك عند أول دخول.';

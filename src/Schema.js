@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 35;
+var SCHEMA_VERSION = 36;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -19,7 +19,8 @@ var SCHEMA = [
     ['lat', 'خط العرض (لتحقق الموقع)'], ['lng', 'خط الطول'], ['geo_radius', 'نطاق الموقع بالمتر'],
     ['geo_con', 'تحقق الموقع عند وصول المتعهد'], ['wa_carts', 'سعة منطقة النفايات (عربات)'],
     ['brand', 'هوية صفحات الفندق: nawazi = كحلي وبيج · warf = زيتي وبيج'],
-    ['tg_chat', 'مجموعة تيليجرام لطلبات التكييف'], ['tg_code', 'رمز ربط المجموعة (مؤقت)']] },
+    ['tg_chat', 'مجموعة تيليجرام لطلبات التكييف'], ['tg_code', 'رمز ربط المجموعة (مؤقت)'],
+    ['kind', 'نوع الموقع: فارغ = فندق · laundry = مغسلة (شاحنات المياه فقط، بلا أدوار ولا غرف)']] },
 
   { name: 'Floors', cols: [
     ['floor_id', 'المعرّف'], ['hotel_id', 'الفندق'], ['name', 'اسم الدور أو المنطقة'],

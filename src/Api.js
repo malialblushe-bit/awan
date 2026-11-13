@@ -44,6 +44,9 @@ function isFacility_(r, floor) { return r.kind === 'facility' || (!r.kind && !!f
 
 function sortFloors_(a, b) { return Number(a.sort) - Number(b.sort); }
 
+/** نوع الموقع: فندق ('') أو مغسلة ('laundry': شاحنات المياه فقط) */
+function siteKind_(h) { return h && h.kind === 'laundry' ? 'laundry' : ''; }
+
 function towersOf_(h) { return Orders.csv(h && h.towers).map(function (t) { return t.replace(/\s+/g, ' '); }); }
 function towerName_(t) { t = String(t || ''); return /^\d+$/.test(t) ? 'برج ' + t : t; }
 function floorLabel_(f) { return (f.tower ? towerName_(f.tower) + ' · ' : '') + f.name; }
@@ -422,7 +425,7 @@ function engBoot_raw(s) {
         var c = Orders.activeContract(id, t);
         if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null, prices: pricesOf_(c) };
       });
-      return { id: id, name: h.name, brand: h.brand || 'nawazi', floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
+      return { id: id, name: h.name, brand: h.brand || 'nawazi', kind: siteKind_(h), floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
     }),
     orders: orders,
     cons: Object.keys(R.cons).map(function (k) { var c = R.cons[k]; return { id: c.con_id, name: c.name, type: c.type }; }),
@@ -692,7 +695,7 @@ function admBoot_() {
       var layout = hotelLayout_(h.hotel_id);
       var elevs = elevatorCards_(h.hotel_id);
       return {
-        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi',
+        id: h.hotel_id, code: h.code, name: h.name, city: h.city || '', towers: towersOf_(h), brand: h.brand || 'nawazi', kind: siteKind_(h),
         lat: h.lat === '' || h.lat == null ? '' : Number(h.lat), lng: h.lng === '' || h.lng == null ? '' : Number(h.lng),
         geo_radius: Number(h.geo_radius) || '', geo_con: Orders.truthy(h.geo_con), wa_carts: Number(h.wa_carts) || '',
         tg: !!h.tg_chat, tg_code: h.tg_code || '', tgErr: h.tg_chat ? Tg.lastErr(h.hotel_id) : null, wt: !!Orders.activeContract(h.hotel_id, 'wt'),
@@ -714,7 +717,7 @@ function admBoot_() {
           var e = x.end ? Utilities.formatDate(new Date(x.end), 'Asia/Riyadh', 'yyyy-MM-dd') : '';
           var left = e ? Math.round((new Date(e).getTime() - new Date(today).getTime()) / 864e5) : null;
           return {
-            id: x.contract_id, hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
+            id: x.contract_id, hids: Orders.csv(x.hotel_ids), hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
             resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
             lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x),
@@ -763,10 +766,16 @@ function apiAdmSaveHotel(token, d) {
       Object.keys(used).forEach(function (t) { if (towers.indexOf(t) === -1) throw new Error('البرج «' + t + '» عليه أدوار، لا يمكن حذفه أو تغيير اسمه.'); });
       var up = { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(',') };
       if (d.brand !== undefined) up.brand = d.brand === 'warf' ? 'warf' : 'nawazi';
+      if (d.kind !== undefined) {
+        var kd = d.kind === 'laundry' ? 'laundry' : '';
+        if (kd === 'laundry' && Db.find('Floors', function (f) { return f.hotel_id === d.id; })) throw new Error('للموقع أدوار مسجلة: لا يتحول إلى مغسلة.');
+        if (kd === 'laundry' && Db.find('Contracts', function (c) { return c.type !== 'wt' && Orders.csv(c.hotel_ids).indexOf(d.id) !== -1; })) throw new Error('على الموقع عقود غير شاحنات المياه: لا يتحول إلى مغسلة.');
+        up.kind = kd;
+      }
       Db.update('Hotels', d.id, up);
       return { id: d.id };
     }
-    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', towers: towers.join(','), brand: d.brand === 'warf' ? 'warf' : 'nawazi', active: true, created_at: new Date() });
+    var h = Db.insert('Hotels', { code: code, name: d.name.trim(), city: d.city || '', towers: d.kind === 'laundry' ? '' : towers.join(','), brand: d.brand === 'warf' ? 'warf' : 'nawazi', kind: d.kind === 'laundry' ? 'laundry' : '', active: true, created_at: new Date() });
     return { id: h.hotel_id };
   });
 }
@@ -1086,6 +1095,7 @@ function apiAdmSaveContract(token, d) {
     if (d.type === 'wt') d.prices = wtPrices_(d.prices);
     if (d.type === 'wa' && !(Number(d.wa_per_week) > 0)) throw new Error('اكتب عدد مرات الرفع في الأسبوع.');
     if (!d.hotel_ids || !d.hotel_ids.length) throw new Error('اختر فندقاً واحداً على الأقل.');
+    if (d.type !== 'wt' && d.hotel_ids.some(function (id) { return siteKind_(Db.get('Hotels', id)) === 'laundry'; })) throw new Error('المغسلة لخدمة شاحنات المياه فقط.');
     if (!d.start || !d.end || d.end < d.start) throw new Error('حدّد تاريخ البداية والنهاية.');
     var pin = null, conId = d.con_id;
     if (!conId) {
@@ -1141,8 +1151,9 @@ function conMail_(conId, p) {
 /** رسالة بيانات الدخول لمستخدم: الموظف بكلمة مؤقتة جديدة، والإشراف بخطوات اختيار رقمه */
 function userCredMsg_(u, pw) {
   var sup = Auth.isSup(u.role);
-  var hs = Orders.csv(u.hotel_ids).map(function (h) { return (Db.get('Hotels', h) || {}).name || ''; }).filter(String);
-  return Mail.creds(sup ? 'sup' : 'staff', { to: String(u.email).trim(), name: u.name, role: u.role, login: String(u.email || u.username).trim(), password: pw, url: webUrl_(), hotels: hs });
+  var ids = Orders.csv(u.hotel_ids), hs = ids.map(function (h) { return (Db.get('Hotels', h) || {}).name || ''; }).filter(String);
+  var ld = ids.length > 0 && ids.every(function (h) { return siteKind_(Db.get('Hotels', h)) === 'laundry'; });
+  return Mail.creds(sup ? 'sup' : 'staff', { to: String(u.email).trim(), name: u.name, role: u.role, laundry: ld, login: String(u.email || u.username).trim(), password: pw, url: webUrl_(), hotels: hs });
 }
 
 /** إرسال بيانات الدخول بالبريد: ids قائمة، أو 'pending' لكل من له بريد ولم يدخل بعد. البريد يُرسل بعد فك القفل */
@@ -1337,7 +1348,7 @@ function supBoot_(s) { var b = supBoot_raw(s); if (bootLite_()) { Object.keys(b)
 function supBoot_raw(s) {
   var LT = bootLite_();
   var me = Db.get('Users', s.id) || {};
-  var hs = Ops.supHotels(s), R = Orders.refs();
+  var R = Orders.refs(), hs = Ops.supHotels(s).filter(function (id) { return siteKind_(R.hotels[id]) !== 'laundry'; }); // المغسلة لا نفايات ولا مكافحة
   var conOf = function (h, t) { var c = Orders.activeContract(h, t); return c ? { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '', perWeek: Number(c.wa_per_week) || 0, start: Orders.ms(c.start) || 0 } : null; };
   var L = listsFor_('pc');
   var cons = [];

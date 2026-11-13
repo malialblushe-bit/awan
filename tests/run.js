@@ -1429,6 +1429,23 @@ t('القفل للكتابة فقط: الدخول بلا قفل، والإقلا
   if (!f.boot.pest || !JSON.stringify(f.boot.pest).includes(zone)) throw new Error('written flag missing from boot');
 });
 
+t('المغسلة: موقع لشاحنات المياه فقط، و«إضافة موقع» عقد جديد لنفس المتعهد بأسعاره', () => {
+  const lid = run(`apiAdmSaveHotel('${adminTok}', { code: 'LNDRY', name: 'المغسلة المركزية', kind: 'laundry' })`).id;
+  const ab = run(`apiAdmBoot('${adminTok}')`); eq(ab.hotels.find(h => h.id === lid).kind, 'laundry');
+  const wc = ab.contractors.find(c => c.type === 'wt'); if (!wc) throw new Error('no wt contractor');
+  throws(`apiAdmSaveContract('${adminTok}', { con_id: '${wc.id}', type: 'ac', hotel_ids: ['${lid}'], start: '${yesterday}', end: '${nextYear}' })`, 'المغسلة');
+  const n0 = wc.contracts.length;
+  run(`apiAdmSaveContract('${adminTok}', { con_id: '${wc.id}', type: 'wt', hotel_ids: ['${lid}'], start: '${yesterday}', end: '${nextYear}', prices: { '20': 400 } })`);
+  const wc2 = run(`apiAdmBoot('${adminTok}')`).contractors.find(c => c.id === wc.id);
+  eq(wc2.contracts.length, n0 + 1); eq(wc2.contracts[wc2.contracts.length - 1].hids.join(','), lid);
+  eq(Object.keys(wc2.contracts[wc2.contracts.length - 1].prices).join(','), '20');
+  // فندق بأدوار لا يتحول إلى مغسلة
+  const fh = run(`Db.all('Floors')[0].hotel_id`);
+  throws(`apiAdmSaveHotel('${adminTok}', { id: '${fh}', code: Db.get('Hotels','${fh}').code, name: 'x', kind: 'laundry' })`, 'مغسلة');
+  // الإشراف لا يرى المغسلة
+  const sb = run(`supBoot_({ role: 'admin', id: 'x' })`); if (sb.hotels.some(h => h.id === lid)) throw new Error('laundry in supervision');
+});
+
 t('الدخول بالبريد وإرسال بيانات الدخول: كلمة مؤقتة 72 ساعة بالبريد، والجماعي لمن لم يدخل، والمتعهد يصله رقمه', () => {
   const n0 = sentMail.length;
   const r = run(`apiAdmAddUser('${adminTok}', { name: 'م. سالم', role: 'gm', username: '', email: 'Salem@Warf.sa', hotel_ids: [] })`);
