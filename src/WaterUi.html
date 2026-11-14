@@ -150,9 +150,14 @@ var RPT={
   if(x.go==='ac'){P.sth='all';P.stmt(x.c.id,r[0],r[1])}else if(x.go==='wt'){WT.f={con:x.c.id,h:'all'};WT.stmt(r[0],r[1])}else{OST.f={};OST.open(x.c.id,r[0],r[1])}},
  view:function(){var L=RPT.list();if(!L.length)return '';
   var T={ac:'كشف الخدمات المنفذة',wt:'كشف رحلات المياه',wa:'كشف زيارات النفايات',pc:'كشف معالجات المكافحة'};
-  return '<div class="card stack" style="gap:10px;margin-bottom:16px"><div><h2 style="font-size:18px">الكشوف</h2><p class="small muted" style="margin:2px 0 0">مبنية على العمليات المسجّلة والمطابَقة فقط. تفتح على هذا الشهر، وتختار الفترة والفندق من داخلها.</p></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+L.map(function(x,i){return '<button class="opt" style="text-align:start" data-i="'+i+'" onclick="RPT.open(+this.dataset.i)"><b data-nt="1">'+esc(x.c.name)+'</b><span>'+T[x.c.type]+' · '+(TYPE[x.c.type]||'')+'</span></button>'}).join('')+'</div></div>'}};
-(function(){var wr=W.render;W.render=function(){wr();if(!S.tok||!W.b||W.must||W.tab!=='reports')return;var wrap=document.querySelector('#app .wrap');if(wrap&&!wrap.querySelector('[data-rpt]')){var d=document.createElement('div');d.setAttribute('data-rpt','1');d.innerHTML=RPT.view();wrap.insertBefore(d,wrap.firstChild);tr(d)}}})();
-(function(){var rv=SV.reportsView;SV.reportsView=function(){return '<div data-rpt="1">'+RPT.view()+'</div>'+rv()}})();
+  return '<div class="card stack" style="gap:10px;margin-bottom:16px"><div><p class="small muted" style="margin:2px 0 0">مبنية على العمليات المسجّلة والمطابَقة فقط. تفتح على هذا الشهر، وتختار الفترة والفندق من داخلها.</p></div><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+L.map(function(x,i){return '<button class="opt" style="text-align:start" data-i="'+i+'" onclick="RPT.open(+this.dataset.i)"><b data-nt="1">'+esc(x.c.name)+'</b><span>'+T[x.c.type]+' · '+(TYPE[x.c.type]||'')+'</span></button>'}).join('')+'</div></div>'}};
+// صفحة «التقارير»: قسمان منفصلان بتبويبات — «الكشوف» (بطاقات الكشوف) و«التقييمات الدورية» (إصدار + قائمة)
+RPT.sec='stm';
+RPT.go=function(s){RPT.sec=s;render()};
+RPT.page=function(who,b,cons,iss){var L=RPT.list(),E=EV.all(who)||[];var sec=RPT.sec==='ev'||(!L.length&&E.length)?'ev':'stm';
+ var tabs='<div class="subnav" style="margin-bottom:14px">'+[['stm','الكشوف',L.length],['ev','التقييمات الدورية',E.length]].map(function(x){return '<button class="'+(sec===x[0]?'on':'')+'" onclick="RPT.go(\''+x[0]+'\')">'+x[1]+' <small>('+x[2]+')</small></button>'}).join('')+'</div>';
+ return tabs+(sec==='ev'?EV.panel(b,cons,iss,who):'<div data-rpt="1">'+RPT.view()+'</div>')};
+(function(){var rv=SV.reportsView;SV.reportsView=function(){return RPT.page('SV',SV.b,SV.b.cons,true)}})();
 // ── تسعيرة المواسم للمياه (مشرف النظام): زر على عقد المياه
 A.season=function(cid){var c=null;W.a.contractors.forEach(function(z){z.contracts.forEach(function(x){if(x.id===cid)c=x})});if(!c)return;
  A.f={ss:cid,ssz:Object.keys(c.prices||{}).sort(function(a,b){return a-b}),ssv:JSON.parse(JSON.stringify(c.season||[]))};if(!A.f.ssv.length)A.f.ssv.push({name:'',from:'',to:'',add:{}});render()};
