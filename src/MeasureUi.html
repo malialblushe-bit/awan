@@ -237,7 +237,7 @@ var PCRP={f:{},
   h+='<div class="chips" style="align-items:center">';
   if(f.kind!=='trap'){h+='<span class="small muted">الأقسام:</span>'+[['res','الأدوار السكنية'],['svc','الأدوار الخدمية'],['ex','ما لم يكتمل']].map(function(x){var on=!!f.sec[x[0]];return '<button class="chip'+(on?' on':'')+'" style="min-height:36px" aria-pressed="'+on+'" data-k="'+x[0]+'" onclick="PCRP.go(\'sec\',this.dataset.k)">'+x[1]+'</button>'}).join('')}
   h+='<button class="tgl'+(f.only?' on':'')+'" aria-pressed="'+f.only+'" onclick="PCRP.go(\'only\')"><i></i>'+(f.kind==='trap'?T('المتأخرة أو التي رُصدت فيها آفة فقط'):T('الناقص فقط'))+'</button></div></div>';
-  h+='<div class="rep pcr">'+(f.kind==='trap'?PCRP.trapHtml(T0):PCRP.compHtml(T0))+'</div></div></div>';
+  h+='<div class="rep pcr prt">'+(f.kind==='trap'?PCRP.trapHtml(T0):PCRP.compHtml(T0))+'</div></div></div>';
   w.innerHTML=h;tr(w)},
  head:function(T0){var r=PCRP.r,f=PCRP.f,fd=function(s){return s.split('-').reverse().join('/')},sc=[];var k=Object.keys(f.tw);if(k.length)sc.push(k.map(function(t){return t||T('بلا برج')}).join('، '));if(f.only)sc.push(f.kind==='trap'?T('المتأخرة ورصد الآفات فقط'):T('الناقص فقط'));
   return '<div class="row" style="align-items:flex-start;border-bottom:3px solid var(--navy);padding-bottom:8px;margin-bottom:10px">'+STM.brand(T0)+'<div style="text-align:end" class="small"><b data-nt="1">'+esc(r.head.hotel)+' · '+PCRP.monName(f.month)+'</b><br><span data-nt="1">'+esc(r.head.con)+'</span><br>'+T('فترة القياس')+': <bdi>'+fd(r.head.from)+'</bdi> – <bdi>'+fd(r.head.to)+'</bdi>'+(r.head.every?' · '+F('الفحص كل {0} يوم',r.head.every):'')+(sc.length?'<br><b>'+T('النطاق')+': '+esc(sc.join(' · '))+'</b>':'')+'</div></div>'},
