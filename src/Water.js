@@ -147,7 +147,7 @@ var Water = (function () {
       return best && best.c;
     };
     var price = function (v) {
-      var c = bestOf(v), p = c ? pricesOf_(c)[String(Number(v.size))] : null;
+      var c = bestOf(v), p = c ? pricesAt_(c, v.at ? Utilities.formatDate(new Date(v.at), 'Asia/Riyadh', 'yyyy-MM-dd') : '')[String(Number(v.size))] : null;
       return p == null || p === '' ? null : Number(p);
     };
     // زيادة الموسم: تُحسب في الإجمالي فقط، والتفاصيل بسعر العقد الأساسي

@@ -1517,20 +1517,6 @@ t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد و�
   eq(run(`apiAdmLaunchPlan('${adminTok}', { hotels: ['NOPE'] })`).total, 0);
 });
 
-t('حذف عقد تجريبي (مؤقت): بلا سجلات يُحذف ومعه المتعهد إن كان آخر عقوده، وما عليه سجلات لا يُحذف', () => {
-  run(`apiAdmSaveContract('${adminTok}', { name: 'متعهد للحذف', type: 'wa', wa_per_week: 3, hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`);
-  const cid = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='متعهد للحذف'})[0].contract_id`);
-  const r = run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);
-  eq(r.conDeleted, true); eq(run(`Db.all('Contractors').some(function(c){return c.name==='متعهد للحذف'})`), false);
-  const ac = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'})[0].contract_id`);
-  throws(`apiAdmDeleteContract('${adminTok}', '${ac}')`, 'عليه سجلات');
-  // عقد مكرر لنفس المتعهد والفندق: يُحذف رغم السجلات لأنها تبقى على العقد الآخر
-  run(`apiAdmSaveContract('${adminTok}', { name: 'مؤسسة التبريد', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`);
-  const dup = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'}).pop().contract_id`);
-  eq(run(`apiAdmDeleteContract('${adminTok}', '${dup}')`).conDeleted, false);
-  eq(run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'}).length`), 1);
-});
-
 t('تعديل العقد: الشروط تتغير في العقد نفسه بلا عقد جديد، والتواريخ والرفع الأسبوعي يُتحقق منها', () => {
   run(`apiAdmSaveContract('${adminTok}', { name: 'نفايات للتعديل', type: 'wa', wa_per_week: 14, hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`);
   const cid = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='نفايات للتعديل'})[0].contract_id`);
@@ -1544,7 +1530,6 @@ t('تعديل العقد: الشروط تتغير في العقد نفسه بل�
   eq(lg.some(x => x.kind === 'new'), true, 'الإنشاء مسجّل');
   const c = run(`Db.get('Contracts', '${cid}')`);
   eq(Number(c.wa_per_week), 7); eq(Number(c.alert_days), 45); eq(run(`Db.all('Contracts').length`), n0, 'لم يُنشأ عقد جديد');
-  run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);
 });
 
 t('الذاكرة المؤقتة لكل الجداول: القراءة التالية بلا ملف، والتعديل اليدوي في الملف لا يُمسح عند الكتابة من نسخة قديمة', () => {
@@ -1559,6 +1544,41 @@ t('الذاكرة المؤقتة لكل الجداول: القراءة التا�
   run(`Db.update('Contracts', '${c.contract_id}', { pay_days: 21 })`);
   const live = run(`Db.ss().getSheetByName('Contracts').getRange(${rows.length + 1}, 1, 1, ${head.length}).getValues()[0]`);
   eq(Number(live[head.indexOf('alert_days')]), 99, 'التعديل اليدوي باقٍ'); eq(Number(live[head.indexOf('pay_days')]), 21);
+});
+
+t('التغيير المالي بفترة سريان: الأسعار والمبلغ الشهري لا يغيّران ما قبله، ولا قبل آخر مطالبة معتمدة، وإشعار المتعهد اختياري يُسجَّل', () => {
+  const ctr = run(`Db.all('Contracts').filter(function(c){return c.type==='ac' && (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'})[0].contract_id`);
+  const P0 = run(`pricesOf_(Db.get('Contracts', '${ctr}'))`); const old = P0['تعبئة فريون 60%'];
+  const P1 = JSON.stringify(Object.assign({}, P0, { 'تعبئة فريون 60%': '150' }));
+  throws(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', ${P1}, null, 'ملحق 2')`, 'تسري');
+  const r = run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', ${P1}, null, 'ملحق 2', '2027-03-01')`);
+  if (!r.logId) throw new Error('logId');
+  eq(Number(run(`pricesAt_(Db.get('Contracts', '${ctr}'), '2027-02-28')['تعبئة فريون 60%']`)), Number(old), 'قبل السريان بالسعر القديم');
+  eq(Number(run(`pricesAt_(Db.get('Contracts', '${ctr}'), '2027-03-01')['تعبئة فريون 60%']`)), 150, 'بعد السريان بالجديد');
+  // مطالبة معتمدة حتى نهاية أبريل: لا يسري تغيير قبل مايو
+  const cl = run(`Db.insert('Claims', { contract_id: '${ctr}', con_id: Db.get('Contracts', '${ctr}').con_id, type: 'ac', item: '2027-04', status: 'approved', amount: 1 }).claim_id`);
+  const P2 = JSON.stringify(Object.assign({}, P0, { 'تعبئة فريون 60%': '170' }));
+  throws(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', ${P2}, null, 'ملحق 3', '2027-04-15')`, 'مطالبة معتمدة');
+  run(`Db.remove('Claims', '${cl}')`);
+  // المبلغ الشهري الثابت: الجديد من شهر سريانه، والسابق لما قبله
+  run(`apiAdmSaveContract('${adminTok}', { name: 'نفايات شهرية', type: 'wa', wa_per_week: 3, hotel_ids: ['${HID}'], start: '2026-01-01', end: '2027-12-31' })`);
+  const wc = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='نفايات شهرية'})[0].contract_id`);
+  run(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'monthly', days: 30, plan: { amount: 1000 } })`);
+  throws(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'monthly', days: 30, plan: { amount: 1200 }, reason: 'ملحق' })`, 'الشهر');
+  const pr = run(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'monthly', days: 30, plan: { amount: 1200 }, reason: 'ملحق', eff: '2026-06' })`);
+  eq(run(`Pay.amountAt(Pay.planOf(Db.get('Contracts', '${wc}')), '2026-05')`), 1000); eq(run(`Pay.amountAt(Pay.planOf(Db.get('Contracts', '${wc}')), '2026-06')`), 1200);
+  // الإشعار: يحتاج بريد المتعهد، ويُسجَّل مرة واحدة
+  throws(`apiAdmNotifyChange('${adminTok}', '${pr.logId}')`, 'بريد');
+  run(`apiAdmSaveConInfo('${adminTok}', Db.get('Contracts', '${wc}').con_id, { emails: 'waste@example.com' })`);
+  eq(run(`apiAdmNotifyChange('${adminTok}', '${pr.logId}')`).notified, true);
+  throws(`apiAdmNotifyChange('${adminTok}', '${pr.logId}')`, 'سابقاً');
+  const lg = run(`apiAdmContractLog('${adminTok}')`).find(x => x.id === pr.logId); if (!lg.notified) throw new Error('notified not logged');
+  // الدفعات المرحلية: المطالَب بها مقفلة، وغيرها يُعدَّل مبلغاً وتاريخاً
+  run(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'sched', value: 2000, days: 30, plan: [{ due: '2026-03-01', amount: 1000 }, { due: '2026-09-01', amount: 1000 }], reason: 'تغيير الطريقة' })`);
+  const c2 = run(`Db.insert('Claims', { contract_id: '${wc}', con_id: Db.get('Contracts', '${wc}').con_id, type: 'wa', item: 'i1', status: 'submitted', amount: 1000 }).claim_id`);
+  throws(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'sched', value: 2000, days: 30, plan: [{ due: '2026-04-01', amount: 1000 }, { due: '2026-09-01', amount: 1000 }], reason: 'x' })`, 'مطالَب بها');
+  run(`apiAdmSavePay('${adminTok}', '${wc}', { mode: 'sched', value: 2000, days: 30, plan: [{ due: '2026-03-01', amount: 1000 }, { due: '2026-10-15', amount: 1000 }], reason: 'تأجيل الدفعة الثانية' })`);
+  run(`Db.remove('Claims', '${c2}')`);
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {

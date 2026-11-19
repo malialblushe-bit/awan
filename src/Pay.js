@@ -31,7 +31,7 @@ var Pay = (function () {
     } else if (mode === 'monthly' || mode === 'stmt') {
       var s = day_(c.start).slice(0, 7), e = (c.end ? day_(c.end) : today_()).slice(0, 7), cur = today_().slice(0, 7);
       if (e > cur) e = cur;
-      for (var m = s; m && m <= e; m = nextM_(m)) out.push({ key: m, label: m, due: addDays_(monthEnd_(m), days), expected: mode === 'monthly' && plan ? round_(plan.amount) : null, month: m });
+      for (var m = s; m && m <= e; m = nextM_(m)) out.push({ key: m, label: m, due: addDays_(monthEnd_(m), days), expected: mode === 'monthly' && plan ? amountAt(plan, m) : null, month: m });
     }
     return out;
   }
@@ -53,16 +53,52 @@ var Pay = (function () {
       if (!(value > 0)) throw new Error('اكتب قيمة العقد.');
       var sum = round_(plan.reduce(function (a, p) { return a + p.amount; }, 0));
       if (Math.abs(sum - value) > 1) throw new Error('مجموع الدفعات (' + sum + ') لا يساوي قيمة العقد (' + value + ').');
+      // الدفعة المطالَب بها أو المسددة مقفلة: مبلغها وتاريخها وترتيبها كما هي (البند مرتبط بترتيبه iN)
+      var oldPlan = c.pay_mode === 'sched' ? planOf(c) : null, liveC = liveFor_(contractId);
+      Object.keys(liveC).forEach(function (k) {
+        var m = /^i(\d+)$/.exec(k); if (!m || !Array.isArray(oldPlan)) return;
+        var i = Number(m[1]) - 1, o = oldPlan[i], n = plan[i];
+        if (!o) return;
+        if (!n || n.due !== o.due || Math.abs(n.amount - round_(o.amount)) > 0.009) throw new Error('الدفعة ' + (i + 1) + ' مطالَب بها أو مسددة: لا يتغير مبلغها ولا تاريخها ولا ترتيبها.');
+      });
     } else if (mode === 'monthly') {
       var amt = round_((d.plan || {}).amount || 0);
       if (!(amt > 0)) throw new Error('اكتب المبلغ الشهري.');
       plan = { amount: amt };
+      // تغيير المبلغ الشهري يسري من شهر يحدده المستخدم، والأشهر قبله تبقى بمبلغها (لا قبل آخر مطالبة معتمدة)
+      var op = c.pay_mode === 'monthly' ? planOf(c) : null;
+      if (op && op.amount && Math.abs(round_(op.amount) - amt) > 0.009) {
+        var eff = String(d.eff || '');
+        if (!/^\d{4}-\d{2}$/.test(eff)) throw new Error('حدّد الشهر الذي يسري منه المبلغ الجديد.');
+        var lk = lockDay(contractId);
+        if (lk && eff <= lk.slice(0, 7)) throw new Error('توجد مطالبة معتمدة حتى ' + lk + '، فلا يسري المبلغ الجديد قبل ' + nextM_(lk.slice(0, 7)) + '.');
+        var prevM = (function () { var y = +eff.slice(0, 4), mo = +eff.slice(5, 7) - 1; if (mo < 1) { y--; mo = 12; } return y + '-' + (mo < 10 ? '0' : '') + mo; })();
+        var hist = (op.hist || []).filter(function (h) { return h.until < eff; });
+        if (!op.from || op.from < eff) hist.push({ until: prevM, amount: round_(op.amount) });
+        plan = { amount: amt, from: eff, hist: hist };
+      } else if (op) { plan = { amount: amt, from: op.from, hist: op.hist || [] }; }
     }
     Db.update('Contracts', contractId, { value: value || '', pay_mode: mode, pay_days: days, pay_plan: plan ? JSON.stringify(plan) : '' });
     return { mode: mode };
   }
 
   function claimsOf_(pred) { return Db.all('Claims', pred); }
+  /** آخر يوم تغطيه مطالبة معتمدة أو مسددة للعقد: التغيير المالي لا يسري قبله */
+  function lockDay(contractId) {
+    var last = '';
+    claimsOf_(function (x) { return x.contract_id === contractId && (x.status === 'approved' || x.status === 'paid'); }).forEach(function (x) {
+      var it = String(x.item || ''), d = /^\d{4}-\d{2}$/.test(it) ? monthEnd_(it) : day_(x.due);
+      if (d > last) last = d;
+    });
+    return last;
+  }
+  /** المبلغ الشهري الساري لشهر m (yyyy-MM): الحالي أو من سجله */
+  function amountAt(plan, m) {
+    var h = (plan && plan.hist) || [];
+    h = h.slice().sort(function (a, b) { return a.until < b.until ? -1 : 1; });
+    for (var i = 0; i < h.length; i++) if (m <= h[i].until) return round_(h[i].amount);
+    return round_(plan.amount);
+  }
   function liveFor_(contractId) {
     var m = {};
     claimsOf_(function (x) { return x.contract_id === contractId && LIVE.indexOf(x.status) !== -1; }).forEach(function (x) { m[x.item] = x; });
@@ -185,5 +221,5 @@ var Pay = (function () {
     Db.update('Claims', id, { status: 'paid', paid_at: d.date, paid_ref: ref, paid_note: String(d.note || '').trim(), paid_by: me.name || '' });
   }
 
-  return { MODES: MODES, owner: owner, items: items, setup: setup, claimable: claimable, submit: submit, conList: conList, board: board, decide: decide, pay: pay, planOf: planOf };
+  return { MODES: MODES, owner: owner, items: items, lockDay: lockDay, amountAt: amountAt, setup: setup, claimable: claimable, submit: submit, conList: conList, board: board, decide: decide, pay: pay, planOf: planOf };
 })();

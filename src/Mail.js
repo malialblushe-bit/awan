@@ -269,7 +269,28 @@ var Mail = (function () {
     return { to: d.to, subject: kind === 'con' ? 'أعوان · رقمكم السري جاهز' : 'أهلاً ' + first + '، حسابك في أعوان جاهز', html: html, text: text, private: true };
   }
 
-  return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom, creds: creds };
+  /** إشعار المتعهد بتعديل مالي على عقده (اختياري، يرسله الموظف بعد الحفظ): البند · قبل · بعد · يسري من */
+  function change(d) {
+    var td = 'padding:9px 12px;border-top:1px solid ' + BEIGE + ';font-size:13px;color:' + INK;
+    var rows = (d.rows || []).map(function (r) {
+      return '<tr><td style="' + td + '">' + esc(r[0]) + '</td><td style="' + td + ';text-decoration:line-through">' + esc(r[1] || '—') + '</td><td style="' + td + ';font-size:14px;font-weight:bold;color:' + NAVY + '">' + esc(r[2] || '—') + '</td></tr>';
+    }).join('');
+    var th = 'padding:9px 12px;font-size:12px;color:' + INK + ';text-align:right';
+    var html = '<div dir="rtl" style="background:' + SAND + ';padding:24px 10px;font-family:' + FONT + '">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + BEIGE + '">' +
+      '<tr><td style="padding:22px 24px;color:' + NAVY + ';line-height:1.8"><b style="font-size:15px">' + BRAND_AR + '</b>' +
+      '<div style="font-size:20px;font-weight:bold;margin-top:8px">تعديل على عقدكم</div>' +
+      '<p style="margin:2px 0 14px;color:' + INK + ';font-size:14px">' + esc(d.con) + ' · ' + esc(d.title) + (d.hotels ? ' · ' + esc(d.hotels) : '') + '</p>' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid ' + BEIGE + ';border-radius:12px;border-collapse:separate">' +
+      '<tr><th style="' + th + '">البند</th><th style="' + th + '">قبل</th><th style="' + th + '">بعد</th></tr>' + rows + '</table>' +
+      (d.eff ? '<p style="margin:14px 0 0;font-size:14px">يسري من: <b dir="ltr">' + esc(d.eff) + '</b></p>' : '') +
+      '<p style="margin:14px 0 0;font-size:13px;color:' + INK + '">للاستفسار يُرجى الرد على هذا البريد.</p></td></tr>' +
+      '<tr><td style="background:' + NAVY + ';padding:10px 24px;font-size:11px;color:#E6DAC0">أعوان · شركاء في الإنجاز</td></tr></table></div>';
+    var text = 'تعديل على عقدكم: ' + d.con + ' · ' + d.title + '\n' + (d.rows || []).map(function (r) { return r[0] + ': ' + (r[1] || '—') + ' ← ' + (r[2] || '—'); }).join('\n') + (d.eff ? '\nيسري من: ' + d.eff : '');
+    return { to: d.to, subject: 'أعوان · تعديل على عقدكم · ' + d.title, html: html, text: text };
+  }
+
+  return { rfq: rfq, notice: notice, send: send, fromOf: fromAddr_, setFrom: setFrom, creds: creds, change: change };
 })();
 
 /** يُشغَّل مرة واحدة من محرر السكربت بحساب الصيانة لمنح إذن إرسال البريد */

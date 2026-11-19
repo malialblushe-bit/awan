@@ -649,7 +649,7 @@ function statementCore_(scope, conId, from, to) {
       var fits = t >= st && t <= en2;
       if (!best || (fits && !best.fits) || (fits === best.fits && Orders.ms(c.created_at) > Orders.ms(best.c.created_at))) best = { c: c, fits: fits };
     });
-    return best ? pricesOf_(best.c) : {};
+    return best ? pricesAt_(best.c, dayOf(o.closed_at)) : {};
   };
   var lines = {}, orders = [];
   var inSt = function (o) { var d = dayOf(o.closed_at); return o.con_id === conId && o.status === 'closed' && o.kind !== 'periodic' && scope.indexOf(o.hotel_id) !== -1 && d >= from && d <= to; };
@@ -1042,6 +1042,16 @@ function cleanPrices_(obj) {
   Object.keys(obj || {}).forEach(function (k) { var v = price_(obj[k]); if (v !== '') out[String(k).trim()] = v; });
   return out;
 }
+/** الأسعار السابقة للعقد (التغيير المالي يسري من تاريخ، والسابق يبقى لما قبله) */
+function priceHist_(c) { var h = c && c.price_hist; if (typeof h === 'string') { try { h = JSON.parse(h || '[]'); } catch (e) { h = []; } } return Array.isArray(h) ? h : []; }
+/** الأسعار السارية في يوم (yyyy-MM-dd): الحالية، أو من سجل الأسعار لما قبل سريانها */
+function pricesAt_(c, day) {
+  if (!day) return pricesOf_(c);
+  var h = priceHist_(c).slice().sort(function (a, b) { return a.until < b.until ? -1 : 1; });
+  for (var i = 0; i < h.length; i++) if (day <= h[i].until) return h[i].prices || {};
+  return pricesOf_(c);
+}
+function dayAdd_(d, n) { var t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
 function pricesOf_(contract) {
   var p = contract && contract.prices;
   if (typeof p === 'string') { try { p = JSON.parse(p); } catch (e) { p = {}; } }
@@ -1049,7 +1059,7 @@ function pricesOf_(contract) {
 }
 
 /** أسعار عقد قائم (عقد التكييف) */
-function apiAdmSaveContractPrices(token, contractId, prices, services, reason) {
+function apiAdmSaveContractPrices(token, contractId, prices, services, reason, eff) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c) throw new Error('العقد غير موجود.');
@@ -1058,9 +1068,22 @@ function apiAdmSaveContractPrices(token, contractId, prices, services, reason) {
     if (c.type === 'ac' && services) { patch.services = svcClean_(services); if (!patch.services.length) throw new Error('اكتب خدمة واحدة على الأقل.'); }
     var bf = { prices: pricesOf_(c) }, af = { prices: parseJ_(patch.prices) };
     if (patch.services) { bf.services = svcOf_(c).map(function (x) { return x.ar; }); af.services = parseJ_(patch.services).map ? parseJ_(patch.services).map(function (x) { return x.ar; }) : []; }
-    ctrLog_(token, c, 'prices', bf, af, reason);
+    // تغيير الأسعار القائمة يسري من تاريخ يحدده المستخدم، والسابقة تُحفظ لما قبله (لا قبل آخر مطالبة معتمدة)
+    var sk = function (o) { var r = {}; Object.keys(o || {}).sort().forEach(function (k) { r[k] = String(o[k]); }); return JSON.stringify(r); };
+    var effOpt = '';
+    if (Object.keys(bf.prices).length && sk(bf.prices) !== sk(af.prices)) {
+      eff = String(eff || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eff)) throw new Error('حدّد التاريخ الذي تسري منه الأسعار الجديدة.');
+      var lk = Pay.lockDay(contractId);
+      if (lk && eff <= lk) throw new Error('توجد مطالبة معتمدة حتى ' + lk + '، فلا تسري الأسعار الجديدة قبل ' + dayAdd_(lk, 1) + '.');
+      var from = c.prices_from ? lv_(c.prices_from) : '';
+      var hist = priceHist_(c).filter(function (h) { return h.until < eff; });
+      if (!from || from < eff) hist.push({ until: dayAdd_(eff, -1), prices: bf.prices });
+      patch.price_hist = JSON.stringify(hist); patch.prices_from = eff; effOpt = eff;
+    }
+    var logId = ctrLog_(token, c, 'prices', bf, af, reason, { eff: effOpt });
     Db.update('Contracts', contractId, patch);
-    return {};
+    return { logId: logId || '' };
   }, 'con');
 }
 
@@ -1105,9 +1128,9 @@ function apiAdmSaveSeason(token, contractId, list, reason) {
     });
     out.sort(function (a, b) { return a.from < b.from ? -1 : 1; });
     for (var i = 1; i < out.length; i++) if (out[i].from <= out[i - 1].to) throw new Error('فترتا «' + out[i - 1].name + '» و«' + out[i].name + '» متداخلتان.');
-    ctrLog_(token, c, 'season', { season: Water.seasonOf(c) }, { season: out }, reason);
+    var logId = ctrLog_(token, c, 'season', { season: Water.seasonOf(c) }, { season: out }, reason);
     Db.update('Contracts', contractId, { season: JSON.stringify(out) });
-    return { season: out };
+    return { season: out, logId: logId || '' };
   }, 'con');
 }
 
@@ -1192,9 +1215,45 @@ function ctrLog_(token, c, kind, before, after, reason, opt) {
   var changesOld = Object.keys(b).some(function (k) { return b[k] !== '' && b[k] !== '{}' && b[k] !== '[]'; });
   if (!reason && changesOld && !opt.noReason) throw new Error('اكتب سبب التعديل.');
   var s = Auth.need(token), u = Db.get('Users', s.id) || {};
-  Db.insert('ContractLog', { contract_id: c.contract_id, con_id: c.con_id, kind: kind, before: JSON.stringify(b), after: JSON.stringify(a), eff_from: opt.eff || '',
-    reason: reason, by: s.id || '', by_name: u.name || s.name || '', by_role: s.role || '', at: new Date(), notified_at: '', notified_by: '' });
-  return true;
+  return Db.insert('ContractLog', { contract_id: c.contract_id, con_id: c.con_id, kind: kind, before: JSON.stringify(b), after: JSON.stringify(a), eff_from: opt.eff || '',
+    reason: reason, by: s.id || '', by_name: u.name || s.name || '', by_role: s.role || '', at: new Date(), notified_at: '', notified_by: '' }).log_id;
+}
+
+/** بنود إشعار المتعهد من سطر السجل: [البند، قبل، بعد] — الأسعار والدفعات بنداً بنداً */
+function notifyRows_(kind, b, a) {
+  var rows = [], J = function (v) { return typeof v === 'string' && /^[\[{]/.test(v) ? parseJ_(v) : v; };
+  var L = { prices: 'السعر', pay_mode: 'طريقة السداد', value: 'قيمة العقد', pay_days: 'مهلة السداد (يوم)', season: 'المواسم' };
+  var MODE = { sched: 'مبلغ مقطوع بدفعات مرحلية', monthly: 'مبلغ مقطوع شهري', stmt: 'أسعار الوحدات' };
+  Object.keys(Object.assign({}, b, a)).forEach(function (k) {
+    var x = J(b[k]), y = J(a[k]);
+    if (k === 'prices') { var ks = Object.keys(Object.assign({}, x || {}, y || {})); ks.forEach(function (s) { var p = (x || {})[s], q = (y || {})[s]; if (String(p == null ? '' : p) !== String(q == null ? '' : q)) rows.push([s, p == null || p === '' ? '' : p + ' ريال', q == null || q === '' ? '' : q + ' ريال']); }); return; }
+    if (k === 'pay_plan') {
+      if ((x && x.amount) || (y && y.amount)) { rows.push(['المبلغ الشهري', x && x.amount ? x.amount + ' ريال' : '', y && y.amount ? y.amount + ' ريال' : '']); return; }
+      var n = Math.max((x || []).length, (y || []).length);
+      for (var i = 0; i < n; i++) { var o = (x || [])[i], w = (y || [])[i], f = function (p) { return p ? p.due + ' · ' + p.amount + ' ريال' : ''; }; if (f(o) !== f(w)) rows.push(['الدفعة ' + (i + 1), f(o), f(w)]); }
+      return;
+    }
+    if (k === 'season') { var g = function (v) { return (v || []).map(function (s) { return s.name + ' ' + s.from + '–' + s.to; }).join('، '); }; rows.push(['المواسم', g(x), g(y)]); return; }
+    if (k === 'pay_mode') { rows.push([L[k], MODE[x] || x || '', MODE[y] || y || '']); return; }
+    rows.push([L[k] || k, x == null ? '' : String(x), y == null ? '' : String(y)]);
+  });
+  return rows;
+}
+
+/** إشعار المتعهد بتعديل مالي (اختياري، بعد الحفظ): البريد قبل القفل، ثم يُسجَّل من أرسله ومتى */
+function apiAdmNotifyChange(token, logId) {
+  var s = Auth.need(token, ['admin']);
+  var r = Db.get('ContractLog', logId);
+  if (!r) throw new Error('السجل غير موجود.');
+  if (['prices', 'pay', 'season'].indexOf(r.kind) === -1) throw new Error('الإشعار للتعديلات المالية فقط.');
+  if (r.notified_at) throw new Error('أُرسل إشعار هذا التعديل سابقاً.');
+  var c = Db.get('Contracts', r.contract_id) || {}, con = Db.get('Contractors', r.con_id) || {}, to = emails_(con.emails);
+  if (!to.length) throw new Error('لا يوجد بريد مسجل لهذا المتعهد. أضفه من «بيانات التواصل» ثم أرسل.');
+  var R = Orders.refs(), hs = Orders.csv(c.hotel_ids), me = Db.get('Users', s.id) || {};
+  var m = Mail.change({ to: to.join(','), con: con.name, title: { prices: 'الأسعار', pay: 'طريقة السداد والدفعات', season: 'تسعيرة المواسم' }[r.kind],
+    hotels: hs.map(function (h) { return (R.hotels[h] || {}).name || h; }).join('، '), rows: notifyRows_(r.kind, parseJ_(r.before), parseJ_(r.after)), eff: lv_(r.eff_from) });
+  Mail.send(m, '', hs[0], me);
+  return adm_(token, function () { Db.update('ContractLog', logId, { notified_at: new Date(), notified_by: me.name || '' }); return { notified: true, to: to.join('، ') }; }, 'con');
 }
 
 /** سجل تعديلات العقود للإدارة (يُقرأ عند فتح التبويب فقط) */
@@ -1205,7 +1264,7 @@ function apiAdmContractLog(token) {
     var c = Db.get('Contracts', r.contract_id) || {}, con = R.cons[r.con_id] || Db.get('Contractors', r.con_id) || {};
     return { id: r.log_id, cid: r.contract_id, con: con.name || r.con_id, type: c.type || con.type || '', hotels: Orders.csv(c.hotel_ids).map(function (h) { return (R.hotels[h] || {}).name || h; }),
       kind: r.kind, before: parseJ_(r.before), after: parseJ_(r.after), eff: lv_(r.eff_from), reason: r.reason || '', by: r.by_name || '', role: r.by_role || '',
-      at: r.at ? new Date(r.at).getTime() : 0, notified: r.notified_at ? new Date(r.notified_at).getTime() : null, notifiedBy: r.notified_by || '' };
+      at: r.at ? new Date(r.at).getTime() : 0, notified: r.notified_at ? new Date(r.notified_at).getTime() : null, notifiedBy: r.notified_by || '', mail: emails_(con.emails || '').length > 0 };
   }).sort(function (x, y) { return y.at - x.at; });
 }
 function parseJ_(v) { if (v && typeof v === 'object') return v; try { return JSON.parse(v || '{}'); } catch (e) { return {}; } }
@@ -1232,32 +1291,6 @@ function apiAdmEditContract(token, contractId, d) {
   }, 'con');
 }
 
-/** مؤقت لتنظيف البيانات التجريبية (يُزال لاحقاً): حذف عقد لم يُسجَّل عليه شيء، وآخر عقد للمتعهد يحذفه معه إن لم يكن عليه شيء */
-function apiAdmDeleteContract(token, contractId) {
-  return adm_(token, function () {
-    var c = Db.get('Contracts', contractId);
-    if (!c) throw new Error('العقد غير موجود.');
-    var con = c.con_id;
-    // سجلات الفندق تتبع المتعهد لا العقد: الفندق الذي يغطيه عقد آخر للمتعهد نفسه تبقى سجلاته عليه، فلا تمنع الحذف (عقد مكرر)
-    var cover = {}; Db.all('Contracts', function (x) { return x.con_id === con && x.contract_id !== contractId; }).forEach(function (x) { Orders.csv(x.hotel_ids).forEach(function (h) { cover[h] = 1; }); });
-    var hs = Orders.csv(c.hotel_ids).filter(function (h) { return !cover[h]; });
-    var T = ['WorkOrders', 'WorkOrdersArchive', 'Arrivals', 'CorrectiveActions', 'WasteVisits', 'WaterLoads', 'Tickets', 'OrgEvals', 'PestLogs', 'SupRatings', 'PcReports'];
-    var used = function (mine) {
-      var n = 0;
-      T.forEach(function (t) { n += Db.all(t, function (r) { return r.con_id === con && (!mine || (r.hotel_id ? hs.indexOf(r.hotel_id) !== -1 : !Object.keys(cover).length)); }).length; });
-      return n;
-    };
-    if (Db.all('Claims', function (r) { return r.contract_id === contractId; }).length || used(true)) throw new Error('عليه سجلات، فلا يُحذف. اتركه ينتهي أو جدّده.');
-    ctrLog_(token, c, 'delete', { hotel_ids: c.hotel_ids, start: c.start, end: c.end }, {}, 'حذف عقد تجريبي بلا سجلات', { noReason: true, always: true });
-    Db.remove('Contracts', contractId);
-    var conDel = false;
-    if (!Db.all('Contracts', function (x) { return x.con_id === con; }).length && !used(false)
-      && !Db.all('Claims', function (r) { return r.con_id === con; }).length && !Db.all('Evaluations', function (r) { return r.con_id === con; }).length) {
-      Db.remove('Contractors', con); conDel = true;
-    }
-    return { conDeleted: conDel };
-  }, 'con');
-}
 
 /** قائد فريق المصاعد أو المكافحة: الاسم ورقم سري جديد يظهر مرة واحدة */
 function apiAdmLeadPin(token, contractId, name) {
@@ -1755,9 +1788,9 @@ function apiAdmSavePay(token, contractId, d) {
     if (!c) throw new Error('العقد غير موجود.');
     if (c.pay_mode && !String((d || {}).reason || '').trim()) throw new Error('اكتب سبب التعديل.');
     var pick = function (x) { return { pay_mode: x.pay_mode, value: x.value, pay_days: x.pay_days, pay_plan: parseJ_(x.pay_plan) }; };
-    var bf = pick(c), r = Pay.setup(contractId, d);
-    ctrLog_(token, c, 'pay', bf, pick(Db.get('Contracts', contractId)), (d || {}).reason, { noReason: !c.pay_mode });
-    return r;
+    var bf = pick(c), r = Pay.setup(contractId, d), c2 = Db.get('Contracts', contractId), p2 = parseJ_(c2.pay_plan);
+    var logId = ctrLog_(token, c, 'pay', bf, pick(c2), (d || {}).reason, { noReason: !c.pay_mode, eff: p2 && p2.from && p2.from === d.eff ? d.eff : '' });
+    return Object.assign({}, r, { logId: logId || '' });
   }, 'con');
 }
 function apiConClaim(token, d) {

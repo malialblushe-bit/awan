@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 38;
+var SCHEMA_VERSION = 39;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -57,7 +57,7 @@ var SCHEMA = [
     ['alert_days', 'التنبيه قبل (يوم)'], ['resp_normal', 'الاستجابة: عادي (دقيقة)'],
     ['resp_urgent', 'الاستجابة: طارئ (دقيقة)'], ['pm_per_month', 'زيارات دورية في الشهر'],
     ['prev_contract_id', 'العقد السابق (عند التجديد)'], ['created_at', 'تاريخ الإنشاء'],
-    ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['services', 'خدمات التكييف في هذا العقد (JSON: [{ar,en}])'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
+    ['prices', 'أسعار الخدمات في هذا العقد (JSON: الخدمة ← الريال)'], ['prices_from', 'الأسعار الحالية تسري من'], ['price_hist', 'الأسعار السابقة (JSON: [{until, prices}])'], ['services', 'خدمات التكييف في هذا العقد (JSON: [{ar,en}])'], ['wa_per_week', 'النفايات: مرات الرفع في الأسبوع'],
     ['lead_name', 'قائد الفريق (المصاعد): يستكمل التقرير'], ['lead_pin_hash', 'رقمه السري (مشفّر)'], ['lead_salt', 'الملح'],
     ['team', 'فنيو المتعهد (JSON: أسماء) يعرّفهم قائد الفريق'], ['season', 'المياه: تسعيرة المواسم (JSON: [{name, from, to, add: {الحجم: زيادة الريال}}])'],
     ['sla_repair', 'زمن الإصلاح المستهدف (دقيقة عمل فعلي)'], ['sla_rescue', 'المصاعد: زمن الإنقاذ (دقيقة)'], ['sla_pest', 'المكافحة: من بلاغ الإصابة إلى المعالجة (ساعة)'],
