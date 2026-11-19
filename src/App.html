@@ -362,31 +362,45 @@ var LANG=(function(){try{return localStorage.getItem('awan_lang')||'ar'}catch(e)
 /* طباعة كشف الخدمات المنفذة: ترويسة ثابتة في كل صفحة، وملخص أولاً، وتفاصيل 10 عمليات للصفحة، وترقيم، وختم المطابقة لمهندس الصيانة فقط */
 function stmtDoc(stamp){
   var r=P.st;if(!r)return;
-  var me=(W.b&&W.b.me)||{},PER=10,N=r.orders.length;
+  var me=(W.b&&W.b.me)||{},N=r.orders.length;
   var fd=function(s){return s.split('-').reverse().join('/')};
   var money=function(v){return v==null?'—':(Math.round(v*100)/100).toLocaleString('en-US')};
   var head='<div class="row" style="align-items:flex-start;border-bottom:3px solid var(--navy);padding-bottom:8px">'+STM.brand('كشف الخدمات المنفذة')+'<div style="text-align:end" class="small"><b>الفترة: <bdi>'+fd(r.from)+'</bdi> إلى <bdi>'+fd(r.to)+'</bdi></b><br>تاريخ الإصدار: '+dmyY(Date.now())+'</div></div><div class="kv" style="margin-top:8px"><div><span>المتعهد</span><b>'+esc(r.con.name)+'</b></div><div><span>النوع</span><b>'+TYPE[r.con.type]+'</b></div><div><span>الفندق</span><b>'+esc(r.hotels.join('، '))+'</b></div><div><span>عدد العمليات</span><b>'+N+'</b></div></div>';
-  var summary='<h3 style="font-size:15px;margin:14px 0 6px">ملخص الخدمات</h3><table class="bill"><thead><tr><th>#</th><th>الخدمة</th><th>العدد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>'+r.lines.map(function(l,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(l.svc)+'</td><td>'+l.qty+'</td><td>'+money(l.price)+'</td><td><b>'+money(l.total)+'</b></td></tr>'}).join('')+'</tbody><tfoot><tr><td colspan="4">الإجمالي (ريال)</td><td>'+money(r.total)+'</td></tr></tfoot></table>'+(r.missing?'<p class="small" style="color:var(--redD);margin:6px 0 0">'+r.missing+' خدمات بلا سعر، لم تدخل في الإجمالي.</p>':'');
-  var table=function(list){return '<h3 style="font-size:15px;margin:14px 0 6px">تفاصيل العمليات</h3><table class="bill"><thead><tr><th>رقم العملية</th><th>تاريخ الإغلاق</th><th>الموقع</th><th>الخدمات</th><th>المبلغ</th></tr></thead><tbody>'+list.map(function(o){return '<tr><td dir="ltr" style="text-align:start">'+esc(o.id)+'</td><td>'+dmyY(o.closed)+'</td><td>'+esc(o.hotel+' · '+o.loc)+'</td><td>'+esc(o.acts.join('، '))+'</td><td>'+money(o.amount)+'</td></tr>'}).join('')+'</tbody></table>'};
-  var chunks=[];for(var i=0;i<N;i+=PER)chunks.push(r.orders.slice(i,i+PER));
-  var fits=r.lines.length<5,pages=[],idx=0;
-  var first={body:[summary],from:0,to:0};
-  if(fits&&chunks.length){first.body.push(table(chunks[0]));first.from=1;first.to=chunks[0].length;idx=chunks[0].length;chunks=chunks.slice(1)}
-  pages.push(first);
-  chunks.forEach(function(ch){pages.push({body:[table(ch)],from:idx+1,to:idx+ch.length});idx+=ch.length});
+  var summary='<h3 style="font-size:17px;margin:18px 0 8px">ملخص الخدمات</h3><table class="bill"><thead><tr><th>#</th><th>الخدمة</th><th>العدد</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>'+r.lines.map(function(l,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(l.svc)+'</td><td>'+l.qty+'</td><td>'+money(l.price)+'</td><td><b>'+money(l.total)+'</b></td></tr>'}).join('')+'</tbody><tfoot><tr><td colspan="4">الإجمالي (ريال)</td><td>'+money(r.total)+'</td></tr></tfoot></table>'+(r.missing?'<p class="small" style="color:var(--redD);margin:6px 0 0">'+r.missing+' خدمات بلا سعر، لم تدخل في الإجمالي.</p>':'');
+  var table=function(list){return '<h3 style="font-size:17px;margin:18px 0 8px">تفاصيل العمليات</h3><table class="bill"><thead><tr><th style="white-space:nowrap">رقم العملية</th><th style="white-space:nowrap">تاريخ الإغلاق</th><th>الموقع</th><th>الخدمات</th><th>المبلغ</th></tr></thead><tbody>'+list.map(function(o){return '<tr><td dir="ltr" style="text-align:start;white-space:nowrap">'+esc(o.id)+'</td><td style="white-space:nowrap">'+dmyY(o.closed)+'</td><td>'+esc(o.hotel+' · '+o.loc)+'</td><td>'+esc(o.acts.join('، '))+'</td><td>'+money(o.amount)+'</td></tr>'}).join('')+'</tbody></table>'};
   var end='<div style="margin-top:14px" class="small"><b>أُعد آلياً بواسطة نظام أعوان</b> · '+dmyY(Date.now())+' '+hm(Date.now())+'</div><p class="small muted" style="margin:6px 0 0">يشمل العمليات التي طابقها المهندس وأغلقها خلال الفترة. الأسعار حسب عقد المتعهد.</p><div class="grid g2" style="margin-top:20px"><div style="border-top:1px solid var(--navy);padding-top:6px" class="small">مهندس الصيانة: الاسم والتوقيع</div><div style="border-top:1px solid var(--navy);padding-top:6px" class="small">المتعهد: الاسم والتوقيع والختم</div></div>'+(stamp?'<div style="margin-top:14px">'+STAMP({label:'مطابق',name:me.name,role:me.role,date:Date.now(),size:112})+'</div>':'');
-  pages[pages.length-1].body.push(end);
-  var total=pages.length;
-  var html=pages.map(function(p,k){return '<section class="qpg stmt">'+head+p.body.join('')+'<div class="pf"><span>صفحة '+(k+1)+' من '+total+'</span><span>'+(p.to?'العمليات من '+p.from+' إلى '+p.to+' من '+N:'ملخص الخدمات')+'</span></div></section>'}).join('');
+  var rows=r.orders.map(function(o){return table([o]).match(/<tbody>([\s\S]*)<\/tbody>/)[1]});
+  var html='';
   var css=[].slice.call(document.querySelectorAll('style')).map(function(s){return s.outerHTML}).join(''),vars=themeVars((curTheme||'shared').split('|')[0]);
-  return '<!doctype html><html lang="ar" dir="rtl" style="'+vars+'"><head><meta charset="utf-8"><title>كشف الخدمات المنفذة</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">'+css+'<style>@page{size:A4;margin:0}html,body{margin:0;background:#fff!important}.qpg.stmt{width:210mm!important;height:297mm!important;box-sizing:border-box!important;padding:12mm 14mm 16mm!important;position:relative!important;overflow:hidden;page-break-after:always;break-after:page}.qpg.stmt:last-child{page-break-after:auto;break-after:auto}.pf{position:absolute;left:14mm;right:14mm;bottom:8mm;display:flex;justify-content:space-between;font-size:11px;color:#555;border-top:1px solid #ccc;padding-top:4px}.qpg .row{display:flex!important;justify-content:space-between;gap:12px;align-items:flex-start}.qpg .kv{display:grid!important;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px}.qpg .kv>div{background:#f5f1e8!important;border-radius:8px;padding:6px 8px}.qpg .kv span{display:block;font-size:11px;color:#666}.qpg h3{margin:12px 0 4px}.qpg .bill{width:100%;border-collapse:collapse;font-size:12px}.qpg .bill th,.qpg .bill td{padding:4px 6px;border-bottom:1px solid #ddd;text-align:start}.qpg .bill th{background:#1F2F4D!important;color:#fff!important}.qpg .small{font-size:12px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media screen{body{background:#888}.qpg.stmt{margin:12px auto;background:#fff}}</style></head><body>'+html+'</body></html>';
+  return {doc:'<!doctype html><html lang="ar" dir="rtl" style="'+vars+'"><head><meta charset="utf-8"><title>كشف الخدمات المنفذة</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">'+css+'<style>@page{size:A4;margin:0}html,body{margin:0;background:#fff!important}.qpg.stmt{width:210mm!important;height:297mm!important;box-sizing:border-box!important;padding:12mm 14mm 16mm!important;position:relative!important;overflow:hidden;page-break-after:always;break-after:page}.qpg.stmt:last-child{page-break-after:auto;break-after:auto}.pf{position:absolute;left:14mm;right:14mm;bottom:8mm;display:flex;justify-content:space-between;font-size:12px;color:#555;border-top:1px solid #ccc;padding-top:4px}.qpg .row{display:flex!important;justify-content:space-between;gap:12px;align-items:flex-start}.qpg .kv{display:grid!important;grid-template-columns:repeat(4,1fr);gap:8px;font-size:14px}.qpg .kv>div{background:#f5f1e8!important;border-radius:8px;padding:9px 11px}.qpg .kv span{display:block;font-size:12px;color:#666;margin-bottom:2px}.qpg h3{margin:12px 0 4px}.qpg .bill{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.5}.qpg .bill th,.qpg .bill td{padding:9px 8px;border-bottom:1px solid #ddd;text-align:start}.qpg .bill th{background:#1F2F4D!important;color:#fff!important}.qpg .small{font-size:13px}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media screen{body{background:#888}.qpg.stmt{margin:12px auto;background:#fff}}</style></head><body>'+html+'</body></html>',d:{head:head,summary:summary,th:table([]),rows:rows,end:end,N:N,fits:r.lines.length<5}};
+}
+// يوزّع الكشف على صفحات A4 بالقياس الفعلي: يملأ كل صفحة بما يتسع من العمليات فوق التذييل، بلا قص
+function stmtPaginate(doc,o){
+  var body=doc.body;body.innerHTML='';var pages=[];
+  var add=function(){var s=doc.createElement('section');s.className='qpg stmt';s.innerHTML=o.head+'<div class="pgb"></div><div class="pf"><span></span><span></span></div>';body.appendChild(s);var pg={s:s,b:s.querySelector('.pgb'),a:0,z:0};pages.push(pg);return pg};
+  var ok=function(pg){return pg.b.offsetTop+pg.b.offsetHeight<=pg.s.querySelector('.pf').offsetTop-8};
+  var cur=add();cur.b.innerHTML=o.summary;
+  if(!o.fits&&o.rows.length)cur=add();
+  var tb=null;
+  var start=function(){cur.b.insertAdjacentHTML('beforeend',o.th);var t=cur.b.querySelectorAll('tbody');tb=t[t.length-1]};
+  o.rows.forEach(function(row,i){
+    if(!tb)start();
+    tb.insertAdjacentHTML('beforeend',row);
+    if(!ok(cur)){var tr=tb.lastElementChild;tb.removeChild(tr);
+      if(!tb.children.length){var tbl=tb.parentNode;tbl.previousElementSibling&&tbl.parentNode.removeChild(tbl.previousElementSibling);tbl.parentNode.removeChild(tbl)}
+      cur=add();start();tb.appendChild(tr)}
+    if(!cur.a)cur.a=i+1;cur.z=i+1;
+  });
+  cur.b.insertAdjacentHTML('beforeend','<div class="pend">'+o.end+'</div>');
+  if(!ok(cur)){var e=cur.b.lastElementChild;cur.b.removeChild(e);cur=add();cur.b.appendChild(e)}
+  pages.forEach(function(pg,k){var sp=pg.s.querySelectorAll('.pf span');sp[0].textContent='صفحة '+(k+1)+' من '+pages.length;sp[1].textContent=pg.a?'العمليات من '+pg.a+' إلى '+pg.z+' من '+o.N:(k===0?'ملخص الخدمات':'')});
 }
 function stmtPrint(stamp){
-  var doc=stmtDoc(stamp);if(!doc)return;
+  var x=stmtDoc(stamp);if(!x)return;
   var w=window.open('','_blank');if(!w){toast('اسمح بالنوافذ المنبثقة للطباعة.','err');return}
-  w.document.write(doc);
+  w.document.write(x.doc);
   w.document.close();
-  var go=function(){(w.document.fonts?w.document.fonts.ready:Promise.resolve()).then(function(){setTimeout(function(){w.focus();w.print()},300)})};if(w.document.readyState==='complete')go();else w.onload=go;
+  var go=function(){(w.document.fonts?w.document.fonts.ready:Promise.resolve()).then(function(){stmtPaginate(w.document,x.d);setTimeout(function(){w.focus();w.print()},300)})};if(w.document.readyState==='complete')go();else w.onload=go;
 }
 var DICT={
 'ابحث عن منطقة…':'Search for a zone…','المنطقة':'Zone','طباعة مع ختم المطابقة':'Print with match stamp',
