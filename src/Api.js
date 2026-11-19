@@ -632,13 +632,6 @@ function apiStatement(token, conId, hotelId, from, to) {
   return statementCore_(scope, conId, from, to);
 }
 
-/** PDF للكشف: الواجهة تبني مستند الكشف وترسله، ويعيد الخادم PDF (Base64) بلا نافذة طباعة */
-function apiStmtPdf(token, doc) {
-  Auth.need(token);
-  if (typeof doc !== 'string' || doc.length > 2000000 || doc.indexOf('class="qpg stmt"') < 0) throw new Error('مستند الكشف غير صالح.');
-  return Utilities.base64Encode(HtmlService.createHtmlOutput(doc).getAs(MimeType.PDF).getBytes());
-}
-
 /** كشف الخدمات المنفذة لنطاق فنادق (يستخدمه الكشف والمطالبات) */
 function statementCore_(scope, conId, from, to) {
   var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
