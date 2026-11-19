@@ -383,6 +383,11 @@ t('المهندس: قرار "المتعهد يوفّر" ← بانتظار ال�
   const b = run(`apiEngBoot('${engTok}')`);
   const o = b.orders.find(x => x.id === AC1);
   eq(o.status, 'decision'); eq(o.quote, '2400');
+  // عملية استبدال رُفعت بلا عرض: لا اعتماد قبل أن يُدخل المهندس السعر
+  run(`Db.update('WorkOrders', '${AC1}', { quote: '' })`);
+  throws(`apiEngAct('${engTok}', '${AC1}', 'decide', { decision: 'con' })`, 'سعر العرض');
+  run(`apiEngAct('${engTok}', '${AC1}', 'cquote', { amount: '2,400' })`);
+  eq(Number(run(`Db.get('WorkOrders', '${AC1}').quote`)), 2400);
   run(`apiEngAct('${engTok}', '${AC1}', 'decide', { decision: 'con' })`);
   eq(run(`apiConBoot('${acTok}')`).jobs[0].status, 'review');
   throws(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix' })`, 'ليست بانتظار تقريرك');

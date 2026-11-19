@@ -347,6 +347,19 @@ var Orders = (function () {
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(o.hotel_id) === -1) throw new Error('هذه العملية ليست ضمن فنادقك.');
     var t = now_(), patch = {}, to = o.status, note = '';
 
+    // عرض سعر الاستبدال الرئيسي (كمبروسر/وحدة خارجية) لعملية رُفعت بلا عرض: يُدخله المهندس في أي مرحلة، فيُسعَّر في الكشف
+    var isRepl = o.type === 'ac' && parse_(o.report, []).some(function (r) { return r && r.outcome === 'comp'; });
+    var hasQ = o.quote !== '' && o.quote != null && Number(o.quote) > 0;
+    if (action === 'cquote') {
+      if (!isRepl) throw new Error('هذه العملية ليست استبدالاً بعرض سعر.');
+      var qa = Number(String(d.amount || '').replace(/[,،\s]/g, ''));
+      if (!(qa > 0)) throw new Error('اكتب سعر العرض بالريال.');
+      Db.update('WorkOrders', woId, { quote: qa });
+      log_(woId, s.id, 'cquote', o.status, o.status, 'سعر العرض ' + qa);
+      return o.status;
+    }
+    if (action === 'decide' && isRepl && !hasQ && (d.decision === 'con' || d.decision === 'own')) throw new Error('سجّل سعر العرض المقدم أولاً، ثم اعتمد.');
+
     if (action === 'rfq') {
       if (o.status !== 'quote') throw new Error('العملية ليست بانتظار عرض سعر.');
       patch.rfq_at = t; patch.rfq_count = (Number(o.rfq_count) || 0) + 1; note = 'طلب عرض سعر بالبريد';
