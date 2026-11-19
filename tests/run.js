@@ -1530,6 +1530,18 @@ t('حذف عقد تجريبي (مؤقت): بلا سجلات يُحذف ومعه 
   eq(run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'}).length`), 1);
 });
 
+t('تعديل العقد: الشروط تتغير في العقد نفسه بلا عقد جديد، والتواريخ والرفع الأسبوعي يُتحقق منها', () => {
+  run(`apiAdmSaveContract('${adminTok}', { name: 'نفايات للتعديل', type: 'wa', wa_per_week: 14, hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`);
+  const cid = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='نفايات للتعديل'})[0].contract_id`);
+  const n0 = run(`Db.all('Contracts').length`);
+  throws(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${nextYear}', end: '${yesterday}', alert_days: 30, wa_per_week: 7 })`, 'البداية والنهاية');
+  throws(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 30, wa_per_week: 0 })`, 'الرفع');
+  run(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 45, wa_per_week: 7 })`);
+  const c = run(`Db.get('Contracts', '${cid}')`);
+  eq(Number(c.wa_per_week), 7); eq(Number(c.alert_days), 45); eq(run(`Db.all('Contracts').length`), n0, 'لم يُنشأ عقد جديد');
+  run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   const cap = run(`apiAdmLaunchInventory('${adminTok}')`).cap; eq(cap.drive.pct, 21.3); eq(cap.cells.limit, 10000000); if (!(cap.cells.used > 0)) throw new Error('cells');
   throws(`apiAdmLaunchInventory('${engTok}')`, '');

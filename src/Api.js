@@ -729,6 +729,7 @@ function admBoot_() {
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
             resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), services: svcOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
             lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x),
+            mf: x.measure_from ? (x.measure_from instanceof Date ? Utilities.formatDate(x.measure_from, 'Asia/Riyadh', 'yyyy-MM-dd') : String(x.measure_from).slice(0, 10)) : '',
             sla: { resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, sla_repair: x.sla_repair, sla_rescue: x.sla_rescue, sla_pest: x.sla_pest, cls_ex: x.cls_ex, cls_good: x.cls_good, cls_ok: x.cls_ok },
             pay: { value: Number(x.value) || 0, mode: x.pay_mode || '', days: x.pay_days === '' || x.pay_days == null ? 30 : Number(x.pay_days), plan: Pay.planOf(x) }
           };
@@ -1159,6 +1160,26 @@ function apiAdmSaveContract(token, d) {
 /** مفتاح اسم المتعهد للمقارنة: بلا مسافات زائدة، والهمزات والتاء المربوطة والألف المقصورة موحّدة */
 function conNameKey_(n) {
   return String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
+}
+
+/** تعديل شروط عقد قائم بدل إنشاء عقد جديد: المدة والتنبيه وبداية القياس، والرفع الأسبوعي (نفايات) والصيانة الشهرية (مصاعد) */
+function apiAdmEditContract(token, contractId, d) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c) throw new Error('العقد غير موجود.');
+    d = d || {};
+    var day = /^\d{4}-\d{2}-\d{2}$/;
+    if (!day.test(String(d.start || '')) || !day.test(String(d.end || '')) || d.end < d.start) throw new Error('حدّد تاريخ البداية والنهاية.');
+    if (d.measure_from && !day.test(String(d.measure_from))) throw new Error('تاريخ بداية القياس غير صحيح.');
+    var al = Number(d.alert_days);
+    if (!(al >= 1 && al <= 365)) throw new Error('التنبيه قبل الانتهاء من 1 إلى 365 يوماً.');
+    var p = { start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: al, measure_from: d.measure_from || '' };
+    if (c.type === 'wa') { var w = Number(d.wa_per_week); if (!(w > 0)) throw new Error('اكتب عدد مرات الرفع الأسبوعي.'); p.wa_per_week = w; }
+    if (c.type === 'el') { var pm = Number(d.pm_per_month); if (isNaN(pm) || pm < 0) throw new Error('عدد زيارات الصيانة الشهرية غير صحيح.'); p.pm_per_month = pm; }
+    Db.update('Contracts', contractId, p);
+    if (['ac', 'el', 'sf'].indexOf(c.type) !== -1) { try { Kpi.rebuild(); } catch (e) { } }
+    return {};
+  });
 }
 
 /** مؤقت لتنظيف البيانات التجريبية (يُزال لاحقاً): حذف عقد لم يُسجَّل عليه شيء، وآخر عقد للمتعهد يحذفه معه إن لم يكن عليه شيء */
