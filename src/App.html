@@ -1190,7 +1190,7 @@ var A={tab:'hotels',hid:null,f:{},
   var h='<div class="tabs" style="margin-bottom:14px">'+tabs.map(function(t){return '<button class="'+(A.tab===t[0]?'on':'')+'" onclick="A.tab=\''+t[0]+'\';A.f={};render()">'+t[1]+'</button>'}).join('')+'</div>';
   if(a.pending&&A.tab!=='lists')h+='<button class="alert a-tan" style="margin-bottom:12px;border:0;width:100%;text-align:start;font:inherit" onclick="A.tab=\'lists\';A.f={};render()"><b>'+a.pending+'</b> بنود جديدة أضافها المتعهدون بانتظار اعتمادك ←</button>';
   return h+A[A.tab]()},
- run:function(fn){var args=[].slice.call(arguments,1);return call.apply(null,[fn,S.tok].concat(args)).then(function(r){W.a=r.boot;return r})},
+ run:function(fn){var args=[].slice.call(arguments,1);return call.apply(null,[fn,S.tok].concat(args)).then(function(r){if(r.boot&&r.boot.__part&&W.a){var m=Object.assign({},W.a);Object.keys(r.boot).forEach(function(k){if(r.boot[k]!==undefined&&r.boot[k]!==null)m[k]=r.boot[k]});W.a=m}else W.a=r.boot;return r})},
  hotel:function(){var a=W.a;if(!A.hid&&a.hotels[0])A.hid=a.hotels[0].id;return a.hotels.filter(function(h){return h.id===A.hid})[0]},
  hotels:function(){var a=W.a,h='<div class="stack"><div class="row"><h2 style="font-size:18px">الفنادق</h2><span style="display:flex;gap:8px"><button class="btn btn-o sm" onclick="A.open(null,\'info\');A.dr.kind=\'laundry\';render()">+ '+T('مغسلة')+'</button><button class="btn btn-p sm" onclick="A.open(null,\'info\')">+ فندق جديد</button></span></div>'+A.tgBotCard()+A.mailCard();
   if(!a.hotels.length)h+='<div class="card muted" style="text-align:center">أضف أول فندق للبدء.</div>';

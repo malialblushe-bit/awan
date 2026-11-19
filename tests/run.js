@@ -1444,7 +1444,8 @@ t('القفل للكتابة فقط: الدخول بلا قفل، والإقلا
   const f = run(`apiPestFlag('${supTok}', { hotel_id: '${HID}', zone: '${zone}', kind: 'ready' })`);
   const locked = lockStat.lockedReads - l0, total = ss.reads - r0;
   if (!f.boot || !f.boot.__lite) throw new Error('lite boot');
-  if (!(locked < total / 2)) throw new Error('boot under lock: ' + locked + '/' + total);
+  // مع الذاكرة المؤقتة لكل الجداول تقل القراءات كلها: تحت القفل قراءات الكتابة وحدها
+  if (!(locked <= 2 || locked < total / 2)) throw new Error('boot under lock: ' + locked + '/' + total);
   if (lockStat.held) throw new Error('lock not released');
   // ما كُتب ظاهر في الإقلاع دون Db.reset()
   if (!f.boot.pest || !JSON.stringify(f.boot.pest).includes(zone)) throw new Error('written flag missing from boot');
@@ -1544,6 +1545,20 @@ t('تعديل العقد: الشروط تتغير في العقد نفسه بل�
   const c = run(`Db.get('Contracts', '${cid}')`);
   eq(Number(c.wa_per_week), 7); eq(Number(c.alert_days), 45); eq(run(`Db.all('Contracts').length`), n0, 'لم يُنشأ عقد جديد');
   run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);
+});
+
+t('الذاكرة المؤقتة لكل الجداول: القراءة التالية بلا ملف، والتعديل اليدوي في الملف لا يُمسح عند الكتابة من نسخة قديمة', () => {
+  run(`Db.reset()`); run(`Db.all('Tickets')`); run(`Db.flush()`);
+  const ss = run(`Db.ss()`); run(`Db.reset()`); const r0 = ss.reads; run(`Db.all('Tickets')`);
+  eq(ss.reads - r0, 0, 'من الذاكرة المؤقتة');
+  // تعديل يدوي في الملف (بلا إصدار جديد) ثم كتابة من نسخة الذاكرة القديمة: يبقى التعديل اليدوي
+  run(`Db.reset()`); const rows = run(`Db.all('Contracts')`); const c = rows[rows.length - 1];
+  const head = run(`Db.ss().getSheetByName('Contracts').getRange(1, 1, 1, Db.ss().getSheetByName('Contracts').getLastColumn()).getValues()[0]`);
+  run(`Db.ss().getSheetByName('Contracts').getRange(${rows.length + 1}, ${head.indexOf('alert_days') + 1}, 1, 1).setValues([[99]])`);
+  run(`Db.reset()`); eq(run(`Db.all('Contracts').length`), rows.length);
+  run(`Db.update('Contracts', '${c.contract_id}', { pay_days: 21 })`);
+  const live = run(`Db.ss().getSheetByName('Contracts').getRange(${rows.length + 1}, 1, 1, ${head.length}).getValues()[0]`);
+  eq(Number(live[head.indexOf('alert_days')]), 99, 'التعديل اليدوي باقٍ'); eq(Number(live[head.indexOf('pay_days')]), 21);
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {

@@ -23,8 +23,16 @@ function perfLog_(fn, ms) {
     var f = g[k];
     var w = function () {
       perfReset_();
+      // علاج البطء (20 نوفمبر): الجداول التي احتاجتها هذه الدالة آخر مرة تُقرأ من الذاكرة المؤقتة دفعة واحدة قبل التنفيذ،
+      // وبعده تُحفظ نسخ الجداول المعدّلة بالإصدار الجديد، فلا يقرأ الطلب التالي الملف
+      var tl = null, C = null;
+      try { C = CacheService.getScriptCache(); tl = JSON.parse(C.get('TL:' + k) || 'null'); if (tl && tl.length) Db.prefetch(tl); } catch (e) { tl = null; }
       try { return f.apply(this, arguments); }
-      finally { var ms = Date.now() - Perf.t0; if (ms >= PERF_SLOW_MS) perfLog_(k, ms); }
+      finally {
+        try { Db.flush(); } catch (e) { }
+        try { var now = Db.touchedList().sort(); if (C && now.length && JSON.stringify(now) !== JSON.stringify(tl)) C.put('TL:' + k, JSON.stringify(now), 21600); } catch (e) { }
+        var ms = Date.now() - Perf.t0; if (ms >= PERF_SLOW_MS) perfLog_(k, ms);
+      }
     };
     w.__perf = true;
     g[k] = w;

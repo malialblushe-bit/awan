@@ -693,12 +693,14 @@ function apiSetLang(token, lang) {
 }
 
 // ───────── مشرف النظام ─────────
-function admBoot_() {
+/** part = 'con': بعد إجراءات العقود والمتعهدين يعود قسم المتعهدين وحده (رد خفيف)، والواجهة تدمجه بما عندها */
+function admBoot_(part) {
   var R = Orders.refs();
   var today = Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd');
   return {
+    __part: part || '',
     webUrl: webUrl_(),
-    hotels: Object.keys(R.hotels).map(function (k) {
+    hotels: part ? undefined : Object.keys(R.hotels).map(function (k) {
       var h = R.hotels[k];
       var layout = hotelLayout_(h.hotel_id);
       var elevs = elevatorCards_(h.hotel_id);
@@ -736,16 +738,16 @@ function admBoot_() {
         })
       };
     }),
-    users: Db.all('Users').map(function (u) {
+    users: part ? undefined : Db.all('Users').map(function (u) {
       return { id: u.user_id, name: u.name, role: u.role, username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
         pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null,
         pending: credPending_(u), sentAt: u.sent_at ? new Date(u.sent_at).getTime() : null };
     }),
     pending: Db.all('Lists', function (l) { return l.status === 'pending'; }).length,
-    lists: Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
+    lists: part ? undefined : Db.all('Lists', function (l) { return l.status === 'active' || l.status === 'pending'; })
       .sort(function (a, b) { return Number(a.sort) - Number(b.sort); })
       .map(function (l) { return { id: l.item_id, type: l.type, list: l.list, ar: String(l.ar), en: String(l.en || ''), price: l.price === '' || l.price == null ? '' : Number(l.price), status: l.status, by: l.created_by || '' }; }),
-    thresholds: Kpi.thresholds(),
+    thresholds: part ? undefined : Kpi.thresholds(),
     tgBot: Tg.bot(),
     mailFrom: String(Db.setting('mail_from') || '')
   };
@@ -753,11 +755,11 @@ function admBoot_() {
 
 function apiAdmBoot(token) { Auth.need(token, ['admin']); return admBoot_(); }
 
-function adm_(token, fn) {
+function adm_(token, fn, part) {
   Auth.need(token, ['admin']);
   ensureSchemaVersion_();
   try { ensureTriggers_(); } catch (e) { /* يُنشأ عند تشغيل authorizeAwan */ }
-  return act_(function () { return fn() || {}; }, function () { return admBoot_(); });
+  return act_(function () { return fn() || {}; }, function () { return admBoot_(part); });
 }
 
 function apiAdmSaveHotel(token, d) {
@@ -1059,7 +1061,7 @@ function apiAdmSaveContractPrices(token, contractId, prices, services, reason) {
     ctrLog_(token, c, 'prices', bf, af, reason);
     Db.update('Contracts', contractId, patch);
     return {};
-  });
+  }, 'con');
 }
 
 /** معايير القياس للعقد: أزمنة الخدمة وعتبات التصنيف */
@@ -1083,7 +1085,7 @@ function apiAdmSaveSla(token, contractId, d) {
     ctrLog_(token, c, 'sla', bf, p, d.reason);
     Db.update('Contracts', contractId, p);
     return {};
-  });
+  }, 'con');
 }
 
 /** المياه: تسعيرة المواسم للعقد — فترات بزيادة لكل حجم تُضاف في إجمالي الكشف */
@@ -1106,7 +1108,7 @@ function apiAdmSaveSeason(token, contractId, list, reason) {
     ctrLog_(token, c, 'season', { season: Water.seasonOf(c) }, { season: out }, reason);
     Db.update('Contracts', contractId, { season: JSON.stringify(out) });
     return { season: out };
-  });
+  }, 'con');
 }
 
 /** عدة عناوين بريد مفصولة بفاصلة أو سطر أو مسافة */
@@ -1122,7 +1124,7 @@ function apiAdmSaveConInfo(token, conId, d) {
     if (!Db.get('Contractors', conId)) throw new Error('المتعهد غير موجود.');
     Db.update('Contractors', conId, { phone: String(d.phone || '').trim(), contact: String(d.contact || '').trim(), emails: emails_(d.emails).join(',') });
     return {};
-  });
+  }, 'con');
 }
 
 function apiAdmSaveContract(token, d) {
@@ -1161,7 +1163,7 @@ function apiAdmSaveContract(token, d) {
     var out = { pin: pin, leadPin: leadPin, linked: linked };
     if (pin || leadPin) Object.assign(out, conMail_(conId, { pin: pin, leadPin: leadPin, leadName: leadNm }));
     return out;
-  });
+  }, 'con');
 }
 
 /** مفتاح اسم المتعهد للمقارنة: بلا مسافات زائدة، والهمزات والتاء المربوطة والألف المقصورة موحّدة */
@@ -1227,7 +1229,7 @@ function apiAdmEditContract(token, contractId, d) {
     Db.update('Contracts', contractId, p);
     if (['ac', 'el', 'sf'].indexOf(c.type) !== -1) { try { Kpi.rebuild(); } catch (e) { } }
     return {};
-  });
+  }, 'con');
 }
 
 /** مؤقت لتنظيف البيانات التجريبية (يُزال لاحقاً): حذف عقد لم يُسجَّل عليه شيء، وآخر عقد للمتعهد يحذفه معه إن لم يكن عليه شيء */
@@ -1254,7 +1256,7 @@ function apiAdmDeleteContract(token, contractId) {
       Db.remove('Contractors', con); conDel = true;
     }
     return { conDeleted: conDel };
-  });
+  }, 'con');
 }
 
 /** قائد فريق المصاعد أو المكافحة: الاسم ورقم سري جديد يظهر مرة واحدة */
@@ -1268,11 +1270,11 @@ function apiAdmLeadPin(token, contractId, name) {
     Db.update('Contracts', contractId, { lead_name: name });
     var lp = Auth.setLeadPin(contractId);
     return Object.assign({ pin: lp, name: name }, conMail_(c.con_id, { leadPin: lp, leadName: name }));
-  });
+  }, 'con');
 }
 
 function apiAdmResetPin(token, conId) {
-  return adm_(token, function () { var p = Auth.setPin(conId); return Object.assign({ pin: p }, conMail_(conId, { pin: p })); });
+  return adm_(token, function () { var p = Auth.setPin(conId); return Object.assign({ pin: p }, conMail_(conId, { pin: p })); }, 'con');
 }
 
 /** يرسل أرقام المتعهد لبريده المسجل (إدارة المتعهد)، والرقم يظهر لمشرف النظام كذلك */
@@ -1756,7 +1758,7 @@ function apiAdmSavePay(token, contractId, d) {
     var bf = pick(c), r = Pay.setup(contractId, d);
     ctrLog_(token, c, 'pay', bf, pick(Db.get('Contracts', contractId)), (d || {}).reason, { noReason: !c.pay_mode });
     return r;
-  });
+  }, 'con');
 }
 function apiConClaim(token, d) {
   var s = Auth.need(token, ['contractor']);
