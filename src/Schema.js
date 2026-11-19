@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 37;
+var SCHEMA_VERSION = 38;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -159,6 +159,11 @@ var SCHEMA = [
     ['zones', 'المناطق'], ['ctype', 'نوع الحالة'], ['title', 'العنوان'], ['note', 'الملاحظة'], ['att', 'المرفقات'], ['by_name', 'المرسل'], ['created_at', 'الوقت'],
     ['status', 'open · done'], ['done_by', 'تعامل معها'], ['done_at', 'وقت التعامل'], ['reply', 'الرد']] },
 
+  { name: 'ContractLog', cols: [
+    ['log_id', 'المعرّف'], ['contract_id', 'العقد'], ['con_id', 'المتعهد'], ['kind', 'new إنشاء · terms الشروط · prices الأسعار · sla معايير القياس · pay السداد · season المواسم · lead القائد · delete حذف'],
+    ['before', 'قبل (JSON)'], ['after', 'بعد (JSON)'], ['eff_from', 'يسري من'], ['reason', 'سبب التعديل'],
+    ['by', 'المستخدم'], ['by_name', 'الاسم'], ['by_role', 'الوظيفة'], ['at', 'الوقت'], ['notified_at', 'أُشعر المتعهد'], ['notified_by', 'أشعره']] },
+
   { name: 'PcReports', cols: [
     ['report_id', 'المعرّف'], ['con_id', 'المتعهد'], ['hotel_id', 'الفندق'], ['month', 'الشهر yyyy-MM'], ['att', 'ملف التقرير'], ['by_name', 'رفعه'], ['at', 'الوقت']] },
 
@@ -207,7 +212,7 @@ var STATUS = {
 var ID_PREFIX = {
   Hotels: 'HTL', Floors: 'FLR', Rooms: 'RM', Elevators: 'ELV', Users: 'USR', Contractors: 'CON',
   Contracts: 'CTR', Lists: 'LST', WorkOrders: 'AWN', WOLog: 'LOG', Arrivals: 'ARV', CorrectiveActions: 'CA', Notes: 'NT',
-  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE', Claims: 'CLM', SupRatings: 'SR', PcReports: 'PR', PestMsgs: 'PM'
+  WasteVisits: 'WV', WaterLoads: 'WL', PestLogs: 'PL', PestFlags: 'PF', Traps: 'TR', Evaluations: 'EV', Tickets: 'TK', OrgEvals: 'OE', Claims: 'CLM', SupRatings: 'SR', PcReports: 'PR', PestMsgs: 'PM', ContractLog: 'CL'
 };
 
 function tableDef(name) {

@@ -126,8 +126,8 @@ var PAY={b:null,o:{by:'con',val:'due',per:'y',ft:'',cell:''},rj:'',f:{},
    h+='<div class="stack" style="gap:6px">'+v.plan.map(function(p,i){return '<div style="display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;align-items:center"><span class="small">'+F('الدفعة {0}',i+1)+'</span><input type="date" class="inp" value="'+esc(p.due)+'" data-i="'+i+'" oninput="A.f.pv.plan[+this.dataset.i].due=this.value"><input class="inp" inputmode="decimal" placeholder="المبلغ" value="'+esc(p.amount)+'" data-i="'+i+'" oninput="A.f.pv.plan[+this.dataset.i].amount=this.value"><button class="btn btn-o sm" data-i="'+i+'" onclick="A.f.pv.plan.splice(+this.dataset.i,1);render()">×</button></div>'}).join('')+'</div><button class="btn btn-o sm" style="align-self:flex-start" onclick="A.f.pv.plan.push({due:\'\',amount:\'\'});render()">+ دفعة</button>'}
   else if(v.mode==='monthly')h+='<div><label class="lbl">المبلغ الشهري (ريال)</label><input class="inp" inputmode="decimal" value="'+esc(v.monthly)+'" oninput="A.f.pv.monthly=this.value"></div>';
   else if(v.mode==='stmt')h+='<p class="small muted" style="margin:0">'+T('تأكد أن أسعار الخدمات مكتوبة في العقد (زر «الأسعار»): الخدمة بلا سعر تُحسب صفراً.')+'</p>';
-  h+='<button class="btn btn-p" onclick="PAY.admSave()">حفظ</button></div></div>';return h},
- admSave:function(){var v=A.f.pv;A.run('apiAdmSavePay',A.f.py,{mode:v.mode,value:v.mode==='sched'?v.value:'',days:v.days,plan:v.mode==='sched'?v.plan:v.mode==='monthly'?{amount:v.monthly}:null}).then(function(){A.f={};toast('حُفظت طريقة السداد.');render()})}
+  h+=A.rsn()+'<button class="btn btn-p" onclick="PAY.admSave()">حفظ</button></div></div>';return h},
+ admSave:function(){var v=A.f.pv;A.run('apiAdmSavePay',A.f.py,{reason:A.f.rsn||'',mode:v.mode,value:v.mode==='sched'?v.value:'',days:v.days,plan:v.mode==='sched'?v.plan:v.mode==='monthly'?{amount:v.monthly}:null}).then(function(){A.f={};toast('حُفظت طريقة السداد.');render()})}
 };
 // مشرف النظام: زر «طريقة السداد» على كل عقد، ونافذته
 (function(){var pf=A.pricesForm;A.pricesForm=function(){return A.f.py?PAY.admForm():pf()}})();

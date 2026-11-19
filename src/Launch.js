@@ -7,7 +7,7 @@ var Launch = (function () {
   var TZ = 'Asia/Riyadh';
   var KEEP = {
     Settings: 'الإعدادات', Hotels: 'الفنادق', Floors: 'الأدوار', Rooms: 'الغرف والمرافق', Elevators: 'المصاعد', Users: 'المستخدمون',
-    Contractors: 'المتعهدون', Contracts: 'العقود', Lists: 'القوائم والبنود', Thresholds: 'العتبات', PestSchedule: 'جدولة المكافحة'
+    Contractors: 'المتعهدون', Contracts: 'العقود', ContractLog: 'سجل تعديلات العقود', Lists: 'القوائم والبنود', Thresholds: 'العتبات', PestSchedule: 'جدولة المكافحة'
   };
   var CLEAR = {
     WorkOrders: 'أوامر العمل', WorkOrdersArchive: 'أرشيف أوامر العمل', WOLog: 'سجل الإجراءات', Arrivals: 'تسجيل الوصول', KpiSummary: 'ملخص المؤشرات',

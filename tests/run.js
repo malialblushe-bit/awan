@@ -641,7 +641,7 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   eq(JSON.stringify(run(`pricesOf_(Db.get('Contracts', '${ctr}'))`)), JSON.stringify({ 'تعبئة فريون 60%': 120, 'استبدال كمبروسر': 2400 }));
   eq(run(`apiEngBoot('${engTok}')`).hotels.find(x => x.id === HID).cons.ac.prices['استبدال كمبروسر'], 2400);
   // خدمات التكييف قائمة خاصة بكل عقد: تُنسخ عند الترقية، وتُحفظ مع الأسعار، وتصل للفني
-  run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', pricesOf_(Db.get('Contracts', '${ctr}')), [{ ar: 'تغيير ريموت', en: 'Remote' }, { ar: 'خدمة خاصة بالعقد', en: '' }])`);
+  run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', pricesOf_(Db.get('Contracts', '${ctr}')), [{ ar: 'تغيير ريموت', en: 'Remote' }, { ar: 'خدمة خاصة بالعقد', en: '' }], 'ملحق العقد 1')`);
   eq(run(`svcOf_(Db.get('Contracts', '${ctr}')).map(x => x.ar).join()`), 'تغيير ريموت,خدمة خاصة بالعقد', 'خدمات العقد');
   eq(run(`apiConBoot('${acTok}')`).hotels.find(x => x.id === HID).cons.ac.services.some(x => x.ar === 'خدمة خاصة بالعقد'), true, 'الفني يرى خدمات عقده');
   run(`Db.insert('Lists', { type: 'ac', list: 'action', ar: 'تعبئة غاز', en: 'x', status: 'active', created_by: 'system', sort: 1 })`);
@@ -1536,7 +1536,11 @@ t('تعديل العقد: الشروط تتغير في العقد نفسه بل�
   const n0 = run(`Db.all('Contracts').length`);
   throws(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${nextYear}', end: '${yesterday}', alert_days: 30, wa_per_week: 7 })`, 'البداية والنهاية');
   throws(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 30, wa_per_week: 0 })`, 'الرفع');
-  run(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 45, wa_per_week: 7 })`);
+  throws(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 45, wa_per_week: 7 })`, 'سبب التعديل');
+  run(`apiAdmEditContract('${adminTok}', '${cid}', { start: '${yesterday}', end: '${nextYear}', alert_days: 45, wa_per_week: 7, reason: 'تصحيح إدخال' })`);
+  const lg = run(`apiAdmContractLog('${adminTok}')`).filter(x => x.cid === cid);
+  eq(lg[0].kind, 'terms'); eq(lg[0].before.wa_per_week, '14'); eq(lg[0].after.wa_per_week, '7'); eq(lg[0].reason, 'تصحيح إدخال');
+  eq(lg.some(x => x.kind === 'new'), true, 'الإنشاء مسجّل');
   const c = run(`Db.get('Contracts', '${cid}')`);
   eq(Number(c.wa_per_week), 7); eq(Number(c.alert_days), 45); eq(run(`Db.all('Contracts').length`), n0, 'لم يُنشأ عقد جديد');
   run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);

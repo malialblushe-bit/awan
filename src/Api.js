@@ -1047,13 +1047,16 @@ function pricesOf_(contract) {
 }
 
 /** أسعار عقد قائم (عقد التكييف) */
-function apiAdmSaveContractPrices(token, contractId, prices, services) {
+function apiAdmSaveContractPrices(token, contractId, prices, services, reason) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c) throw new Error('العقد غير موجود.');
     if (c.type === 'wt') { prices = wtPrices_(prices); if (!Object.keys(prices).length) throw new Error('اكتب حجم رحلة واحد على الأقل بسعره.'); }
     var patch = { prices: cleanPrices_(prices) };
     if (c.type === 'ac' && services) { patch.services = svcClean_(services); if (!patch.services.length) throw new Error('اكتب خدمة واحدة على الأقل.'); }
+    var bf = { prices: pricesOf_(c) }, af = { prices: parseJ_(patch.prices) };
+    if (patch.services) { bf.services = svcOf_(c).map(function (x) { return x.ar; }); af.services = parseJ_(patch.services).map ? parseJ_(patch.services).map(function (x) { return x.ar; }) : []; }
+    ctrLog_(token, c, 'prices', bf, af, reason);
     Db.update('Contracts', contractId, patch);
     return {};
   });
@@ -1076,13 +1079,15 @@ function apiAdmSaveSla(token, contractId, d) {
     var ex = p.cls_ex || Number(c.cls_ex) || 90, gd = p.cls_good || Number(c.cls_good) || 80, ok = p.cls_ok || Number(c.cls_ok) || 70;
     if (!(ex > gd && gd > ok)) throw new Error('العتبات تنازلية: ممتاز > جيد > مقبول.');
     if (c.type === 'wa' || c.type === 'pc' || c.type === 'wt') { delete p.resp_normal; delete p.resp_urgent; }
+    var bf = {}; Object.keys(p).forEach(function (k) { bf[k] = c[k]; });
+    ctrLog_(token, c, 'sla', bf, p, d.reason);
     Db.update('Contracts', contractId, p);
     return {};
   });
 }
 
 /** المياه: تسعيرة المواسم للعقد — فترات بزيادة لكل حجم تُضاف في إجمالي الكشف */
-function apiAdmSaveSeason(token, contractId, list) {
+function apiAdmSaveSeason(token, contractId, list, reason) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c || c.type !== 'wt') throw new Error('تسعيرة المواسم لعقود شاحنات المياه.');
@@ -1098,6 +1103,7 @@ function apiAdmSaveSeason(token, contractId, list) {
     });
     out.sort(function (a, b) { return a.from < b.from ? -1 : 1; });
     for (var i = 1; i < out.length; i++) if (out[i].from <= out[i - 1].to) throw new Error('فترتا «' + out[i - 1].name + '» و«' + out[i].name + '» متداخلتان.');
+    ctrLog_(token, c, 'season', { season: Water.seasonOf(c) }, { season: out }, reason);
     Db.update('Contracts', contractId, { season: JSON.stringify(out) });
     return { season: out };
   });
@@ -1150,6 +1156,7 @@ function apiAdmSaveContract(token, d) {
       lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : '',
       measure_from: /^\d{4}-\d{2}-\d{2}$/.test(String(d.measure_from || '')) ? d.measure_from : ''
     });
+    ctrLog_(token, ctr, 'new', {}, { type: d.type, hotel_ids: d.hotel_ids.join(','), start: d.start, end: d.end, prev_contract_id: d.prev_contract_id || '' }, d.prev_contract_id ? 'تجديد' : '', { noReason: true, always: true });
     var leadPin = leadNm ? Auth.setLeadPin(ctr.contract_id) : null;
     var out = { pin: pin, leadPin: leadPin, linked: linked };
     if (pin || leadPin) Object.assign(out, conMail_(conId, { pin: pin, leadPin: leadPin, leadName: leadNm }));
@@ -1161,6 +1168,45 @@ function apiAdmSaveContract(token, d) {
 function conNameKey_(n) {
   return String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 }
+
+/** سجل تعديلات العقود (ISO 9001: 7.5.3 ضبط التغييرات و8.5.6): من عدّل ومتى، والقيم قبل ← بعد، والسبب.
+ *  يُستدعى قبل الكتابة: يرفض بلا سبب إن غيّر قيمة قائمة، ولا يسجّل شيئاً إن لم يتغير شيء. */
+function lv_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Riyadh', 'yyyy-MM-dd');
+  if (v == null) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+function ctrLog_(token, c, kind, before, after, reason, opt) {
+  opt = opt || {};
+  var b = {}, a = {}, keys = Object.keys(after || {});
+  keys.forEach(function (k) {
+    var x = lv_(before[k]), y = lv_(after[k]);
+    if (x === y || ((x === '' || x === '{}' || x === '[]') && (y === '' || y === '{}' || y === '[]'))) return;
+    b[k] = x; a[k] = y;
+  });
+  if (!Object.keys(a).length && !opt.always) return false;
+  reason = String(reason || '').trim();
+  var changesOld = Object.keys(b).some(function (k) { return b[k] !== '' && b[k] !== '{}' && b[k] !== '[]'; });
+  if (!reason && changesOld && !opt.noReason) throw new Error('اكتب سبب التعديل.');
+  var s = Auth.need(token), u = Db.get('Users', s.id) || {};
+  Db.insert('ContractLog', { contract_id: c.contract_id, con_id: c.con_id, kind: kind, before: JSON.stringify(b), after: JSON.stringify(a), eff_from: opt.eff || '',
+    reason: reason, by: s.id || '', by_name: u.name || s.name || '', by_role: s.role || '', at: new Date(), notified_at: '', notified_by: '' });
+  return true;
+}
+
+/** سجل تعديلات العقود للإدارة (يُقرأ عند فتح التبويب فقط) */
+function apiAdmContractLog(token) {
+  Auth.need(token, ['admin', 'management']);
+  var R = Orders.refs();
+  return Db.all('ContractLog').map(function (r) {
+    var c = Db.get('Contracts', r.contract_id) || {}, con = R.cons[r.con_id] || Db.get('Contractors', r.con_id) || {};
+    return { id: r.log_id, cid: r.contract_id, con: con.name || r.con_id, type: c.type || con.type || '', hotels: Orders.csv(c.hotel_ids).map(function (h) { return (R.hotels[h] || {}).name || h; }),
+      kind: r.kind, before: parseJ_(r.before), after: parseJ_(r.after), eff: lv_(r.eff_from), reason: r.reason || '', by: r.by_name || '', role: r.by_role || '',
+      at: r.at ? new Date(r.at).getTime() : 0, notified: r.notified_at ? new Date(r.notified_at).getTime() : null, notifiedBy: r.notified_by || '' };
+  }).sort(function (x, y) { return y.at - x.at; });
+}
+function parseJ_(v) { if (v && typeof v === 'object') return v; try { return JSON.parse(v || '{}'); } catch (e) { return {}; } }
 
 /** تعديل شروط عقد قائم بدل إنشاء عقد جديد: المدة والتنبيه وبداية القياس، والرفع الأسبوعي (نفايات) والصيانة الشهرية (مصاعد) */
 function apiAdmEditContract(token, contractId, d) {
@@ -1176,6 +1222,8 @@ function apiAdmEditContract(token, contractId, d) {
     var p = { start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: al, measure_from: d.measure_from || '' };
     if (c.type === 'wa') { var w = Number(d.wa_per_week); if (!(w > 0)) throw new Error('اكتب عدد مرات الرفع الأسبوعي.'); p.wa_per_week = w; }
     if (c.type === 'el') { var pm = Number(d.pm_per_month); if (isNaN(pm) || pm < 0) throw new Error('عدد زيارات الصيانة الشهرية غير صحيح.'); p.pm_per_month = pm; }
+    var bf = {}; Object.keys(p).forEach(function (k) { bf[k] = c[k]; });
+    if (!ctrLog_(token, c, 'terms', bf, p, d.reason)) return {};
     Db.update('Contracts', contractId, p);
     if (['ac', 'el', 'sf'].indexOf(c.type) !== -1) { try { Kpi.rebuild(); } catch (e) { } }
     return {};
@@ -1198,6 +1246,7 @@ function apiAdmDeleteContract(token, contractId) {
       return n;
     };
     if (Db.all('Claims', function (r) { return r.contract_id === contractId; }).length || used(true)) throw new Error('عليه سجلات، فلا يُحذف. اتركه ينتهي أو جدّده.');
+    ctrLog_(token, c, 'delete', { hotel_ids: c.hotel_ids, start: c.start, end: c.end }, {}, 'حذف عقد تجريبي بلا سجلات', { noReason: true, always: true });
     Db.remove('Contracts', contractId);
     var conDel = false;
     if (!Db.all('Contracts', function (x) { return x.con_id === con; }).length && !used(false)
@@ -1215,6 +1264,7 @@ function apiAdmLeadPin(token, contractId, name) {
     if (!c || (c.type !== 'el' && c.type !== 'pc')) throw new Error('قائد الفريق لعقود المصاعد والمكافحة.');
     name = String(name || c.lead_name || '').trim();
     if (!name) throw new Error('اكتب اسم قائد الفريق.');
+    ctrLog_(token, c, 'lead', { lead_name: c.lead_name || '' }, { lead_name: name }, '', { noReason: true });
     Db.update('Contracts', contractId, { lead_name: name });
     var lp = Auth.setLeadPin(contractId);
     return Object.assign({ pin: lp, name: name }, conMail_(c.con_id, { leadPin: lp, leadName: name }));
@@ -1697,7 +1747,17 @@ function apiAdmConHistory(token, contractId) {
   return out;
 }
 
-function apiAdmSavePay(token, contractId, d) { return adm_(token, function () { return Pay.setup(contractId, d); }); }
+function apiAdmSavePay(token, contractId, d) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c) throw new Error('العقد غير موجود.');
+    if (c.pay_mode && !String((d || {}).reason || '').trim()) throw new Error('اكتب سبب التعديل.');
+    var pick = function (x) { return { pay_mode: x.pay_mode, value: x.value, pay_days: x.pay_days, pay_plan: parseJ_(x.pay_plan) }; };
+    var bf = pick(c), r = Pay.setup(contractId, d);
+    ctrLog_(token, c, 'pay', bf, pick(Db.get('Contracts', contractId)), (d || {}).reason, { noReason: !c.pay_mode });
+    return r;
+  });
+}
 function apiConClaim(token, d) {
   var s = Auth.need(token, ['contractor']);
   if (!s.web) throw new Error('المطالبات من صفحة المتعهد على الويب.');
