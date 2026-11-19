@@ -1,3 +1,7 @@
+/** الاستبدال الرئيسي للتكييف بعرض سعر وقرار المهندس: اسم الخدمة في الكشف لكل نوع */
+var REPL_ = { comp: 'استبدال كمبروسر', unit: 'تغيير وحدة خارجية' };
+function replKind_(v) { return v === 'unit' || v === REPL_.unit ? 'unit' : 'comp'; }
+
 /**
  * Orders.js — أعوان: دورة أمر العمل كاملة.
  * الحالات: assigned · in_progress · decision · pay · parts · matching · closed · rejected
@@ -179,7 +183,7 @@ var Orders = (function () {
     // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
     if (o.type === 'el' && ['fix', 'ok', 'diag', 'pm'].indexOf(oc) !== -1 && !(d.att || []).length) throw new Error('أرفق التقرير الفني للمتعهد (صورة أو PDF).');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
-    if (oc === 'comp' && !(Number(d.quote) > 0)) throw new Error('اكتب سعر عرض الكمبروسر بالريال.');
+    if (oc === 'comp' && !(Number(d.quote) > 0)) throw new Error('اكتب سعر العرض بالريال.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var pm = oc === 'pm' ? pmParse_(d) : null;
     if (oc === 'ok' && !(d.checked || []).length) throw new Error('سجّل ما فحصته حتى لو كان سليماً.');
@@ -194,6 +198,7 @@ var Orders = (function () {
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime(),
       att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : ''
     };
+    if (oc === 'comp') report.rep = replKind_(d.rep);
     if (pm) {
       report.units = pm.units; report.grid = pm.grid; report.working = pm.working;
       report.techs = d.techs || ''; report.replaced = d.replaced || ''; report.adjust = d.adjust || ''; report.toreplace = d.toreplace || ''; report.others = d.others || '';
@@ -203,7 +208,8 @@ var Orders = (function () {
     // تركيب الكمبروسر المعتمد: «استبدال كمبروسر» ثابت في الخدمة المقدمة (يُحسب في الكشف)، والمعدة والسبب من تقرير الكمبروسر
     var compR = all.filter(function (r) { return r && r.outcome === 'comp'; }).pop();
     if (oc === 'fix' && o.type === 'ac' && compR && (o.decision === 'con' || o.decision === 'own')) {
-      if (report.action.indexOf('استبدال كمبروسر') === -1) report.action.unshift('استبدال كمبروسر');
+      var rn = REPL_[replKind_(compR.rep)];
+      if (report.action.indexOf(rn) === -1) report.action.unshift(rn);
       if (!report.equip) report.equip = compR.equip || o.equip || '';
       if (!report.cause.length) report.cause = compR.cause || [];
     }

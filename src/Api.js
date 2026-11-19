@@ -663,7 +663,7 @@ function statementCore_(scope, conId, from, to) {
       var amount = 0, price = cprice(o);
       acts.forEach(function (a) {
         // الكمبروسر يُسعَّر بعرض السعر المقدم على العملية نفسها، وباقي الخدمات بسعر العقد
-        var pr = a === 'استبدال كمبروسر' ? (o.quote !== '' && o.quote != null && !isNaN(Number(o.quote)) ? Number(o.quote) : null) : (price[a] == null ? null : Number(price[a])), key = a + '|' + (pr == null ? '' : pr);
+        var pr = (a === REPL_.comp || a === REPL_.unit) ? (o.quote !== '' && o.quote != null && !isNaN(Number(o.quote)) ? Number(o.quote) : null) : (price[a] == null ? null : Number(price[a])), key = a + '|' + (pr == null ? '' : pr);
         var L = lines[key] || (lines[key] = { svc: a, en: en[a] || '', qty: 0, price: pr });
         L.qty++; if (pr != null) amount += pr;
       });

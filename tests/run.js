@@ -400,6 +400,8 @@ t('المتعهد: الإصلاح بعد الاعتماد، والمتابعة �
   // تركيب الكمبروسر المعتمد: «استبدال كمبروسر» ثابت في الخدمة المقدمة ولو لم يُرسل
   const rep = run(`(function (r) { r = typeof r === 'string' ? JSON.parse(r) : r; return r[r.length - 1]; })(Db.get('WorkOrders', '${AC1}').report)`);
   eq(rep.action[0], 'استبدال كمبروسر'); eq(rep.equip, 'AC-712-A');
+  // الاستبدال الرئيسي: كمبروسر أو وحدة خارجية (الافتراضي كمبروسر للعمليات القديمة)
+  eq(run(`replKind_('تغيير وحدة خارجية')`), 'unit'); eq(run(`replKind_('')`), 'comp'); eq(run(`REPL_.unit`), 'تغيير وحدة خارجية');
   eq(r.boot.jobs.length, 2);
   eq(run("Db.all('Lists', l => l.status === 'pending').length"), 1);
   eq(run(`Db.get('WorkOrders', '${AC1}').visits`), 2);
