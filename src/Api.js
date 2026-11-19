@@ -664,7 +664,7 @@ function statementCore_(scope, conId, from, to) {
       acts.forEach(function (a) {
         // الكمبروسر يُسعَّر بعرض السعر المقدم على العملية نفسها، وباقي الخدمات بسعر العقد
         var pr = (a === REPL_.comp || a === REPL_.unit) ? (o.quote !== '' && o.quote != null && !isNaN(Number(o.quote)) ? Number(o.quote) : null) : (price[a] == null ? null : Number(price[a])), key = a + '|' + (pr == null ? '' : pr);
-        var L = lines[key] || (lines[key] = { svc: a, en: en[a] || '', qty: 0, price: pr });
+        var L = lines[key] || (lines[key] = { svc: a, en: en[a] || '', qty: 0, price: pr, grp: (a === REPL_.comp || a === REPL_.unit) ? 'rep' : (/غسيل/.test(a) ? 'wash' : 'fix') });
         L.qty++; if (pr != null) amount += pr;
       });
       var v = Orders.view(R, o, false);
