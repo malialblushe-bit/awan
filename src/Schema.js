@@ -66,7 +66,7 @@ var SCHEMA = [
 
   { name: 'Lists', cols: [
     ['item_id', 'المعرّف'], ['type', 'ac · el · all'],
-    ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الإجراء المتخذ · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض · pest = الآفة · ftype = نوع المرفق · material = مادة المكافحة'],
+    ['list', 'sym = الملاحظة · part = الجزء · cause = السبب · action = الخدمة المقدمة · parts = قطع · leave = سبب المغادرة · reject = سبب الرفض · pest = الآفة · ftype = نوع المرفق · material = مادة المكافحة'],
     ['ar', 'العربية'], ['en', 'English'], ['status', 'active · pending · merged · rejected'],
     ['merged_into', 'دُمج في'], ['created_by', 'أضافه'], ['sort', 'الترتيب'], ['orig', 'النص الأصلي قبل إعادة الصياغة'], ['price', 'السعر بالريال (لخدمات الإجراء)']] },
 
@@ -130,7 +130,7 @@ var SCHEMA = [
     ['topic', 'الموضوع'], ['wo_id', 'العملية (اختياري)'], ['text', 'النص'], ['photos', 'المرفقات'], ['by_name', 'رفعها'], ['created_at', 'وقت الرفع'],
     ['owner', 'المالك: engineer · supmgr · gm'], ['resp_due', 'موعد الإفادة (يوم عمل)'], ['close_due', 'موعد الإغلاق (يوما عمل)'],
     ['status', 'new · noted · closed · reopened'], ['owner_note', 'إفادة المالك'], ['owner_by', 'من أفاد'], ['owner_at', 'وقت الإفادة'],
-    ['reply', 'الرد'], ['action', 'الإجراء المتخذ'], ['accepted', 'الشكوى: مقبولة · غير مقبولة'], ['closed_by', 'أغلقها'], ['closed_role', 'دوره'], ['closed_at', 'وقت الإغلاق'],
+    ['reply', 'الرد'], ['action', 'الخدمة المقدمة'], ['accepted', 'الشكوى: مقبولة · غير مقبولة'], ['closed_by', 'أغلقها'], ['closed_role', 'دوره'], ['closed_at', 'وقت الإغلاق'],
     ['sat', 'رضا المتعهد عن الرد: راضٍ · غير راضٍ'], ['sat_note', 'ملاحظته'], ['sat_at', 'وقت التقييم'], ['reopened', 'أُعيدت مرة']] },
 
   { name: 'Claims', cols: [
