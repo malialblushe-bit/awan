@@ -438,6 +438,23 @@ var Orders = (function () {
     return to;
   }
 
+  /** أنشطة أمر عمل المشروع: [{p: الحزمة, n: النشاط, c: معيار القبول, d: موعد التسليم}] + معايير الحزم {pk} */
+  function projActs_(x, start, end) {
+    x = x || {};
+    var pk = {}, a = [], day = /^\d{4}-\d{2}-\d{2}$/;
+    Object.keys(x.pk || {}).forEach(function (k) { var v = String(x.pk[k] || '').trim(); if (String(k).trim() && v) pk[String(k).trim()] = v; });
+    (x.a || []).forEach(function (r, i) {
+      var n = String((r && r.n) || '').trim(); if (!n) return;
+      var p = String(r.p || '').trim(), c = String(r.c || '').trim(), dd = String(r.d || '').trim();
+      if (!c && !(p && pk[p])) throw new Error('النشاط «' + n + '»: اكتب معيار قبوله، أو معياراً لحزمته.');
+      if (dd && !day.test(dd)) throw new Error('النشاط «' + n + '»: موعد التسليم غير صحيح.');
+      if (dd && (dd < start || dd > end)) throw new Error('النشاط «' + n + '»: موعد التسليم خارج مدة المشروع.');
+      a.push({ p: p, n: n, c: c, d: dd });
+    });
+    if (!a.length) throw new Error('عرّف نطاق المشروع: نشاط واحد على الأقل بمعيار قبوله.');
+    return { pk: pk, a: a };
+  }
+
   /** أمر عمل مشروع (قرار صاحب المشروع 20 نوفمبر): عمل محدد النطاق والمدة لمتعهد مسجل أو لمنفذ جديد.
    *  المنفذ يُعطى عقداً من نوع «مشروع» بمدة المشروع وقيمته، فيدخل برقمه طوال المدة ويتوقف دخوله تلقائياً بعدها. */
   function projCreate(s, d) {
@@ -448,6 +465,8 @@ var Orders = (function () {
     var day = /^\d{4}-\d{2}-\d{2}$/;
     if (!day.test(String(d.start || '')) || !day.test(String(d.end || '')) || d.end < d.start) throw new Error('حدّد مدة المشروع: من تاريخ إلى تاريخ.');
     var amt = Number(String(d.amount || '').replace(/[,،\s]/g, '')); if (!(amt > 0)) throw new Error('اكتب قيمة المشروع المتفق عليها بالريال.');
+    // النطاق نشاطاً نشاطاً: لكل نشاط معيار قبوله، أو معيار حزمته إن جُمعت الأنشطة في حزم (مربط الفرس في أمر العمل)
+    var acts = projActs_(d.acts, d.start, d.end);
     var conId = d.con_id || '', pin = null, con;
     if (conId) { con = Db.get('Contractors', conId); if (!con) throw new Error('المتعهد غير موجود.'); }
     else {
@@ -460,7 +479,7 @@ var Orders = (function () {
     var ctr = Db.insert('Contracts', { con_id: conId, type: 'pj', hotel_ids: d.hotel_id, start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: 7, value: amt, created_at: now_() });
     var r = create({ hotel_id: d.hotel_id, type: 'pj', kind: 'project', source: 'engineer', con_id: conId, floor_id: d.floor_id || '', room: d.room || '',
       symptom: title, description: String(d.description || '').trim(), photos: d.photos || [], requester: me.name || '' }, me.name || s.id);
-    Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id });
+    Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id, acts: JSON.stringify(acts) });
     return { id: r.order.wo_id, contract_id: ctr.contract_id, con_id: conId, pin: pin, isNew: !!pin };
   }
 
@@ -532,7 +551,7 @@ var Orders = (function () {
       con_id: o.con_id, con: c.name || '', status: st, priority: o.priority,
       floor_id: o.floor_id, room: String(o.room || ''), equip: o.equip || '', loc: loc(R, o),
       units: room ? csv(room.ac_units) : [], symptom: o.symptom || '', title: o.symptom || (o.kind === 'report' ? 'تقرير فني' : 'طلب صيانة'),
-      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '',
+      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '', acts: o.type === 'pj' ? parse_(o.acts, null) : undefined,
       photos: csv(o.photos), reports: reports, quote: forCon ? '' : (o.quote || ''),
       decision: o.decision || '', decision_note: o.decision_note || '', note: note,
       reject_reason: (o.status === 'in_progress' || o.status === 'rejected') ? (o.reject_reason || '') : '',
