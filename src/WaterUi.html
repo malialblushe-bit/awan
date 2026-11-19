@@ -78,8 +78,9 @@ var WT={st:{},pin:'',
  mk:function(off){var t=new Date(Date.now()+3*3600e3),d=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+off,1));return d.toISOString().slice(0,7)},
  cons:function(w,f){
   var M=f.m||'t',P_=f.p||'m',ser=w.ser||{},m3=w.m3||1,hids=f.h==='all'?W.b.hotels.map(function(x){return x.id}):[f.h];
-  var day=P_==='m',N=P_==='3'?3:P_==='6'?6:P_==='y'?12:0,dn=Number(WT.dk(0).slice(8)),keys=[],prev=[];
-  if(day){for(var i=0;i<dn;i++){keys.push(WT.dk(i-(dn-1)))}var pm=WT.mk(-1);for(var j=0;j<dn;j++){prev.push(pm+'-'+(j<9?'0':'')+(j+1))}}
+  var day=P_==='m'||P_==='r',N=P_==='3'?3:P_==='6'?6:P_==='y'?12:0,dn=Number(WT.dk(0).slice(8)),keys=[],prev=[];
+  if(P_==='r'){if(!f.rf||!f.rt){f.rt=WT.dk(0);f.rf=WT.dk(-6)}keys=WT.rng(f.rf,f.rt);prev=WT.rng(WT.sh(f.rf,-keys.length),WT.sh(f.rf,-1))}
+  else if(day){for(var i=0;i<dn;i++){keys.push(WT.dk(i-(dn-1)))}var pm=WT.mk(-1);for(var j=0;j<dn;j++){prev.push(pm+'-'+(j<9?'0':'')+(j+1))}}
   else{for(var a=N-1;a>=0;a--)keys.push(WT.mk(-a));for(var b=2*N-1;b>=N;b--)prev.push(WT.mk(-b))}
   var get=function(h,k,isD){var s=ser[h];if(!s)return [0,0,0,0];return (isD?s.d[k]:s.m[k])||[0,0,0,0]};
   var val=function(arr,idx){return M==='c'?arr[idx+1]:M==='m'?arr[idx]*m3:arr[idx]};
@@ -92,7 +93,8 @@ var WT={st:{},pin:'',
   var lbl=function(k){return day?String(Number(k.slice(8))):P.mlabel(k)};
   var h='<div class="card stack" style="gap:12px"><div class="row" style="flex-wrap:wrap;gap:8px"><div><h3 style="font-size:16px;margin:0">'+T('استهلاك المياه')+'</h3><p class="small muted" style="margin:2px 0 0">'+T('المعتمد ذهبي · المعلّق بخطوط')+'</p></div></div>';
   h+='<div class="chips">'+[['c','رحلات'],['t','طن'],['m','م³']].map(function(x){return '<button class="chip'+(M===x[0]?' on':'')+'" style="min-height:36px" onclick="WT.v.m=\''+x[0]+'\';render()">'+T(x[1])+'</button>'}).join('')+'</div>';
-  h+='<div class="chips">'+[['m','هذا الشهر'],['3','3 أشهر'],['6','6 أشهر'],['y','سنة']].map(function(x){return '<button class="chip'+(P_===x[0]?' on':'')+'" style="min-height:36px" onclick="WT.v.p=\''+x[0]+'\';render()">'+T(x[1])+'</button>'}).join('')+'</div>';
+  h+='<div class="chips">'+[['m','هذا الشهر'],['3','3 أشهر'],['6','6 أشهر'],['y','سنة'],['r','مخصص']].map(function(x){return '<button class="chip'+(P_===x[0]?' on':'')+'" style="min-height:36px" onclick="WT.v.p=\''+x[0]+'\';render()">'+T(x[1])+'</button>'}).join('')+'</div>';
+  if(P_==='r'){h+='<div class="small muted">'+T('اختر الفترة (آخر 40 يوماً)')+'</div><input id="wtrange" class="inp" readonly style="max-width:300px" value="'+esc(f.rf+' to '+f.rt)+'">';setTimeout(function(){WT.pick()},0)}
   h+='<div class="chips">'+[['bar','أعمدة'],['line','خط']].map(function(x){return '<button class="chip'+((WT.v.g||'bar')===x[0]?' on':'')+'" style="min-height:36px" onclick="WT.v.g=\''+x[0]+'\';render()">'+T(x[1])+'</button>'}).join('')+'</div>';
   if(M==='m')h+='<p class="small muted" style="margin:0">'+T('1 طن ≈ 1 م³ (الماء كثافته 1000 كجم/م³)')+'</p>';
   h+='<div style="display:flex;gap:10px;flex-wrap:wrap">'+[[T('الإجمالي المعتمد'),fmt(tot)+' '+unit],[day?T('متوسط يومي'):T('متوسط شهري'),fmt(tot/Math.max(1,cur.length))+' '+unit],[T('أعلى فترة'),(cur[pk][0]+cur[pk][1]?lbl(keys[pk])+' · '+fmt(cur[pk][0]+cur[pk][1]):'—')]].map(function(x){return '<div style="flex:1;min-width:120px;background:var(--bg);border-radius:12px;padding:10px 12px"><div class="small muted">'+x[0]+'</div><b style="font-size:18px">'+x[1]+'</b></div>'}).join('')+'</div>';
@@ -125,6 +127,17 @@ var WT={st:{},pin:'',
        axes:[{stroke:mut,grid:{show:false},values:function(u,v){return v.map(function(i){return keys[i]!=null?lbl(keys[i]):''})}},{stroke:mut,size:48}],
        scales:{x:{time:false}}},[xs,ap,pe],el);
    }).catch(fail);
+ },
+ /* مجال تواريخ من–إلى (ISO) وإزاحة يوم، للفترة المخصصة */
+ rng:function(a,b){var out=[],t=Date.parse(a+'T00:00:00Z'),e=Date.parse(b+'T00:00:00Z');for(;t<=e&&out.length<62;t+=864e5)out.push(new Date(t).toISOString().slice(0,10));return out},
+ sh:function(s,n){return new Date(Date.parse(s+'T00:00:00Z')+n*864e5).toISOString().slice(0,10)},
+ /* التقويم المخصص بـ flatpickr، يحدّ الاختيار بآخر 40 يوماً (البيانات اليومية) */
+ pick:function(){var FP='https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/',el=document.getElementById('wtrange');if(!el)return;
+   WT.lib(FP+'flatpickr.min.css',1).then(function(){return WT.lib(FP+'flatpickr.min.js')}).then(function(){return WT.lib(FP+'l10n/ar.js')}).then(function(){
+     var el2=document.getElementById('wtrange');if(!el2||typeof flatpickr==='undefined')return;
+     flatpickr(el2,{mode:'range',locale:'ar',dateFormat:'Y-m-d',minDate:WT.dk(-39),maxDate:WT.dk(0),defaultDate:[WT.v.rf,WT.v.rt],
+       onChange:function(d,s){if(d.length===2){var p=s.split(' to ');WT.v.rf=p[0];WT.v.rt=p[1];render()}}});
+   }).catch(function(){});
  },
  iso:function(d){return d.toISOString().slice(0,10)},
  stRange:function(k){var d=new Date(Date.now()+3*3600e3),y=d.getUTCFullYear(),m=d.getUTCMonth();if(k==='prev')m--;
