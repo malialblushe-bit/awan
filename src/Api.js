@@ -145,6 +145,11 @@ function upgradeSchema_() {
   Db.reset();
   seedMissingLists_();
   Db.all('Hotels').forEach(function (h) { ensureCorridors_(h.hotel_id); });
+  // v37: خدمات التكييف صارت لكل عقد (كانت قائمة عامة واحدة): تُنسخ القائمة الحالية لكل عقد تكييف بلا خدمات
+  if (Number(Db.setting('schema_version')) < 37) {
+    var seedSv = svcSeed_();
+    Db.all('Contracts').forEach(function (c) { if (c.type === 'ac' && !svcOf_(c).length) Db.update('Contracts', c.contract_id, { services: seedSv }); });
+  }
   // v32: بداية القياس الفعلي (تهيئة الإطلاق)، وإعادة حساب الملخص دونها
   if (Number(Db.setting('schema_version')) < 32) {
     if (!Db.find('Settings', function (r) { return r.key === 'measure_from'; })) Db.insert('Settings', { key: 'measure_from', value: Kpi.LIVE_DEFAULT, note: 'بداية القياس الفعلي: لا يُحسب ما قبله في الأداء والتقييم' });
@@ -288,6 +293,8 @@ function conBoot_raw(s) {
       if (h) {
         var all = elevatorsOf_(hid), inC = Orders.csv(c.elevator_ids).filter(function (e) { return all.indexOf(e) !== -1; });
         hotels[hid] = { id: hid, name: h.name, brand: h.brand || 'nawazi', resp: Number(c.resp_normal) || null, floors: floorsOf_(hid), elevators: all, mine: inC.length ? inC : all, pm: Number(c.pm_per_month) || 0 };
+        // خدمات التكييف في عقده (قائمة خاصة بالعقد)
+        if (c.type === 'ac') hotels[hid].cons = { ac: { services: svcOf_(c) } };
       }
     });
   });
@@ -423,7 +430,7 @@ function engBoot_raw(s) {
       var cons = {};
       ['ac', 'el'].forEach(function (t) {
         var c = Orders.activeContract(id, t);
-        if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null, prices: pricesOf_(c) };
+        if (c) cons[t] = { name: (R.cons[c.con_id] || {}).name || '', resp: Number(c.resp_normal) || null, urgent: Number(c.resp_urgent) || null, prices: pricesOf_(c), services: t === 'ac' ? svcOf_(c) : [] };
       });
       return { id: id, name: h.name, brand: h.brand || 'nawazi', kind: siteKind_(h), floors: floorsOf_(id), elevators: elevatorsOf_(id), cons: cons };
     }),
@@ -720,7 +727,7 @@ function admBoot_() {
           return {
             id: x.contract_id, hids: Orders.csv(x.hotel_ids), hotels: Orders.csv(x.hotel_ids).map(function (id) { return (R.hotels[id] || {}).name || id; }),
             elevators: Orders.csv(x.elevator_ids), start: s, end: e, left: left, alert: Number(x.alert_days) || 60,
-            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
+            resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, pm: x.pm_per_month, type: x.type, prices: pricesOf_(x), services: svcOf_(x), wa_per_week: Number(x.wa_per_week) || 0,
             lead: x.lead_name || '', leadPin: !!x.lead_pin_hash, season: Water.seasonOf(x),
             sla: { resp_normal: x.resp_normal, resp_urgent: x.resp_urgent, sla_repair: x.sla_repair, sla_rescue: x.sla_rescue, sla_pest: x.sla_pest, cls_ex: x.cls_ex, cls_good: x.cls_good, cls_ok: x.cls_ok },
             pay: { value: Number(x.value) || 0, mode: x.pay_mode || '', days: x.pay_days === '' || x.pay_days == null ? 30 : Number(x.pay_days), plan: Pay.planOf(x) }
@@ -1007,6 +1014,26 @@ function apiAdmSaveElevator(token, hotelId, d) {
 
 /** d: con_id? name type phone contact hotel_ids[] elevator_ids[] start end alert_days resp_normal resp_urgent pm_per_month */
 /** أسعار خدمات العقد: {الخدمة: ريال}، والخانة الفارغة تُترك */
+/** خدمات التكييف في العقد: [{ar, en}]، قائمة خاصة بكل عقد */
+function svcOf_(contract) {
+  var s = contract && contract.services;
+  if (typeof s === 'string') { try { s = JSON.parse(s); } catch (e) { s = []; } }
+  return (Array.isArray(s) ? s : []).filter(function (x) { return x && String(x.ar || '').trim(); });
+}
+function svcClean_(list) {
+  var seen = {}, out = [];
+  (Array.isArray(list) ? list : []).forEach(function (x) {
+    var ar = String((x && x.ar) || '').trim();
+    if (!ar || seen[ar]) return;
+    seen[ar] = true;
+    out.push({ ar: ar, en: String((x && x.en) || '').trim() });
+  });
+  return out;
+}
+/** القائمة الأولية لعقد التكييف الجديد: الخدمات النشطة المعرّفة */
+function svcSeed_() {
+  return listsFor_('ac').action.map(function (x) { return { ar: x.ar, en: x.en || '' }; });
+}
 function cleanPrices_(obj) {
   var out = {};
   Object.keys(obj || {}).forEach(function (k) { var v = price_(obj[k]); if (v !== '') out[String(k).trim()] = v; });
@@ -1019,12 +1046,14 @@ function pricesOf_(contract) {
 }
 
 /** أسعار عقد قائم (عقد التكييف) */
-function apiAdmSaveContractPrices(token, contractId, prices) {
+function apiAdmSaveContractPrices(token, contractId, prices, services) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c) throw new Error('العقد غير موجود.');
     if (c.type === 'wt') { prices = wtPrices_(prices); if (!Object.keys(prices).length) throw new Error('اكتب حجم رحلة واحد على الأقل بسعره.'); }
-    Db.update('Contracts', contractId, { prices: cleanPrices_(prices) });
+    var patch = { prices: cleanPrices_(prices) };
+    if (c.type === 'ac' && services) { patch.services = svcClean_(services); if (!patch.services.length) throw new Error('اكتب خدمة واحدة على الأقل.'); }
+    Db.update('Contracts', contractId, patch);
     return {};
   });
 }
@@ -1110,7 +1139,7 @@ function apiAdmSaveContract(token, d) {
       con_id: conId, type: d.type, hotel_ids: d.hotel_ids.join(','), elevator_ids: (d.elevator_ids || []).join(','),
       start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: Number(d.alert_days) || 60,
       resp_normal: Number(d.resp_normal) || 30, resp_urgent: Number(d.resp_urgent) || 15, pm_per_month: Number(d.pm_per_month) || 0,
-      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), wa_per_week: Number(d.wa_per_week) || '',
+      prev_contract_id: d.prev_contract_id || '', created_at: new Date(), prices: cleanPrices_(d.prices), services: d.type === 'ac' ? (svcClean_(d.services).length ? svcClean_(d.services) : svcSeed_()) : '', wa_per_week: Number(d.wa_per_week) || '',
       lead_name: (d.type === 'el' || d.type === 'pc') ? String(d.lead_name || '').trim() : '',
       measure_from: /^\d{4}-\d{2}-\d{2}$/.test(String(d.measure_from || '')) ? d.measure_from : ''
     });

@@ -627,6 +627,10 @@ t('الملاحظة والعطل والإجراء: قائمة الإجراء ت�
   run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', { 'تعبئة فريون 60%': '120', 'استبدال كمبروسر': '2400', 'تغيير ريموت': '' })`);
   eq(JSON.stringify(run(`pricesOf_(Db.get('Contracts', '${ctr}'))`)), JSON.stringify({ 'تعبئة فريون 60%': 120, 'استبدال كمبروسر': 2400 }));
   eq(run(`apiEngBoot('${engTok}')`).hotels.find(x => x.id === HID).cons.ac.prices['استبدال كمبروسر'], 2400);
+  // خدمات التكييف قائمة خاصة بكل عقد: تُنسخ عند الترقية، وتُحفظ مع الأسعار، وتصل للفني
+  run(`apiAdmSaveContractPrices('${adminTok}', '${ctr}', pricesOf_(Db.get('Contracts', '${ctr}')), [{ ar: 'تغيير ريموت', en: 'Remote' }, { ar: 'خدمة خاصة بالعقد', en: '' }])`);
+  eq(run(`svcOf_(Db.get('Contracts', '${ctr}')).map(x => x.ar).join()`), 'تغيير ريموت,خدمة خاصة بالعقد', 'خدمات العقد');
+  eq(run(`apiConBoot('${acTok}')`).hotels.find(x => x.id === HID).cons.ac.services.some(x => x.ar === 'خدمة خاصة بالعقد'), true, 'الفني يرى خدمات عقده');
   run(`Db.insert('Lists', { type: 'ac', list: 'action', ar: 'تعبئة غاز', en: 'x', status: 'active', created_by: 'system', sort: 1 })`);
   run('seedMissingLists_()');
   eq(run(`Db.find('Lists', l => l.ar === 'تعبئة غاز').status`), 'rejected');
