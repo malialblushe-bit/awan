@@ -1127,7 +1127,13 @@ function apiAdmSaveContract(token, d) {
     if (!d.hotel_ids || !d.hotel_ids.length) throw new Error('اختر فندقاً واحداً على الأقل.');
     if (d.type !== 'wt' && d.hotel_ids.some(function (id) { return siteKind_(Db.get('Hotels', id)) === 'laundry'; })) throw new Error('المغسلة لخدمة شاحنات المياه فقط.');
     if (!d.start || !d.end || d.end < d.start) throw new Error('حدّد تاريخ البداية والنهاية.');
-    var pin = null, conId = d.con_id;
+    var pin = null, conId = d.con_id, linked = '';
+    // لا متعهد مكرر: الاسم نفسه (بعد توحيد الكتابة) والنوع نفسه ← العقد يُربط بالمتعهد الموجود ورقمه السري
+    if (!conId && String(d.name || '').trim()) {
+      var nk = conNameKey_(d.name);
+      var ex = Db.all('Contractors', function (c) { return c.type === d.type && conNameKey_(c.name) === nk; })[0];
+      if (ex) { conId = ex.con_id; linked = ex.name; }
+    }
     if (!conId) {
       if (!String(d.name || '').trim()) throw new Error('اكتب اسم المتعهد.');
       var c = Db.insert('Contractors', { name: d.name.trim(), type: d.type, phone: d.phone || '', contact: d.contact || '', emails: emails_(d.emails).join(','), failed: 0, lang: 'ar', active: true });
@@ -1144,10 +1150,15 @@ function apiAdmSaveContract(token, d) {
       measure_from: /^\d{4}-\d{2}-\d{2}$/.test(String(d.measure_from || '')) ? d.measure_from : ''
     });
     var leadPin = leadNm ? Auth.setLeadPin(ctr.contract_id) : null;
-    var out = { pin: pin, leadPin: leadPin };
+    var out = { pin: pin, leadPin: leadPin, linked: linked };
     if (pin || leadPin) Object.assign(out, conMail_(conId, { pin: pin, leadPin: leadPin, leadName: leadNm }));
     return out;
   });
+}
+
+/** مفتاح اسم المتعهد للمقارنة: بلا مسافات زائدة، والهمزات والتاء المربوطة والألف المقصورة موحّدة */
+function conNameKey_(n) {
+  return String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 }
 
 /** قائد فريق المصاعد أو المكافحة: الاسم ورقم سري جديد يظهر مرة واحدة */

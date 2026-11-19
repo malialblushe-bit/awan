@@ -305,6 +305,12 @@ t('الأبراج: نفس الدور في ثلاثة أبراج بنطاقات �
 t('المشرف: عقدان، والرقم السري يظهر مرة واحدة وفريد', () => {
   acPin = run(`apiAdmSaveContract('${adminTok}', { name: 'مؤسسة التبريد', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`).pin;
   elPin = run(`apiAdmSaveContract('${adminTok}', { name: 'شركة المصاعد', type: 'el', hotel_ids: ['${HID}'], elevator_ids: ['مصعد النزلاء 1'], start: '${yesterday}', end: '${nextYear}', resp_normal: 45, resp_urgent: 15, pm_per_month: 1 })`).pin;
+  // لا متعهد مكرر: الاسم نفسه والنوع نفسه يُربط بالموجود بلا رقم جديد، والهمزة لا تفرّق
+  { const n0 = run(`Db.all('Contractors').length`);
+    const rr = run(`apiAdmSaveContract('${adminTok}', { name: ' مؤسسه  التبريد ', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`);
+    eq(rr.pin, null); eq(rr.linked, 'مؤسسة التبريد'); eq(run(`Db.all('Contractors').length`), n0, 'لم يُنشأ متعهد جديد');
+    const cs = run(`Db.all('Contracts').filter(function(c){return Db.get('Contractors', c.con_id).name==='مؤسسة التبريد'}).map(function(c){return c.contract_id})`);
+    eq(cs.length, 2, 'عقدان للمتعهد نفسه'); run(`Db.remove('Contracts', '${cs[1]}')`); }
   if (!/^\d{6}$/.test(acPin) || acPin === elPin) throw new Error('رقم سري غير صالح');
   const b = run(`apiAdmBoot('${adminTok}')`);
   eq(b.contractors.length, 2);
