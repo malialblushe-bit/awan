@@ -1516,6 +1516,15 @@ t('تهيئة الإطلاق المخصّصة: بالفئة والمتعهد و�
   eq(run(`apiAdmLaunchPlan('${adminTok}', { hotels: ['NOPE'] })`).total, 0);
 });
 
+t('حذف عقد تجريبي (مؤقت): بلا سجلات يُحذف ومعه المتعهد إن كان آخر عقوده، وما عليه سجلات لا يُحذف', () => {
+  run(`apiAdmSaveContract('${adminTok}', { name: 'متعهد للحذف', type: 'wa', wa_per_week: 3, hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}' })`);
+  const cid = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='متعهد للحذف'})[0].contract_id`);
+  const r = run(`apiAdmDeleteContract('${adminTok}', '${cid}')`);
+  eq(r.conDeleted, true); eq(run(`Db.all('Contractors').some(function(c){return c.name==='متعهد للحذف'})`), false);
+  const ac = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'})[0].contract_id`);
+  throws(`apiAdmDeleteContract('${adminTok}', '${ac}')`, 'عليه سجلات');
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   const cap = run(`apiAdmLaunchInventory('${adminTok}')`).cap; eq(cap.drive.pct, 21.3); eq(cap.cells.limit, 10000000); if (!(cap.cells.used > 0)) throw new Error('cells');
   throws(`apiAdmLaunchInventory('${engTok}')`, '');

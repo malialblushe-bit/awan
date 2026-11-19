@@ -1161,6 +1161,29 @@ function conNameKey_(n) {
   return String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').toLowerCase();
 }
 
+/** مؤقت لتنظيف البيانات التجريبية (يُزال لاحقاً): حذف عقد لم يُسجَّل عليه شيء، وآخر عقد للمتعهد يحذفه معه إن لم يكن عليه شيء */
+function apiAdmDeleteContract(token, contractId) {
+  return adm_(token, function () {
+    var c = Db.get('Contracts', contractId);
+    if (!c) throw new Error('العقد غير موجود.');
+    var hs = Orders.csv(c.hotel_ids), con = c.con_id;
+    var T = ['WorkOrders', 'WorkOrdersArchive', 'Arrivals', 'CorrectiveActions', 'WasteVisits', 'WaterLoads', 'Tickets', 'OrgEvals', 'PestLogs', 'SupRatings', 'PcReports'];
+    var used = function (mine) {
+      var n = 0;
+      T.forEach(function (t) { n += Db.all(t, function (r) { return r.con_id === con && (!mine || !r.hotel_id || hs.indexOf(r.hotel_id) !== -1); }).length; });
+      return n;
+    };
+    if (Db.all('Claims', function (r) { return r.contract_id === contractId; }).length || used(true)) throw new Error('عليه سجلات، فلا يُحذف. اتركه ينتهي أو جدّده.');
+    Db.remove('Contracts', contractId);
+    var conDel = false;
+    if (!Db.all('Contracts', function (x) { return x.con_id === con; }).length && !used(false)
+      && !Db.all('Claims', function (r) { return r.con_id === con; }).length && !Db.all('Evaluations', function (r) { return r.con_id === con; }).length) {
+      Db.remove('Contractors', con); conDel = true;
+    }
+    return { conDeleted: conDel };
+  });
+}
+
 /** قائد فريق المصاعد أو المكافحة: الاسم ورقم سري جديد يظهر مرة واحدة */
 function apiAdmLeadPin(token, contractId, name) {
   return adm_(token, function () {
