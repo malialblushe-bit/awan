@@ -1581,6 +1581,32 @@ t('التغيير المالي بفترة سريان: الأسعار والمب�
   run(`Db.remove('Claims', '${c2}')`);
 });
 
+t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع، زيارة تقدم ثم تسليم بصور ومطابقة، ولا يدخل في الأداء، ويتوقف دخوله بانتهاء المدة', () => {
+  const today = run(`Utilities.formatDate(new Date(), 'Asia/Riyadh', 'yyyy-MM-dd')`);
+  throws(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'بلاط', name: 'مؤسسة البلاط', start: '${today}', end: '${nextYear}' })`, 'قيمة');
+  const r = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'تجديد بلاط ممر الدور 5', name: 'مؤسسة البلاط الحديث', start: '${yesterday}', end: '${nextYear}', amount: '18,500', description: 'إزالة وتركيب' })`);
+  if (!r.pin || !r.id) throw new Error('pin/id');
+  const o = run(`Db.get('WorkOrders', '${r.id}')`); eq(o.type, 'pj'); eq(Number(o.quote), 18500); eq(o.status, 'assigned');
+  // المنفذ يدخل بالباركود ويسجّل وصوله، ثم زيارة تقدم وتسليم
+  const tk = run(`apiConLogin('WARIF2', '${r.pin}')`).token;
+  const jb = run(`apiConBoot('${tk}')`).jobs.find(j => j.id === r.id); if (!jb) throw new Error('job visible'); eq(jb.quote, '', 'القيمة لا تظهر للمنفذ');
+  run(`apiConAct('${tk}', 'arrive', null, { ids: ['${r.id}'] })`);
+  throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', photos: ['data:image/jpeg;base64,AAAA'] })`, 'نسبة');
+  run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', pct: '50%', photos: ['data:image/jpeg;base64,AAAA'] })`);
+  eq(run(`Db.get('WorkOrders', '${r.id}').status`), 'in_progress');
+  throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'fix' })`, 'صور التسليم');
+  run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'fix', photos: ['data:image/jpeg;base64,AAAA'], note: 'سُلّم' })`);
+  eq(run(`Db.get('WorkOrders', '${r.id}').status`), 'matching');
+  run(`apiEngAct('${engTok}', '${r.id}', 'close', { sat: 'good' })`); eq(run(`Db.get('WorkOrders', '${r.id}').status`), 'closed');
+  eq(run(`Db.all('KpiSummary').some(function(k){return k.con_id===Db.get('WorkOrders', '${r.id}').con_id})`), false, 'لا يدخل في الأداء');
+  // بانتهاء مدة المشروع يتوقف الدخول
+  run(`Db.update('Contracts', Db.get('WorkOrders', '${r.id}').equip, { end: new Date(Date.now() - 2 * 864e5), start: new Date(Date.now() - 30 * 864e5) })`);
+  throws(`apiConLogin('WARIF2', '${r.pin}')`, 'عقد ساري');
+  // المنفذ نفسه لمشروع آخر: يُربط بسجله، بلا رقم جديد
+  const r2 = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'بلاط الدور 6', name: 'مؤسسه البلاط الحديث', start: '${today}', end: '${nextYear}', amount: 9000 })`);
+  eq(r2.pin, null); eq(run(`Db.get('WorkOrders', '${r2.id}').con_id`), run(`Db.get('WorkOrders', '${r.id}').con_id`));
+});
+
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
   const cap = run(`apiAdmLaunchInventory('${adminTok}')`).cap; eq(cap.drive.pct, 21.3); eq(cap.cells.limit, 10000000); if (!(cap.cells.used > 0)) throw new Error('cells');
   throws(`apiAdmLaunchInventory('${engTok}')`, '');

@@ -49,6 +49,21 @@ A.slaForm=function(){var v=A.f.slv,t=A.f.slt,inp=function(k,l){return '<div><lab
 (function(){var pf=A.pricesForm;A.pricesForm=function(){return A.f.sl?A.slaForm():pf()}})();
 // سبب التعديل في نماذج العقد (يُحفظ في سجل التعديلات)؛ القيمة في A.f.rsn فلا تضيع مع إعادة الرسم
 A.rsn=function(){return '<div><label class="lbl" for="a_rsn">'+T('سبب التعديل')+'</label><input id="a_rsn" class="inp" value="'+esc(A.f.rsn||'')+'" oninput="A.f.rsn=this.value" placeholder="'+T('مثال: ملحق العقد رقم… أو تصحيح إدخال')+'"><p class="small muted" style="margin:4px 0 0">'+T('يُحفظ في سجل التعديلات باسمك. مطلوب عند تغيير قيمة قائمة.')+'</p></div>'};
+// أمر عمل مشروع (قرار صاحب المشروع 20 نوفمبر): عمل محدد النطاق والمدة لمتعهد مسجل أو منفذ جديد برقم دخول لمدة المشروع
+W.projModal=function(){var b=W.b,f=W.f;if(!f.ph)f.ph=(b.hotels[0]||{}).id;var hotel=b.hotels.filter(function(x){return x.id===f.ph})[0]||{floors:[]};
+ var inp=function(k,l,ty,ph){return '<div><label class="lbl">'+T(l)+'</label><input class="inp"'+(ty?' type="'+ty+'"':'')+(ph?' placeholder="'+T(ph)+'"':'')+' value="'+esc(f[k]||'')+'" data-k="'+k+'" oninput="W.f[this.dataset.k]=this.value"></div>'};
+ var h='<div class="modal"><div role="dialog" aria-modal="true" style="max-width:620px"><div class="row"><h2 style="font-size:20px">'+T('أمر عمل مشروع')+'</h2><button class="btn btn-o sm" onclick="W.modal=null;render()">إغلاق</button></div>';
+ if(b.hotels.length>1)h+='<div class="chips">'+b.hotels.map(function(x){return '<button class="chip'+(f.ph===x.id?' on':'')+'" data-id="'+x.id+'" onclick="W.f.ph=this.dataset.id;W.f.pf=\'\';render()">'+esc(x.name)+'</button>'}).join('')+'</div>';
+ h+=inp('pt','عنوان المشروع','','مثال: تجديد بلاط ممر الدور 5');
+ h+='<div class="grid g2"><div><label class="lbl">'+T('الدور أو المكان')+'</label><select class="inp" onchange="W.f.pf=this.value"><option value="">—</option>'+(hotel.floors||[]).map(function(x){return '<option value="'+x.id+'"'+(f.pf===x.id?' selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select></div>'+inp('pr','الغرفة أو المرفق (اختياري)')+'</div>';
+ h+=inp('pd','النطاق والتفاصيل');
+ h+='<div><span class="lbl">'+T('المنفذ')+'</span><div class="seg" role="group">'+[['new','منفذ جديد'],['reg','متعهد مسجل']].map(function(x){return '<button class="'+(f.pk===x[0]?'on':'')+'" data-k="'+x[0]+'" onclick="W.f.pk=this.dataset.k;render()">'+T(x[1])+'</button>'}).join('')+'</div></div>';
+ if(f.pk==='reg')h+='<div><select class="inp" onchange="W.f.pc=this.value"><option value="">—</option>'+(b.pjCons||[]).map(function(c){return '<option value="'+c.id+'"'+(f.pc===c.id?' selected':'')+'>'+esc(c.name)+' · '+esc(TYPE[c.type]||c.type)+'</option>'}).join('')+'</select></div>';
+ else h+='<div class="grid g2">'+inp('pn','اسم المنفذ')+inp('pp','الجوال (اختياري)','tel')+'</div>'+inp('pe','البريد (اختياري، يصله رقم الدخول)','email');
+ h+='<div class="grid g2">'+inp('ps','من','date')+inp('pz','إلى','date')+'</div>'+inp('pa','قيمة المشروع المتفق عليها (ريال)','','');
+ h+='<p class="small muted" style="margin:0">'+T('يدخل المنفذ برقمه طوال مدة المشروع ويتوقف دخوله تلقائياً بعدها. القيمة لا تظهر له.')+'</p>';
+ h+='<button class="btn btn-p" onclick="W.projCreate()">'+T('إنشاء أمر العمل')+'</button></div></div>';return h};
+W.projCreate=function(){var f=W.f;call('apiEngProject',S.tok,{hotel_id:f.ph,title:f.pt,floor_id:f.pf||'',room:f.pr||'',description:f.pd||'',con_id:f.pk==='reg'?(f.pc||''):'',name:f.pk==='new'?(f.pn||''):'',phone:f.pp||'',emails:f.pe||'',start:f.ps||'',end:f.pz||'',amount:f.pa||''}).then(function(r){W.b=r.boot;W.modal=null;W.f={};toast(F('أُنشئ أمر العمل {0}',r.id));render();if(r.pin)ask({title:T('رقم دخول المنفذ (يظهر مرة واحدة):'),msg:r.pin+(r.mailTo?' · '+r.mailTo:''),ok:T('تم'),fn:function(){}})})};
 // فترة السريان للتغيير المالي، وإشعار المتعهد الاختياري بعد الحفظ (سجل التعديلات)
 A.effBox=function(){if(!A.f.eff)A.f.eff=new Date(Date.now()+3*36e5).toISOString().slice(0,10);return '<div><label class="lbl" for="a_eff">'+T('يسري من')+'</label><input id="a_eff" class="inp" type="date" style="max-width:220px" value="'+esc(A.f.eff)+'" oninput="A.f.eff=this.value"><p class="small muted" style="margin:4px 0 0">'+T('عند تغيير سعر قائم: الكشوف قبل هذا التاريخ تبقى بالسعر السابق.')+'</p></div>'};
 A.ntAfter=function(r,msg){toast(msg);A.f=r&&r.logId?{nt:r.logId}:{};render()};

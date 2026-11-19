@@ -425,6 +425,7 @@ function engBoot_raw(s) {
   var dayOf = function (t) { return t ? Utilities.formatDate(new Date(t), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
   return {
     me: { name: me.name, role: s.role, lang: me.lang || 'ar', email: me.email || '' },
+    pjCons: LT || (s.role !== 'admin' && s.role !== 'engineer') ? undefined : Object.keys(R.cons).map(function (k) { var c = R.cons[k]; return { id: c.con_id, name: c.name, type: c.type }; }),
     hotels: myHotels.map(function (id) {
       var h = R.hotels[id] || {};
       var cons = {};
@@ -518,6 +519,22 @@ function apiEngFind(token, woId) {
   var v = Orders.view(Orders.refs(), o, false);
   v.archived = !Db.get('WorkOrders', id);
   return v;
+}
+
+/** أمر عمل مشروع: المهندس (للأعمال الفنية) ومشرف النظام */
+function apiEngProject(token, d) {
+  var s = Auth.need(token, ['admin', 'engineer']);
+  d = d || {};
+  var photos = d.photos && d.photos.length ? savePhotos_(d.photos, 'PRJ') : [];
+  var out = null;
+  var res = act_(function () {
+    out = Orders.projCreate(s, Object.assign({}, d, { photos: photos }));
+    var c = Db.get('Contracts', out.contract_id);
+    ctrLog_(token, c, 'new', {}, { type: 'pj', hotel_ids: d.hotel_id, start: d.start, end: d.end, value: String(d.amount) }, 'أمر عمل مشروع ' + out.id, { noReason: true, always: true });
+    return out;
+  }, function () { return engBoot_(s); });
+  if (out && out.pin) { try { Object.assign(res, conMail_(out.con_id, { pin: out.pin })); } catch (e) { } }
+  return res;
 }
 
 function apiEngCreate(token, d) {

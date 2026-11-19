@@ -177,7 +177,7 @@ var Kpi = (function () {
     var win = windowDays_() * 864e5;
     woIds.forEach(function (id) {
       var o = Db.get('WorkOrders', id);
-      if (!o) return;
+      if (!o || o.type === 'pj') return;   // أوامر عمل المشاريع لا تدخل في أداء المتعهدين
       keys.push({ con: o.con_id, hotel: o.hotel_id, month: month_(o.created_at) });
       var lk = locKey_(o), t = Orders.ms(o.created_at);
       if (!lk) return;

@@ -143,7 +143,8 @@ var Orders = (function () {
   // ───────── إجراءات المتعهد ─────────
   var OUTCOMES = {
     ac: ['ok', 'fix', 'comp', 'diag', 'report'],
-    el: ['fix', 'ok', 'visit', 'diag', 'report', 'pm', 'lead']
+    el: ['fix', 'ok', 'visit', 'diag', 'report', 'pm', 'lead'],
+    pj: ['visit', 'fix']   // أمر عمل مشروع: زيارة تقدم · تسليم المشروع
   };
   var PM_EL_N = 38;   // بنود نموذج الصيانة الدورية للمصاعد (1–38)
 
@@ -182,6 +183,8 @@ var Orders = (function () {
     if (o.status === 'lead' && (oc === 'visit' || oc === 'report')) throw new Error('استكمل التقرير: تم الإصلاح أو يحتاج قطعة أو سليم.');
     // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
     if (o.type === 'el' && ['fix', 'ok', 'diag', 'pm'].indexOf(oc) !== -1 && !(d.att || []).length) throw new Error('أرفق التقرير الفني للمتعهد (صورة أو PDF).');
+    if (o.type === 'pj' && !(d.photos || []).length) throw new Error(oc === 'fix' ? 'أرفق صور التسليم (قبل وبعد).' : 'أرفق صورة لما أُنجز.');
+    if (o.type === 'pj' && oc === 'visit' && !d.pct) throw new Error('حدّد نسبة الإنجاز التقريبية.');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
     if (oc === 'comp' && !(Number(d.quote) > 0)) throw new Error('اكتب سعر العرض بالريال.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
@@ -196,7 +199,7 @@ var Orders = (function () {
       outcome: oc, equip: d.equip || '', sym: d.sym || '', part: d.part || '', cause: d.cause || [], action: d.action || [], parts: d.parts || [], checked: d.checked || [], rec: d.rec || [], gas: d.gas || '', pb: d.pb || '', pa: d.pa || '',
       working: d.working || '', follow: d.follow || '', followNote: d.followNote || '', note: d.note || '',
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime(),
-      att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : ''
+      att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : '', pct: d.pct || ''
     };
     if (oc === 'comp') report.rep = replKind_(d.rep);
     if (pm) {
@@ -435,6 +438,32 @@ var Orders = (function () {
     return to;
   }
 
+  /** أمر عمل مشروع (قرار صاحب المشروع 20 نوفمبر): عمل محدد النطاق والمدة لمتعهد مسجل أو لمنفذ جديد.
+   *  المنفذ يُعطى عقداً من نوع «مشروع» بمدة المشروع وقيمته، فيدخل برقمه طوال المدة ويتوقف دخوله تلقائياً بعدها. */
+  function projCreate(s, d) {
+    var me = Db.get('Users', s.id) || {};
+    if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
+    if (!Db.get('Hotels', d.hotel_id)) throw new Error('اختر الفندق.');
+    var title = String(d.title || '').trim(); if (!title) throw new Error('اكتب عنوان المشروع.');
+    var day = /^\d{4}-\d{2}-\d{2}$/;
+    if (!day.test(String(d.start || '')) || !day.test(String(d.end || '')) || d.end < d.start) throw new Error('حدّد مدة المشروع: من تاريخ إلى تاريخ.');
+    var amt = Number(String(d.amount || '').replace(/[,،\s]/g, '')); if (!(amt > 0)) throw new Error('اكتب قيمة المشروع المتفق عليها بالريال.');
+    var conId = d.con_id || '', pin = null, con;
+    if (conId) { con = Db.get('Contractors', conId); if (!con) throw new Error('المتعهد غير موجود.'); }
+    else {
+      var nm = String(d.name || '').trim(); if (!nm) throw new Error('اختر متعهداً مسجلاً أو اكتب اسم المنفذ.');
+      var nk = conNameKey_(nm);
+      con = Db.all('Contractors', function (c) { return conNameKey_(c.name) === nk; })[0];
+      if (!con) { con = Db.insert('Contractors', { name: nm, type: 'pj', phone: String(d.phone || '').trim(), contact: '', emails: emails_(d.emails).join(','), failed: 0, lang: 'ar', active: true }); pin = Auth.setPin(con.con_id); }
+      conId = con.con_id;
+    }
+    var ctr = Db.insert('Contracts', { con_id: conId, type: 'pj', hotel_ids: d.hotel_id, start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: 7, value: amt, created_at: now_() });
+    var r = create({ hotel_id: d.hotel_id, type: 'pj', kind: 'project', source: 'engineer', con_id: conId, floor_id: d.floor_id || '', room: d.room || '',
+      symptom: title, description: String(d.description || '').trim(), photos: d.photos || [], requester: me.name || '' }, me.name || s.id);
+    Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id });
+    return { id: r.order.wo_id, contract_id: ctr.contract_id, con_id: conId, pin: pin, isNew: !!pin };
+  }
+
   function engCreate(s, d) {
     var me = Db.get('Users', s.id);
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
@@ -522,6 +551,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, leave: leave, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
+    engAct: engAct, engCreate: engCreate, projCreate: projCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();
