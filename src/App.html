@@ -385,7 +385,9 @@ function stmtPaginate(doc,o){
   if(!o.fits&&o.rows.length)cur=add();
   var tb=null;
   var start=function(){cur.b.insertAdjacentHTML('beforeend',o.th);var t=cur.b.querySelectorAll('table');tb=t[t.length-1]};
+  var MAX=15;
   o.rows.forEach(function(row,i){
+    if(tb&&cur.a&&cur.z-cur.a+1>=MAX){cur=add();tb=null}
     if(!tb)start();
     tb.insertAdjacentHTML('beforeend',row);
     if(!ok(cur)){var tr=tb.lastElementChild;tb.removeChild(tr);
@@ -394,7 +396,14 @@ function stmtPaginate(doc,o){
     if(!cur.a)cur.a=i+1;cur.z=i+1;
   });
   cur.b.insertAdjacentHTML('beforeend','<div class="pend">'+o.end+'</div>');
-  if(!ok(cur)){var e=cur.b.lastElementChild;cur.b.removeChild(e);cur=add();cur.b.appendChild(e)}
+  // التوقيع لا يبقى وحده: إن لم يتسع تنتقل معه آخر 3 عمليات للصفحة الجديدة
+  if(!ok(cur)){var e=cur.b.lastElementChild;cur.b.removeChild(e);
+    var n=cur.a?cur.z-cur.a+1:0,k=Math.min(3,n),mv=[],z=cur.z;
+    for(var q=0;q<k;q++)mv.unshift(tb.removeChild(tb.lastElementChild));
+    if(k&&k===n){tb.previousElementSibling&&tb.parentNode.removeChild(tb.previousElementSibling);tb.parentNode.removeChild(tb);cur.a=0;cur.z=0}else cur.z=z-k;
+    cur=add();
+    if(k){start();mv.forEach(function(t){tb.appendChild(t)});cur.a=z-k+1;cur.z=z}
+    cur.b.appendChild(e)}
   pages.forEach(function(pg,k){var sp=pg.s.querySelectorAll('.pf span');sp[0].textContent='صفحة '+(k+1)+' من '+pages.length;sp[1].textContent=pg.a?'العمليات من '+pg.a+' إلى '+pg.z+' من '+o.N:(k===0?'ملخص الخدمات':'')});
 }
 function stmtPrint(stamp){
