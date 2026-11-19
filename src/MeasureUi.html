@@ -289,7 +289,12 @@ var PCRP={f:{},
 (function(){var ol=RPT.list,oo=RPT.open,ov=RPT.view;
  RPT.list=function(){var L=ol(),out=[];L.forEach(function(x){out.push(x);if(x.c.type==='pc'){out.push({c:x.c,go:'pcc',t:'تقرير إتمام المكافحة'});out.push({c:x.c,go:'pct',t:'تقرير المصائد'})}});return out};
  RPT.open=function(i){var x=RPT.list()[i];if(x&&(x.go==='pcc'||x.go==='pct')){PCRP.f.month=null;return PCRP.open(x.go==='pct'?'trap':'comp',x.c.id,'')}return oo(i)};
- RPT.view=function(){var L=RPT.list();var h=ov();return h.replace(/<span>([^<]*)<\/span><\/button>/g,function(m,s,off){return m}).replace(/data-i="(\d+)" onclick="RPT\.open\(\+this\.dataset\.i\)"><b data-nt="1">([^<]*)<\/b><span>[^<]*<\/span>/g,function(m,i,n){var x=L[+i];return x&&x.t?'data-i="'+i+'" onclick="RPT.open(+this.dataset.i)"><b data-nt="1">'+n+'</b><span>'+T(x.t)+' · '+T('شهري')+'</span>':m})}})();
+ // بطاقة واحدة لكل متعهد وتقاريره أزرار داخلها، مرتبة حسب الخدمة
+ RPT.view=function(){var L=RPT.list();if(!L.length)return '';
+  var N={ac:'كشف الخدمات المنفذة',wt:'كشف رحلات المياه',wa:'كشف زيارات النفايات',pc:'كشف معالجات المكافحة'},ORD=['ac','el','sf','wt','wa','pc'],G={},keys=[];
+  L.forEach(function(x,i){var k=x.c.id;if(!G[k]){G[k]={c:x.c,it:[]};keys.push(k)}G[k].it.push({i:i,t:x.t?T(x.t)+' · '+T('شهري'):T(N[x.c.type]||'كشف')})});
+  keys.sort(function(a,b){return ORD.indexOf(G[a].c.type)-ORD.indexOf(G[b].c.type)});
+  return '<div class="card stack" style="gap:10px;margin-bottom:16px"><p class="small muted" style="margin:2px 0 0">'+T('مبنية على العمليات المسجّلة والمطابَقة فقط. تفتح على هذا الشهر، وتختار الفترة والفندق من داخلها.')+'</p><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">'+keys.map(function(k){var g=G[k];return '<div class="opt" style="text-align:start;cursor:default"><b data-nt="1">'+esc(g.c.name)+'</b><span>'+(TYPE[g.c.type]||'')+'</span><div class="chips" style="margin-top:8px">'+g.it.map(function(x){return '<button class="chip" style="min-height:36px" data-i="'+x.i+'" onclick="RPT.open(+this.dataset.i)">'+x.t+'</button>'}).join('')+'</div></div>'}).join('')+'</div></div>'}})();
 </script>
 <style>
 .pcr .rpw{width:100%;border-collapse:collapse}.pcr .rpw>thead>tr>td,.pcr .rpw>tbody>tr>td{padding:0}
