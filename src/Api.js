@@ -655,7 +655,8 @@ function statementCore_(scope, conId, from, to) {
       if (!acts) return;
       var amount = 0, price = cprice(o);
       acts.forEach(function (a) {
-        var pr = price[a] == null ? null : Number(price[a]), key = a + '|' + (pr == null ? '' : pr);
+        // الكمبروسر يُسعَّر بعرض السعر المقدم على العملية نفسها، وباقي الخدمات بسعر العقد
+        var pr = a === 'استبدال كمبروسر' ? (o.quote !== '' && o.quote != null && !isNaN(Number(o.quote)) ? Number(o.quote) : null) : (price[a] == null ? null : Number(price[a])), key = a + '|' + (pr == null ? '' : pr);
         var L = lines[key] || (lines[key] = { svc: a, en: en[a] || '', qty: 0, price: pr });
         L.qty++; if (pr != null) amount += pr;
       });

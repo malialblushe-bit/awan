@@ -179,6 +179,7 @@ var Orders = (function () {
     // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
     if (o.type === 'el' && ['fix', 'ok', 'diag', 'pm'].indexOf(oc) !== -1 && !(d.att || []).length) throw new Error('أرفق التقرير الفني للمتعهد (صورة أو PDF).');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
+    if (oc === 'comp' && !(Number(d.quote) > 0)) throw new Error('اكتب سعر عرض الكمبروسر بالريال.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
     var pm = oc === 'pm' ? pmParse_(d) : null;
     if (oc === 'ok' && !(d.checked || []).length) throw new Error('سجّل ما فحصته حتى لو كان سليماً.');

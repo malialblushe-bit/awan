@@ -393,7 +393,7 @@ t('المهندس: قرار "المتعهد يوفّر" ← بانتظار ال�
 });
 
 t('المتعهد: الإصلاح بعد الاعتماد، والمتابعة تفتح عملية جديدة، والبند الجديد ينتظر الاعتماد', () => {
-  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', photos: ['data:image/jpeg;base64,AA'] })`, 'معتمدة للتركيب');
+  throws(`apiConAct('${acTok}', 'submit', '${AC1}', { outcome: 'comp', quote: '2400', photos: ['data:image/jpeg;base64,AA'] })`, 'معتمدة للتركيب');
   const r = run(`apiConAct('${acTok}', 'submit', '${AC1}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'fix', equip: 'AC-712-A', sym: 'لا يبرد', part: 'الكمبروسر', cause: ['تآكل طبيعي'], parts: ['كمبروسر جديد'], follow: 'نعم', followNote: 'تنظيف خط التصريف', custom: [{ list: 'parts', ar: 'كمبروسر جديد' }] })`);
   eq(r.result.status, 'matching');
   if (!r.result.msg.includes('متابعة')) throw new Error('لم تُفتح المتابعة');
@@ -674,6 +674,9 @@ t('المتعهد: أكثر من بريد، والكشف الشهري يجمع �
   const l = st.lines.find(x => x.svc === 'تعبئة فريون 60%');
   eq(l.qty, 1); eq(l.price, 120); eq(l.total, 120);
   eq(st.total >= 120, true); eq(st.orders.length >= 1, true); eq(st.con.emails.length, 2);
+  // الكمبروسر يُسعَّر بعرض السعر المقدم على العملية (2400) لا بسعر العقد
+  const cl = st.lines.find(x => x.svc === 'استبدال كمبروسر');
+  eq(!!cl && cl.price === 2400 && cl.total === 2400, true, 'الكمبروسر بعرض السعر');
   throws(`apiStatement('${acTok}', '${con}', 'all', '2026-10-01', '2026-10-31')`, 'صلاحية');
 });
 
