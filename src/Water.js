@@ -9,6 +9,10 @@ var Water = (function () {
   var TZ = 'Asia/Riyadh';
   var DUP_MIN = 20;
   var MATCH_ROLES = ['gm', 'duty', 'fo', 'admin'];
+  /** معيار التحويل: الحجم (م³) = الكتلة (طن) × 1000 ÷ الكثافة (كجم/م³)، والماء كثافته 1000 كجم/م³ فـ 1 طن = 1 م³ */
+  var WATER_DENSITY_KG_M3 = 1000;
+  var M3_PER_T = 1000 / WATER_DENSITY_KG_M3;
+  function tonToM3_(t) { return (Number(t) || 0) * 1000 / WATER_DENSITY_KG_M3; }
 
   function ms(d) { return Orders.ms(d); }
   function day_(t) { return t ? Utilities.formatDate(new Date(t), TZ, 'yyyy-MM-dd') : ''; }
@@ -78,24 +82,27 @@ var Water = (function () {
       status: v.status, dup: Orders.truthy(v.dup), by: v.match_by || '', matched: ms(v.match_at) || null, reason: v.reason || '', dist: v.dist === '' ? null : Number(v.dist) };
   }
 
-  /** لوحة الفريق: المعلّق كله + آخر 40 يوماً، واستهلاك 6 أشهر لكل فندق. null إن لا عقد مياه في النطاق */
+  /** لوحة الفريق: المعلّق كله + آخر 40 يوماً، واستهلاك يومي وشهري لكل فندق. null إن لا عقد مياه في النطاق */
   function staffBoot(s, hotelIds) {
     var R = Orders.refs();
     var has = R.contracts.some(function (c) { return c.type === 'wt' && Orders.csv(c.hotel_ids).some(function (h) { return hotelIds.indexOf(h) !== -1; }); });
     if (!has) return null;
-    var since = Date.now() - 40 * 864e5, from6 = Date.now() - 190 * 864e5, vol = {};
-    var all = Db.all('WaterLoads', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && ms(v.at) >= from6; });
+    var since = Date.now() - 40 * 864e5, from25 = Date.now() - 780 * 864e5, from62 = Date.now() - 62 * 864e5, ser = {};
+    var all = Db.all('WaterLoads', function (v) { return hotelIds.indexOf(v.hotel_id) !== -1 && ms(v.at) >= from25; });
+    // سلسلة الاستهلاك: [معتمد طن، معتمد عدد، معلّق طن، معلّق عدد] لكل يوم (62 يوماً) ولكل شهر (25 شهراً)
     all.forEach(function (v) {
       if (v.status === 'rejected') return;
-      var m = Utilities.formatDate(new Date(v.at), TZ, 'yyyy-MM'), k = v.hotel_id;
-      vol[k] = vol[k] || {}; vol[k][m] = (vol[k][m] || 0) + (Number(v.size) || 0);
+      var k = v.hotel_id, dd = Utilities.formatDate(new Date(v.at), TZ, 'yyyy-MM-dd'), mm = dd.slice(0, 7), ap = v.status === 'approved' ? 0 : 2, t = Number(v.size) || 0;
+      ser[k] = ser[k] || { d: {}, m: {} };
+      var mo = ser[k].m[mm] = ser[k].m[mm] || [0, 0, 0, 0]; mo[ap] += t; mo[ap + 1]++;
+      if (ms(v.at) >= from62) { var dy = ser[k].d[dd] = ser[k].d[dd] || [0, 0, 0, 0]; dy[ap] += t; dy[ap + 1]++; }
     });
     var cons = {};
     R.contracts.forEach(function (c) { if (c.type === 'wt' && Orders.csv(c.hotel_ids).some(function (h) { return hotelIds.indexOf(h) !== -1; })) cons[c.con_id] = { id: c.con_id, name: (R.cons[c.con_id] || {}).name || '' }; });
     return {
       canMatch: MATCH_ROLES.indexOf(s.role) !== -1,
       loads: all.filter(function (v) { return v.status === 'pending' || ms(v.at) >= since; }).map(function (v) { return view_(v, R); }).sort(function (a, b) { return b.at - a.at; }),
-      vol: vol, cons: Object.keys(cons).map(function (k) { return cons[k]; })
+      ser: ser, m3: M3_PER_T, cons: Object.keys(cons).map(function (k) { return cons[k]; })
     };
   }
 
@@ -178,5 +185,5 @@ var Water = (function () {
     };
   }
 
-  return { seasonOf: seasonOf, login: login, boot: boot, submit: submit, staffBoot: staffBoot, conList: conList, match: match, statement: statement, MATCH_ROLES: MATCH_ROLES };
+  return { seasonOf: seasonOf, login: login, boot: boot, submit: submit, staffBoot: staffBoot, M3_PER_T: M3_PER_T, tonToM3_: tonToM3_, conList: conList, match: match, statement: statement, MATCH_ROLES: MATCH_ROLES };
 })();

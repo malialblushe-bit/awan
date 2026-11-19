@@ -1042,6 +1042,7 @@ t('شاحنات المياه: باركود بالرقم السري والموق�
   run(`Auth.changePassword(apiStaffLogin('fo.warif', '${fpw}').token, 'Front2026xx')`);
   const fo = run(`apiStaffLogin('fo.warif', 'Front2026xx')`).token;
   eq(run(`apiEngBoot('${fo}')`).water.canMatch, true);
+  const wb = run(`apiEngBoot('${fo}')`).water; eq(wb.m3, 1, 'معيار التحويل 1 طن = 1 م³'); eq(typeof wb.ser, 'object', 'سلسلة الاستهلاك');
   throws(`apiEngAct('${fo}', '${run(`Db.all('WorkOrders')[0].wo_id`)}', 'close', {})`, 'صلاحية');
   run(`apiSvcBoot('${fo}')`);
   const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
