@@ -54,9 +54,19 @@ var WT={st:{},pin:'',
   var pend=w.loads.filter(function(x){return x.status==='pending'&&inH(x)}),rest=w.loads.filter(function(x){return x.status!=='pending'&&inH(x)});
   var h='<div class="stack"><div class="row" style="flex-wrap:wrap;gap:10px;align-items:center"><h2 style="font-size:18px;margin:0">'+T('شاحنات المياه')+'</h2></div>';
   if(multi)h+='<div class="chips">'+[{id:'all',name:'كل الفنادق'}].concat(hs).map(function(x){return '<button class="chip'+(f.h===x.id?' on':'')+'" style="min-height:36px" onclick="WT.v.h=\''+x.id+'\';render()">'+esc(x.name)+'</button>'}).join('')+'</div>';
-  if(pend.length)h+='<div class="card stack" style="border-color:var(--gold)"><div class="row" style="flex-wrap:wrap"><h3 style="font-size:16px">'+(can?T('بانتظار مطابقتك'):T('بانتظار مطابقة مدير الفندق'))+' ('+pend.length+')</h3></div>'+(can?'<p class="small muted" style="margin:0">'+T('تحقق من كل رحلة ثم اعتمدها أو ارفضها.')+'</p>':'')+pend.map(function(x){return WT.row(x,can)}).join('')+'</div>';
+  if(pend.length)h+='<div class="card stack" style="border-color:var(--gold)"><div class="row" style="flex-wrap:wrap"><h3 style="font-size:16px">'+(can?T('بانتظار مطابقتك'):T('بانتظار مطابقة مدير الفندق'))+' ('+pend.length+')</h3></div>'+(can?'<p class="small muted" style="margin:0">'+T('تحقق من كل رحلة ثم اعتمدها أو ارفضها.')+'</p>':'')+pend.map(function(x){return WT.prow(x,can)}).join('')+'</div>';
   h+=WT.cons(w,f);
   h+=WT.days(rest,multi);
+  return h+'</div>'},
+ prow:function(x,can){
+  var multi=W.b.hotels.length>1,rj=WT.rj===x.id;
+  var h='<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bd);flex-wrap:wrap">'
+   +'<b style="font-size:20px;min-width:56px">'+x.size+' <span class="small muted">'+T('طن')+'</span></b>'
+   +'<div style="flex:1;min-width:150px"><div><b data-nt="1">'+esc(x.driver)+'</b>'+(x.dup?' <span class="pill st-late">'+T('مكرر محتمل')+'</span>':'')+'</div>'
+   +'<div class="small muted">'+(multi?esc(x.hotel)+' · ':'')+hm(x.at)+' · '+dmy(x.at)+(x.receipt?' · <span dir="ltr">'+esc(x.receipt)+'</span>':'')+'</div></div>';
+  if(can){
+   if(rj)h+='<div style="display:flex;gap:6px;flex-wrap:wrap;width:100%"><input id="wtrj" class="inp" style="flex:1;min-width:180px" placeholder="سبب الرفض"><button class="btn btn-p sm" style="background:#8E3A2E" onclick="WT.act([\''+x.id+'\'],false,$(\'#wtrj\').value)">تأكيد الرفض</button><button class="btn btn-o sm" onclick="WT.rj=null;render()">إلغاء</button></div>';
+   else h+='<div style="display:flex;gap:6px"><button class="btn btn-p sm" onclick="WT.act([\''+x.id+'\'],true)">اعتماد</button><button class="btn btn-o sm" onclick="WT.rj=\''+x.id+'\';render()">رفض</button></div>'}
   return h+'</div>'},
  dk:function(off){var t=new Date(Date.now()+3*3600e3+off*864e5);return t.toISOString().slice(0,10)},
  mk:function(off){var t=new Date(Date.now()+3*3600e3),d=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+off,1));return d.toISOString().slice(0,7)},
