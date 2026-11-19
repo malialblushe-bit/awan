@@ -1166,11 +1166,14 @@ function apiAdmDeleteContract(token, contractId) {
   return adm_(token, function () {
     var c = Db.get('Contracts', contractId);
     if (!c) throw new Error('العقد غير موجود.');
-    var hs = Orders.csv(c.hotel_ids), con = c.con_id;
+    var con = c.con_id;
+    // سجلات الفندق تتبع المتعهد لا العقد: الفندق الذي يغطيه عقد آخر للمتعهد نفسه تبقى سجلاته عليه، فلا تمنع الحذف (عقد مكرر)
+    var cover = {}; Db.all('Contracts', function (x) { return x.con_id === con && x.contract_id !== contractId; }).forEach(function (x) { Orders.csv(x.hotel_ids).forEach(function (h) { cover[h] = 1; }); });
+    var hs = Orders.csv(c.hotel_ids).filter(function (h) { return !cover[h]; });
     var T = ['WorkOrders', 'WorkOrdersArchive', 'Arrivals', 'CorrectiveActions', 'WasteVisits', 'WaterLoads', 'Tickets', 'OrgEvals', 'PestLogs', 'SupRatings', 'PcReports'];
     var used = function (mine) {
       var n = 0;
-      T.forEach(function (t) { n += Db.all(t, function (r) { return r.con_id === con && (!mine || !r.hotel_id || hs.indexOf(r.hotel_id) !== -1); }).length; });
+      T.forEach(function (t) { n += Db.all(t, function (r) { return r.con_id === con && (!mine || (r.hotel_id ? hs.indexOf(r.hotel_id) !== -1 : !Object.keys(cover).length)); }).length; });
       return n;
     };
     if (Db.all('Claims', function (r) { return r.contract_id === contractId; }).length || used(true)) throw new Error('عليه سجلات، فلا يُحذف. اتركه ينتهي أو جدّده.');

@@ -1523,6 +1523,11 @@ t('حذف عقد تجريبي (مؤقت): بلا سجلات يُحذف ومعه 
   eq(r.conDeleted, true); eq(run(`Db.all('Contractors').some(function(c){return c.name==='متعهد للحذف'})`), false);
   const ac = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'})[0].contract_id`);
   throws(`apiAdmDeleteContract('${adminTok}', '${ac}')`, 'عليه سجلات');
+  // عقد مكرر لنفس المتعهد والفندق: يُحذف رغم السجلات لأنها تبقى على العقد الآخر
+  run(`apiAdmSaveContract('${adminTok}', { name: 'مؤسسة التبريد', type: 'ac', hotel_ids: ['${HID}'], start: '${yesterday}', end: '${nextYear}', resp_normal: 30, resp_urgent: 15 })`);
+  const dup = run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'}).pop().contract_id`);
+  eq(run(`apiAdmDeleteContract('${adminTok}', '${dup}')`).conDeleted, false);
+  eq(run(`Db.all('Contracts').filter(function(c){return (Db.get('Contractors', c.con_id)||{}).name==='مؤسسة التبريد'}).length`), 1);
 });
 
 t('تهيئة الإطلاق: الجرد، ولا مسح بلا كلمة «إطلاق»، والمسح يفرغ التشغيلي فقط ويصفّر الترقيم (آخر فحص)', () => {
