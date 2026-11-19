@@ -54,15 +54,15 @@ var WT={st:{},pin:'',
   var pend=w.loads.filter(function(x){return x.status==='pending'&&inH(x)}),rest=w.loads.filter(function(x){return x.status!=='pending'&&inH(x)});
   var h='<div class="stack"><div class="row" style="flex-wrap:wrap;gap:10px;align-items:center"><h2 style="font-size:18px;margin:0">'+T('شاحنات المياه')+'</h2></div>';
   if(multi)h+='<div class="chips">'+[{id:'all',name:'كل الفنادق'}].concat(hs).map(function(x){return '<button class="chip'+(f.h===x.id?' on':'')+'" style="min-height:36px" onclick="WT.v.h=\''+x.id+'\';render()">'+esc(x.name)+'</button>'}).join('')+'</div>';
-  if(pend.length)h+='<div class="card stack" style="border-color:var(--gold)"><div class="row" style="flex-wrap:wrap"><h3 style="font-size:16px">'+(can?T('بانتظار مطابقتك'):T('بانتظار مطابقة مدير الفندق'))+' ('+pend.length+')</h3></div>'+(can?'<p class="small muted" style="margin:0">'+T('تحقق من كل رحلة ثم اعتمدها أو ارفضها.')+'</p>':'')+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px">'+pend.map(function(x){return WT.prow(x,can)}).join('')+'</div>'+'</div>';
+  if(pend.length)h+='<div class="card stack" style="border-color:var(--gold)"><div class="row" style="flex-wrap:wrap"><h3 style="font-size:16px">'+(can?T('بانتظار مطابقتك'):T('بانتظار مطابقة مدير الفندق'))+' ('+pend.length+')</h3></div>'+(can?'<p class="small muted" style="margin:0">'+T('تحقق من كل رحلة ثم اعتمدها أو ارفضها.')+'</p>':'')+'<style>.wt-pc{transition:transform .15s,box-shadow .15s,border-color .15s}.wt-pc:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.12);border-color:var(--gold)}@media (prefers-reduced-motion:reduce){.wt-pc,.wt-pc:hover{transition:none;transform:none}}</style><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px">'+pend.map(function(x){return WT.prow(x,can)}).join('')+'</div>'+'</div>';
   h+=WT.cons(w,f);
   h+=WT.days(rest,multi);
   return h+'</div>'},
  prow:function(x,can){
   var multi=W.b.hotels.length>1,rj=WT.rj===x.id,id='\''+x.id+'\'';
-  var h='<div class="card stack" style="gap:6px;padding:12px;'+(rj?'grid-column:1/-1;':'')+'"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:26px;line-height:1">'+x.size+'</b><span class="small muted">'+T('طن')+'</span>'+(x.dup?'<span class="pill st-late" style="margin-inline-start:auto">'+T('مكرر محتمل')+'</span>':'')+'</div>'
+  var h='<div class="card stack wt-pc" style="gap:6px;padding:12px;'+(rj?'grid-column:1/-1;':'')+'"><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:26px;line-height:1">'+x.size+'</b><span class="small muted">'+T('طن')+'</span>'+(x.dup?'<span class="pill st-late" style="margin-inline-start:auto">'+T('مكرر محتمل')+'</span>':'')+'</div>'
    +'<b data-nt="1" style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.driver)+'</b>'
-   +'<div class="small muted">'+(multi?esc(x.hotel)+' · ':'')+hm(x.at)+' · '+dmy(x.at)+'</div>'
+   +'<div style="font-size:15px;font-weight:700;color:var(--navy)">'+dmy(x.at)+' · '+hm(x.at)+'</div>'+(multi?'<div class="small muted">'+esc(x.hotel)+'</div>':'')
    +(x.receipt?'<div class="small muted" dir="ltr">'+esc(x.receipt)+'</div>':'');
   if(can){
    if(rj)h+='<div style="display:flex;gap:6px;flex-wrap:wrap"><input id="wtrj" class="inp" style="flex:1;min-width:160px" placeholder="'+T('سبب الرفض')+'"><button class="btn btn-p sm" style="background:#8E3A2E" onclick="WT.act(['+id+'],false,$(\'#wtrj\').value)">'+T('تأكيد الرفض')+'</button><button class="btn btn-o sm" onclick="WT.rj=null;render()">'+T('إلغاء')+'</button></div>';
