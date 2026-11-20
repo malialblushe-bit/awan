@@ -137,7 +137,7 @@ var PAY={b:null,o:{by:'con',val:'due',per:'y',ft:'',cell:''},rj:'',f:{},
    $('#app').innerHTML=hdr('',right)+'<div class="wrap">'+PAY.view()+'</div>'+(W.modal?W.modal():'');tr(document.getElementById('app'));return}
   wr();if(!S.tok||!W.b||W.must||['engineer','gm','admin','management'].indexOf(W.b.me.role)===-1)return;
   if(W.tab==='pay'){var wrap=document.querySelector('#app .wrap');if(wrap){wrap.innerHTML=PAY.view();tr(wrap)}}
-  var nav=document.querySelector('#app .topnav');if(nav&&!nav.querySelector('[data-pay]')){var bt=document.createElement('button');bt.setAttribute('data-pay','1');var n=PAY.b?PAY.count():0;bt.textContent=T('المطالبات')+(n?' ('+n+')':'');if(W.tab==='pay'){[].forEach.call(nav.querySelectorAll('button'),function(x){x.className=''});bt.className='on'}
+  var nav=document.querySelector('#app .topnav');if(nav&&!nav.querySelector('[data-pay]')){var bt=document.createElement('button');bt.setAttribute('data-pay','1');var n=PAY.b?PAY.count():0;bt.textContent=T('الوفاء بالمستحقات')+(n?' ('+n+')':'');if(W.tab==='pay'){[].forEach.call(nav.querySelectorAll('button'),function(x){x.className=''});bt.className='on'}
    bt.onclick=function(){W.tab='pay';W.modal=null;render();PAY.soft()};var rep=nav.querySelector('[data-rep]');nav.insertBefore(bt,rep||null)}}})();
 // مدير الإشراف: تبويب «المطالبات»
 SV.payView=function(){return PAY.view()};
