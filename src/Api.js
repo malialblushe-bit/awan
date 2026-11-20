@@ -103,10 +103,10 @@ function elevatorsOf_(hotelId) {
 }
 
 /** مرفقات التقارير: صورة أو PDF (حتى 3) في مجلد الصور، وتعيد معرّفات Drive */
-function saveFiles_(list, prefix) {
+function saveFiles_(list, prefix, max) {
   if (!list || !list.length) return [];
   var folder = DriveApp.getFolderById(Db.setting('photos_folder_id'));
-  return list.slice(0, 3).map(function (dataUrl, i) {
+  return list.slice(0, max || 3).map(function (dataUrl, i) {
     var m = String(dataUrl).match(/^data:(image\/[\w.+-]+|application\/pdf);base64,(.+)$/);
     if (!m) throw new Error('صيغة المرفق غير مقبولة: صورة أو PDF.');
     var ext = m[1] === 'application/pdf' ? '.pdf' : '.jpg';
@@ -358,7 +358,7 @@ function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['contractor']);
   d = d || {};
   if (s.web) {
-    if (action !== 'submit' && action !== 'tech') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
+    if (action !== 'submit' && action !== 'tech' && action !== 'paccept' && action !== 'pmod') throw new Error('هذا الإجراء من الفندق فقط: امسح باركود أعوان.');
   }
   // حفظ الملفات في Drive قبل القفل
   d.photos = savePhotos_(d.photos, woId || 'NEW');
@@ -376,6 +376,8 @@ function apiConAct(token, action, woId, d) { BOOT_LITE_ = true;
       Kpi.touch(arr); Tg.refresh(arr);
       return { result: { ids: arr, msg: 'سُجّل وصولك' } };
     }
+    if (action === 'paccept') { Orders.pjAccept(s, woId, false); return { result: { msg: 'سُجّل استلامك لأمر العمل' } }; }
+    if (action === 'pmod') { Orders.pjModReq(s, woId, d.note); return { result: { msg: 'أُرسل طلب التعديل للمهندس' } }; }
     if (action === 'submit') res = Orders.conSubmit(s, woId, d);
     else if (action === 'new') res = Orders.conNew(s, d);
     else if (action === 'tech') res = Orders.techReport(s, d);
@@ -461,6 +463,12 @@ function apiEngBoot(token) {
 
 function apiEngAct(token, woId, action, d) { BOOT_LITE_ = true;
   var s = Auth.need(token, ['admin', 'engineer']);
+  if (action === 'pdoc' || action === 'pedit') { d = d || {}; d.docs = pjDocFiles_(d.docs, 'PRJDOC-' + woId); }
+  if (action === 'pedit') return act_(function () {
+    var r = Orders.projEdit(s, woId, d);
+    if (r.c && r.before) ctrLog_(token, r.c, 'terms', r.before, r.after, 'تعديل أمر العمل ' + woId + ' قبل الاستلام' + (r.req ? ': ' + r.req : ''), { noReason: true });
+    return {};
+  }, function () { return engBoot_(s); });
   return act_(function () {
     d = d || {};
     var to = Orders.engAct(s, woId, action, d);
@@ -522,10 +530,19 @@ function apiEngFind(token, woId) {
 }
 
 /** أمر عمل مشروع: المهندس (للأعمال الفنية) ومشرف النظام */
+/** المستندات المرجعية لأمر عمل المشروع: تُحفظ في Drive قبل القفل (حتى 8 ملفات) */
+function pjDocFiles_(docs, prefix) {
+  docs = (docs || []).filter(function (x) { return x && x.data; }).slice(0, 8);
+  if (!docs.length) return [];
+  var ids = saveFiles_(docs.map(function (x) { return x.data; }), prefix, 8);
+  return docs.map(function (x, i) { return { f: ids[i], n: x.n, t: x.t, v: x.v }; });
+}
+
 function apiEngProject(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   d = d || {};
   var photos = d.photos && d.photos.length ? savePhotos_(d.photos, 'PRJ') : [];
+  d.docs = pjDocFiles_(d.docs, 'PRJDOC');
   var out = null;
   var res = act_(function () {
     out = Orders.projCreate(s, Object.assign({}, d, { photos: photos }));

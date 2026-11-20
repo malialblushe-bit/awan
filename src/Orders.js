@@ -179,6 +179,7 @@ var Orders = (function () {
     }
     var oc = d.outcome;
     if ((OUTCOMES[o.type] || []).indexOf(oc) === -1) throw new Error('اختر النتيجة.');
+    if (o.type === 'pj' && o.supply && !o.accepted_at) throw new Error('استلم أمر العمل أولاً: اقرأ النطاق والشروط ثم اضغط «استلمت أمر العمل».');
     if (oc === 'lead' && (s.web || o.status === 'lead')) throw new Error('الإرسال لقائد الفريق من الفني في الموقع.');
     if (o.status === 'lead' && (oc === 'visit' || oc === 'report')) throw new Error('استكمل التقرير: تم الإصلاح أو يحتاج قطعة أو سليم.');
     // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
@@ -358,6 +359,21 @@ var Orders = (function () {
     // عرض سعر الاستبدال الرئيسي (كمبروسر/وحدة خارجية) لعملية رُفعت بلا عرض: يُدخله المهندس في أي مرحلة، فيُسعَّر في الكشف
     var isRepl = o.type === 'ac' && parse_(o.report, []).some(function (r) { return r && r.outcome === 'comp'; });
     var hasQ = o.quote !== '' && o.quote != null && Number(o.quote) > 0;
+    if (action === 'paccept') { pjAccept(s, woId, true); return o.status; }
+    if (action === 'pkeep') {
+      var mm = parse_(o.mod, null); if (!mm || mm.done) throw new Error('لا طلب تعديل مفتوح.');
+      var rp = String(d.note || '').trim(); if (!rp) throw new Error('اكتب ردك على طلب التعديل.');
+      mm.reply = rp.slice(0, 600); mm.rat = t.getTime(); mm.done = 1;
+      Db.update('WorkOrders', woId, { mod: JSON.stringify(mm) }); log_(woId, me ? me.name : s.id, 'modkeep', o.status, o.status, rp);
+      return o.status;
+    }
+    if (action === 'pdoc') {
+      if (o.type !== 'pj') throw new Error('المستندات لأوامر عمل المشاريع.');
+      if (!(d.docs || []).length) throw new Error('اختر الملف.');
+      Db.update('WorkOrders', woId, { docs: JSON.stringify(projDocs_(d.docs, parse_(o.docs, []))) });
+      log_(woId, me ? me.name : s.id, 'doc', o.status, o.status, '');
+      return o.status;
+    }
     if (action === 'cquote') {
       if (!isRepl) throw new Error('هذه العملية ليست استبدالاً بعرض سعر.');
       var qa = Number(String(d.amount || '').replace(/[,،\s]/g, ''));
@@ -456,6 +472,68 @@ var Orders = (function () {
     return Math.round(got / tot * 100) + '%';
   }
 
+  /** شروط العمل والتوريد والمواد والأدوات (قرار صاحب المشروع 21 نوفمبر) */
+  var SUPPLY_ = { con: 'المنفذ', own: 'نحن', mix: 'مشترك' };
+  function projSpec_(d) {
+    var tx = function (v, n) { return String(v == null ? '' : v).trim().slice(0, n || 160); };
+    var terms = (d.terms || []).map(function (x) { return tx(x); }).filter(String).slice(0, 20);
+    if (!SUPPLY_[d.supply]) throw new Error('حدّد من يورّد المواد: المنفذ أو نحن أو مشترك.');
+    var by = function (v) { return SUPPLY_[v] && v !== 'mix' ? v : (d.supply === 'own' ? 'own' : 'con'); };
+    var mats = (d.mats || []).filter(function (r) { return r && tx(r.n); }).slice(0, 60).map(function (r) { return { n: tx(r.n, 100), s: tx(r.s), q: tx(r.q, 40), by: by(r.by) }; });
+    var tools = (d.tools || []).filter(function (r) { return r && tx(r.n); }).slice(0, 40).map(function (r) { return { n: tx(r.n, 100), by: r.by === 'own' ? 'own' : 'con' }; });
+    return { terms: JSON.stringify(terms), supply: d.supply, mats: JSON.stringify(mats), tools: JSON.stringify(tools) };
+  }
+  /** المستندات المرجعية: d = [{f: معرّف الملف في Drive, n, t, v}] */
+  function projDocs_(list, prev) {
+    var T = ['مخطط', 'مواصفات', 'جدول كميات', 'عرض سعر', 'أخرى'], at = now_().getTime();
+    return (prev || []).concat((list || []).filter(function (x) { return x && x.f; }).map(function (x) {
+      var t = T.indexOf(x.t) === -1 ? 'أخرى' : x.t;
+      return { f: x.f, n: String(x.n || t).trim().slice(0, 80) || t, t: t, v: t === 'عرض سعر' ? false : x.v !== false, at: at };
+    }));
+  }
+  /** استلام المنفذ لأمر العمل وموافقته على النطاق (أو «ورقياً» من المهندس) */
+  function pjAccept(s, woId, paper) {
+    var o = Db.get('WorkOrders', woId);
+    if (!o || o.type !== 'pj') throw new Error('أمر العمل غير موجود.');
+    if (!paper && o.con_id !== s.id) throw new Error('أمر العمل غير موجود.');
+    if (o.accepted_at) throw new Error('استُلم أمر العمل من قبل.');
+    var who = paper ? 'ورقياً · ' + ((Db.get('Users', s.id) || {}).name || '') : ((Db.get('Contractors', s.id) || {}).name || '') + (s.lead_name ? ' · ' + s.lead_name : '');
+    Db.update('WorkOrders', woId, { accepted_at: now_(), accepted_by: who });
+    log_(woId, who, 'accept', o.status, o.status, '');
+  }
+
+  /** طلب تعديل من المنفذ قبل الاستلام (قبل الاستلام لم يُتفق بعد، فالتعديل بلا أمر تغيير) */
+  function pjModReq(s, woId, note) {
+    var o = Db.get('WorkOrders', woId);
+    if (!o || o.type !== 'pj' || o.con_id !== s.id) throw new Error('أمر العمل غير موجود.');
+    if (o.accepted_at) throw new Error('استُلم أمر العمل: أي تعديل بعده أمر تغيير من المهندس.');
+    note = String(note || '').trim(); if (!note) throw new Error('اكتب التعديل المطلوب.');
+    Db.update('WorkOrders', woId, { mod: JSON.stringify({ req: note.slice(0, 600), at: now_().getTime() }) });
+    log_(woId, (Db.get('Contractors', s.id) || {}).name || s.id, 'modreq', o.status, o.status, note);
+  }
+  /** تعديل أمر العمل من المهندس قبل الاستلام: النموذج نفسه؛ يعيد {before, after} لعقد المشروع لسجل التعديلات */
+  function projEdit(s, woId, d) {
+    var o = Db.get('WorkOrders', woId), me = Db.get('Users', s.id) || {};
+    if (!o || o.type !== 'pj') throw new Error('أمر العمل غير موجود.');
+    if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(o.hotel_id) === -1) throw new Error('هذه العملية ليست ضمن فنادقك.');
+    if (o.accepted_at) throw new Error('استُلم أمر العمل: التعديل بعده أمر تغيير (لاحقاً).');
+    if (o.status !== 'assigned') throw new Error('بدأ التنفيذ: لا يُعدَّل أمر العمل.');
+    var title = String(d.title || '').trim(); if (!title) throw new Error('اكتب عنوان المشروع.');
+    var day = /^\d{4}-\d{2}-\d{2}$/;
+    if (!day.test(String(d.start || '')) || !day.test(String(d.end || '')) || d.end < d.start) throw new Error('حدّد مدة المشروع: من تاريخ إلى تاريخ.');
+    var amt = Number(String(d.amount || '').replace(/[,،\s]/g, '')); if (!(amt > 0)) throw new Error('اكتب قيمة المشروع المتفق عليها بالريال.');
+    var acts = projActs_(d.acts, d.start, d.end), spec = projSpec_(d), rq = String(d.req_name || '').trim();
+    var c = Db.get('Contracts', o.equip), before = c ? { start: dayStr_(new Date(c.start)), end: dayStr_(new Date(c.end)), value: String(c.value) } : null;
+    if (c) Db.update('Contracts', c.contract_id, { start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), value: amt });
+    var m = parse_(o.mod, null);
+    Db.update('WorkOrders', woId, { symptom: title, description: String(d.description || '').trim(), floor_id: d.floor_id || '', room: d.room || '', quote: amt,
+      acts: JSON.stringify(acts), terms: spec.terms, supply: spec.supply, mats: spec.mats, tools: spec.tools,
+      requester: rq || o.issued_by || me.name || '', req_title: rq ? String(d.req_title || '').trim() : (o.issued_title || userTitle_(me, s.role)),
+      docs: JSON.stringify(projDocs_(d.docs, parse_(o.docs, []))), mod: m ? JSON.stringify({ req: m.req, at: m.at, reply: 'عُدّل أمر العمل', rat: now_().getTime(), done: 1 }) : '' });
+    log_(woId, me.name || s.id, 'edit', o.status, o.status, m ? m.req : '');
+    return { c: c, before: before, after: { start: d.start, end: d.end, value: String(amt) }, req: m ? m.req : '' };
+  }
+
   function projActs_(x, start, end) {
     x = x || {};
     var pk = {}, a = [], day = /^\d{4}-\d{2}-\d{2}$/;
@@ -492,7 +570,7 @@ var Orders = (function () {
     if (!day.test(String(d.start || '')) || !day.test(String(d.end || '')) || d.end < d.start) throw new Error('حدّد مدة المشروع: من تاريخ إلى تاريخ.');
     var amt = Number(String(d.amount || '').replace(/[,،\s]/g, '')); if (!(amt > 0)) throw new Error('اكتب قيمة المشروع المتفق عليها بالريال.');
     // النطاق نشاطاً نشاطاً: لكل نشاط معيار قبوله، أو معيار حزمته إن جُمعت الأنشطة في حزم (مربط الفرس في أمر العمل)
-    var acts = projActs_(d.acts, d.start, d.end);
+    var acts = projActs_(d.acts, d.start, d.end), spec = projSpec_(d);
     var conId = d.con_id || '', pin = null, con;
     if (conId) { con = Db.get('Contractors', conId); if (!con) throw new Error('المتعهد غير موجود.'); }
     else {
@@ -508,7 +586,8 @@ var Orders = (function () {
     var r = create({ hotel_id: d.hotel_id, type: 'pj', kind: 'project', source: 'engineer', con_id: conId, floor_id: d.floor_id || '', room: d.room || '',
       symptom: title, description: String(d.description || '').trim(), photos: d.photos || [], requester: rq || me.name || '' }, me.name || s.id);
     Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id, acts: JSON.stringify(acts),
-      req_title: rq ? String(d.req_title || '').trim() : myTitle, issued_by: me.name || '', issued_title: myTitle });
+      req_title: rq ? String(d.req_title || '').trim() : myTitle, issued_by: me.name || '', issued_title: myTitle,
+      terms: spec.terms, supply: spec.supply, mats: spec.mats, tools: spec.tools, docs: JSON.stringify(projDocs_(d.docs, [])) });
     return { id: r.order.wo_id, contract_id: ctr.contract_id, con_id: conId, pin: pin, isNew: !!pin };
   }
 
@@ -541,10 +620,14 @@ var Orders = (function () {
   }
 
   /** بيانات أمر عمل المشروع للطباعة: المدة من عقد المشروع، والطالب والمُصدِر بوظيفتيهما */
-  function pjInfo_(R, o) {
+  function pjInfo_(R, o, forCon) {
     var c = null; for (var i = 0; i < R.contracts.length; i++) if (R.contracts[i].contract_id === o.equip) { c = R.contracts[i]; break; }
     var d = function (x) { return x ? Utilities.formatDate(new Date(x), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
-    return { from: c ? d(c.start) : '', to: c ? d(c.end) : '', req_title: o.req_title || '', by: o.issued_by || '', by_title: o.issued_title || '' };
+    var docs = parse_(o.docs, []).filter(function (x) { return !forCon || x.v; });
+    return { from: c ? d(c.start) : '', to: c ? d(c.end) : '', req_title: o.req_title || '', by: o.issued_by || '', by_title: o.issued_title || '',
+      terms: parse_(o.terms, []), supply: o.supply || '', mats: parse_(o.mats, []), tools: parse_(o.tools, []), docs: docs,
+      acc: o.accepted_at ? new Date(o.accepted_at).getTime() : null, accBy: o.accepted_by || '', needAcc: !!o.supply && !o.accepted_at,
+      mod: parse_(o.mod, null), floor_id: o.floor_id || '', room: String(o.room || ''), description: o.description || '' };
   }
 
   function contractOf_(R, o) {
@@ -587,7 +670,7 @@ var Orders = (function () {
       con_id: o.con_id, con: c.name || '', status: st, priority: o.priority,
       floor_id: o.floor_id, room: String(o.room || ''), equip: o.equip || '', loc: loc(R, o),
       units: room ? csv(room.ac_units) : [], symptom: o.symptom || '', title: o.symptom || (o.kind === 'report' ? 'تقرير فني' : 'طلب صيانة'),
-      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '', acts: o.type === 'pj' ? parse_(o.acts, null) : undefined, pj: o.type === 'pj' ? pjInfo_(R, o) : undefined,
+      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '', acts: o.type === 'pj' ? parse_(o.acts, null) : undefined, pj: o.type === 'pj' ? pjInfo_(R, o, forCon) : undefined,
       photos: csv(o.photos), reports: reports, quote: forCon ? '' : (o.quote || ''),
       decision: o.decision || '', decision_note: o.decision_note || '', note: note,
       reject_reason: (o.status === 'in_progress' || o.status === 'rejected') ? (o.reject_reason || '') : '',
@@ -606,6 +689,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, leave: leave, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, projCreate: projCreate, userTitle: userTitle_, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
+    engAct: engAct, engCreate: engCreate, projCreate: projCreate, pjAccept: pjAccept, pjModReq: pjModReq, projEdit: projEdit, userTitle: userTitle_, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();

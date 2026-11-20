@@ -1586,12 +1586,13 @@ t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع�
   throws(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'بلاط', name: 'مؤسسة البلاط', start: '${today}', end: '${nextYear}' })`, 'قيمة');
   const ACTS = "{ pk: { 'التشطيب': 'لا فراغات تحت البلاط عند الطرق، وفواصل منتظمة 3 مم' }, a: [{ p: 'الإزالة', n: 'إزالة البلاط القديم', c: 'السطح نظيف خالٍ من البقايا' }, { p: 'التشطيب', n: 'تركيب البلاط الجديد' }, { p: 'التشطيب', n: 'الترويب والتنظيف' }] }";
   throws(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'بلاط', name: 'مؤسسة البلاط', start: '${yesterday}', end: '${nextYear}', amount: 100, acts: { a: [{ n: 'إزالة' }] } })`, 'معيار');
-  const r = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'تجديد بلاط ممر الدور 5', name: 'مؤسسة البلاط الحديث', start: '${yesterday}', end: '${nextYear}', amount: '18,500', description: 'إزالة وتركيب', acts: ${ACTS} })`);
+  const r = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', supply: 'mix', terms: ['تنظيف الموقع يومياً', 'العمل من 9 ص إلى 5 م'], mats: [{ n: 'بلاط بورسلين', s: '60×60 رمادي', q: '120 م²', by: 'con' }, { n: 'روبة', s: 'إيبوكسي', q: '15 كجم', by: 'own' }, { n: '' }], tools: [{ n: 'سقالة', by: 'own' }], title: 'تجديد بلاط ممر الدور 5', name: 'مؤسسة البلاط الحديث', start: '${yesterday}', end: '${nextYear}', amount: '18,500', description: 'إزالة وتركيب', acts: ${ACTS} })`);
   eq(JSON.parse(run(`Db.get('WorkOrders', '${r.id}').acts`)).a.length, 3);
   if (!r.pin || !r.id) throw new Error('pin/id');
   const o = run(`Db.get('WorkOrders', '${r.id}')`); eq(o.type, 'pj'); eq(Number(o.quote), 18500); eq(o.status, 'assigned');
   eq(o.issued_title, 'مهندس الصيانة', 'المُصدِر بوظيفة الدور حين لا مسمى'); eq(o.requester, o.issued_by, 'بلا طالب = المُصدِر'); eq(o.req_title, 'مهندس الصيانة');
-  const rq = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'دهان', name: 'مؤسسة الدهانات', start: '${yesterday}', end: '${nextYear}', amount: 900, req_name: 'سالم', req_title: 'مدير الفندق', acts: ${ACTS} })`);
+  const rq = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', supply: 'con', title: 'دهان', name: 'مؤسسة الدهانات', start: '${yesterday}', end: '${nextYear}', amount: 900, req_name: 'سالم', req_title: 'مدير الفندق', acts: ${ACTS} })`);
+  run(`apiEngAct('${engTok}', '${rq.id}', 'paccept', {})`); eq(String(run(`Db.get('WorkOrders', '${rq.id}').accepted_by`)).indexOf('ورقياً'), 0, 'الاستلام الورقي');
   const o2 = run(`Db.get('WorkOrders', '${rq.id}')`); eq(o2.requester, 'سالم'); eq(o2.req_title, 'مدير الفندق');
   const pv = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === rq.id); eq(pv.pj.from, yesterday, 'المدة من عقد المشروع'); eq(pv.pj.req_title, 'مدير الفندق');
   // المنفذ يدخل بالباركود ويسجّل وصوله، ثم زيارة تقدم وتسليم
@@ -1599,6 +1600,11 @@ t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع�
   const jb = run(`apiConBoot('${tk}')`).jobs.find(j => j.id === r.id); if (!jb) throw new Error('job visible'); eq(jb.quote, '', 'القيمة لا تظهر للمنفذ');
   eq(jb.acts && jb.acts.a.length, 3, 'المنفذ يرى النطاق ومعايير القبول');
   run(`apiConAct('${tk}', 'arrive', null, { ids: ['${r.id}'] })`);
+  throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', done: ['1. x'], photos: ['data:image/jpeg;base64,AAAA'] })`, 'استلم أمر العمل');
+  { const pv = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === r.id).pj; eq(pv.needAcc, true); eq(pv.mats.length, 2, 'المواد بلا الصف الفارغ'); eq(pv.mats[1].by, 'own'); eq(pv.tools[0].n, 'سقالة'); eq(pv.terms.length, 2); }
+  run(`apiConAct('${tk}', 'paccept', '${r.id}', {})`);
+  throws(`apiConAct('${tk}', 'paccept', '${r.id}', {})`, 'من قبل');
+  eq(!!run(`Db.get('WorkOrders', '${r.id}').accepted_at`), true, 'استلام المنفذ');
   throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', done: ['1. x'] })`, 'صورة');
   run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', done: ['1. x', '3. y'], photos: ['data:image/jpeg;base64,AAAA'] })`);
   { const ac = JSON.parse(run(`Db.get('WorkOrders', '${r.id}').acts`)); eq(!!ac.a[0].done && !ac.a[1].done && !!ac.a[2].done, true, 'الأنشطة المنجزة تُعلَّم');
@@ -1614,7 +1620,7 @@ t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع�
   run(`Db.update('Contracts', Db.get('WorkOrders', '${r.id}').equip, { end: new Date(Date.now() - 2 * 864e5), start: new Date(Date.now() - 30 * 864e5) })`);
   throws(`apiConLogin('WARIF2', '${r.pin}')`, 'عقد ساري');
   // المنفذ نفسه لمشروع آخر: يُربط بسجله، بلا رقم جديد
-  const r2 = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'بلاط الدور 6', name: 'مؤسسه البلاط الحديث', start: '${today}', end: '${nextYear}', amount: 9000, acts: { a: [{ n: 'تركيب', c: 'مستوٍ' }] } })`);
+  const r2 = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', supply: 'con', title: 'بلاط الدور 6', name: 'مؤسسه البلاط الحديث', start: '${today}', end: '${nextYear}', amount: 9000, acts: { a: [{ n: 'تركيب', c: 'مستوٍ' }] } })`);
   eq(r2.pin, null); eq(run(`Db.get('WorkOrders', '${r2.id}').con_id`), run(`Db.get('WorkOrders', '${r.id}').con_id`));
 });
 

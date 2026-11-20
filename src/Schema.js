@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 41;
+var SCHEMA_VERSION = 42;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -94,7 +94,7 @@ var SCHEMA = [
     ['tg_msg', 'رسالة تيليجرام'], ['claimed_by', 'استلمه (الفني)'], ['claimed_at', 'وقت الاستلام'], ['tg_uid', 'معرّف الفني في تيليجرام'], ['tg_reminded', 'نُبّه لعدم الاستلام'],
     ['att', 'التقارير الفنية للمتعهد (ملفات Drive)'], ['lead_at', 'وقت إنهاء الفني وإرساله لقائد الفريق'],
      ['acts', 'أمر عمل المشروع: النطاق نشاطاً نشاطاً (JSON: {pk: {الحزمة: معيارها}, a: [{p, n, c, d}]})'],
-     ['req_title', 'وظيفة طالب أمر العمل'], ['issued_by', 'مُصدِر أمر العمل'], ['issued_title', 'وظيفة مُصدِر أمر العمل']] },
+     ['req_title', 'وظيفة طالب أمر العمل'], ['terms', 'شروط العمل في الفندق (JSON: قائمة نصوص)'], ['supply', 'توريد المواد: con المنفذ · own نحن · mix مشترك'], ['mats', 'المواد (JSON: [{n, s, q, by}])'], ['tools', 'الأدوات والمعدات (JSON: [{n, by}])'], ['docs', 'المستندات المرجعية (JSON: [{f, n, t, v, at}])'], ['accepted_at', 'استلام المنفذ لأمر العمل'], ['accepted_by', 'من استلم (المنفذ أو «ورقياً» باسم المهندس)'], ['mod', 'طلب تعديل قبل الاستلام (JSON: {req, at, reply, rat})'], ['issued_by', 'مُصدِر أمر العمل'], ['issued_title', 'وظيفة مُصدِر أمر العمل']] },
 
   { name: 'WOLog', cols: [
     ['log_id', 'المعرّف'], ['wo_id', 'العملية'], ['at', 'الوقت'], ['actor', 'الفاعل'],
