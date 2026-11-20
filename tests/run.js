@@ -1590,6 +1590,10 @@ t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع�
   eq(JSON.parse(run(`Db.get('WorkOrders', '${r.id}').acts`)).a.length, 3);
   if (!r.pin || !r.id) throw new Error('pin/id');
   const o = run(`Db.get('WorkOrders', '${r.id}')`); eq(o.type, 'pj'); eq(Number(o.quote), 18500); eq(o.status, 'assigned');
+  eq(o.issued_title, 'مهندس الصيانة', 'المُصدِر بوظيفة الدور حين لا مسمى'); eq(o.requester, o.issued_by, 'بلا طالب = المُصدِر'); eq(o.req_title, 'مهندس الصيانة');
+  const rq = run(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'دهان', name: 'مؤسسة الدهانات', start: '${yesterday}', end: '${nextYear}', amount: 900, req_name: 'سالم', req_title: 'مدير الفندق', acts: ${ACTS} })`);
+  const o2 = run(`Db.get('WorkOrders', '${rq.id}')`); eq(o2.requester, 'سالم'); eq(o2.req_title, 'مدير الفندق');
+  const pv = run(`apiEngBoot('${engTok}')`).orders.find(x => x.id === rq.id); eq(pv.pj.from, yesterday, 'المدة من عقد المشروع'); eq(pv.pj.req_title, 'مدير الفندق');
   // المنفذ يدخل بالباركود ويسجّل وصوله، ثم زيارة تقدم وتسليم
   const tk = run(`apiConLogin('WARIF2', '${r.pin}')`).token;
   const jb = run(`apiConBoot('${tk}')`).jobs.find(j => j.id === r.id); if (!jb) throw new Error('job visible'); eq(jb.quote, '', 'القيمة لا تظهر للمنفذ');

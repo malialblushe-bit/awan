@@ -756,7 +756,7 @@ function admBoot_(part) {
       };
     }),
     users: part ? undefined : Db.all('Users').map(function (u) {
-      return { id: u.user_id, name: u.name, role: u.role, username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
+      return { id: u.user_id, name: u.name, role: u.role, title: u.title || '', username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
         pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null,
         pending: credPending_(u), sentAt: u.sent_at ? new Date(u.sent_at).getTime() : null };
     }),
@@ -1382,6 +1382,7 @@ function apiAdmAddUser(token, d) {
   return adm_(token, function () {
     if (!String(d.name || '').trim()) throw new Error('اكتب الاسم.');
     var r = Auth.createUser(d.name, d.role, d.username, emails_(d.email)[0] || '', (d.hotel_ids || []).join(','));
+    if (String(d.title || '').trim()) { Db.update('Users', r.user.user_id, { title: String(d.title).trim() }); r.user.title = String(d.title).trim(); }
     if (!r.user.email) return { password: r.password, sup: !r.password };
     // له بريد: تُرسل بيانات الدخول له، ولا تظهر كلمة المرور على الشاشة إلا إن تعذّر الإرسال
     try { Mail.send(userCredMsg_(r.user, r.password), '', '', null); Db.update('Users', r.user.user_id, { sent_at: new Date() }); return { mailTo: r.user.email, sup: !r.password }; }
@@ -1396,6 +1397,15 @@ function apiAdmSaveUserEmail(token, userId, email) {
     if (e.length > 1) throw new Error('بريد واحد للمستخدم.');
     if (Auth.emailTaken(e[0], userId)) throw new Error('البريد مسجل لمستخدم آخر.');
     Db.update('Users', userId, { email: e[0] || '' });
+    return {};
+  });
+}
+
+/** المسمى الوظيفي للمستخدم (يظهر على أوامر العمل المطبوعة)؛ فارغ = وظيفة الدور */
+function apiAdmSaveUserTitle(token, userId, title) {
+  return adm_(token, function () {
+    if (!Db.get('Users', userId)) throw new Error('المستخدم غير موجود.');
+    Db.update('Users', userId, { title: String(title || '').trim() });
     return {};
   });
 }

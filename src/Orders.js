@@ -457,6 +457,10 @@ var Orders = (function () {
 
   /** أمر عمل مشروع (قرار صاحب المشروع 20 نوفمبر): عمل محدد النطاق والمدة لمتعهد مسجل أو لمنفذ جديد.
    *  المنفذ يُعطى عقداً من نوع «مشروع» بمدة المشروع وقيمته، فيدخل برقمه طوال المدة ويتوقف دخوله تلقائياً بعدها. */
+  var ROLE_T_ = { admin: 'مشرف النظام', engineer: 'مهندس الصيانة', management: 'الإدارة', gm: 'مدير الفندق', om: 'مدير التشغيل', duty: 'المدير المناوب', fo: 'مشرف المكاتب الأمامية', supmgr: 'مدير الإشراف', sup: 'المشرف الميداني', fin: 'المالية' };
+  /** المسمى الوظيفي من الحساب، وإلا وظيفة الدور */
+  function userTitle_(u, role) { return String((u && u.title) || '').trim() || ROLE_T_[role || (u && u.role)] || ''; }
+
   function projCreate(s, d) {
     var me = Db.get('Users', s.id) || {};
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
@@ -477,9 +481,12 @@ var Orders = (function () {
       conId = con.con_id;
     }
     var ctr = Db.insert('Contracts', { con_id: conId, type: 'pj', hotel_ids: d.hotel_id, start: new Date(d.start + 'T00:00:00'), end: new Date(d.end + 'T00:00:00'), alert_days: 7, value: amt, created_at: now_() });
+    // المُصدِر = المهندس من حسابه (الاسم والمسمى)، والطالب من يكتبه المهندس، وإلا فالمُصدِر نفسه
+    var myTitle = userTitle_(me, s.role), rq = String(d.req_name || '').trim();
     var r = create({ hotel_id: d.hotel_id, type: 'pj', kind: 'project', source: 'engineer', con_id: conId, floor_id: d.floor_id || '', room: d.room || '',
-      symptom: title, description: String(d.description || '').trim(), photos: d.photos || [], requester: me.name || '' }, me.name || s.id);
-    Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id, acts: JSON.stringify(acts) });
+      symptom: title, description: String(d.description || '').trim(), photos: d.photos || [], requester: rq || me.name || '' }, me.name || s.id);
+    Db.update('WorkOrders', r.order.wo_id, { quote: amt, equip: ctr.contract_id, acts: JSON.stringify(acts),
+      req_title: rq ? String(d.req_title || '').trim() : myTitle, issued_by: me.name || '', issued_title: myTitle });
     return { id: r.order.wo_id, contract_id: ctr.contract_id, con_id: conId, pin: pin, isNew: !!pin };
   }
 
@@ -509,6 +516,13 @@ var Orders = (function () {
       if (r.kind !== 'facility' && !rooms[r.hotel_id + '|' + String(r.number)]) rooms[r.hotel_id + '|' + String(r.number)] = r;
     });
     return { floors: floors, hotels: hotels, cons: cons, rooms: rooms, contracts: Db.all('Contracts') };
+  }
+
+  /** بيانات أمر عمل المشروع للطباعة: المدة من عقد المشروع، والطالب والمُصدِر بوظيفتيهما */
+  function pjInfo_(R, o) {
+    var c = null; for (var i = 0; i < R.contracts.length; i++) if (R.contracts[i].contract_id === o.equip) { c = R.contracts[i]; break; }
+    var d = function (x) { return x ? Utilities.formatDate(new Date(x), 'Asia/Riyadh', 'yyyy-MM-dd') : ''; };
+    return { from: c ? d(c.start) : '', to: c ? d(c.end) : '', req_title: o.req_title || '', by: o.issued_by || '', by_title: o.issued_title || '' };
   }
 
   function contractOf_(R, o) {
@@ -551,7 +565,7 @@ var Orders = (function () {
       con_id: o.con_id, con: c.name || '', status: st, priority: o.priority,
       floor_id: o.floor_id, room: String(o.room || ''), equip: o.equip || '', loc: loc(R, o),
       units: room ? csv(room.ac_units) : [], symptom: o.symptom || '', title: o.symptom || (o.kind === 'report' ? 'تقرير فني' : 'طلب صيانة'),
-      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '', acts: o.type === 'pj' ? parse_(o.acts, null) : undefined,
+      trapped: truthy(o.trapped), requester: o.requester || '', description: o.description || '', acts: o.type === 'pj' ? parse_(o.acts, null) : undefined, pj: o.type === 'pj' ? pjInfo_(R, o) : undefined,
       photos: csv(o.photos), reports: reports, quote: forCon ? '' : (o.quote || ''),
       decision: o.decision || '', decision_note: o.decision_note || '', note: note,
       reject_reason: (o.status === 'in_progress' || o.status === 'rejected') ? (o.reject_reason || '') : '',
@@ -570,6 +584,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, leave: leave, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, projCreate: projCreate, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
+    engAct: engAct, engCreate: engCreate, projCreate: projCreate, userTitle: userTitle_, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();
