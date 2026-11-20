@@ -1599,8 +1599,11 @@ t('أمر عمل مشروع: منفذ جديد برقم لمدة المشروع�
   const jb = run(`apiConBoot('${tk}')`).jobs.find(j => j.id === r.id); if (!jb) throw new Error('job visible'); eq(jb.quote, '', 'القيمة لا تظهر للمنفذ');
   eq(jb.acts && jb.acts.a.length, 3, 'المنفذ يرى النطاق ومعايير القبول');
   run(`apiConAct('${tk}', 'arrive', null, { ids: ['${r.id}'] })`);
-  throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', photos: ['data:image/jpeg;base64,AAAA'] })`, 'نسبة');
-  run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', pct: '50%', photos: ['data:image/jpeg;base64,AAAA'] })`);
+  throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', done: ['1. x'] })`, 'صورة');
+  run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'visit', done: ['1. x', '3. y'], photos: ['data:image/jpeg;base64,AAAA'] })`);
+  { const ac = JSON.parse(run(`Db.get('WorkOrders', '${r.id}').acts`)); eq(!!ac.a[0].done && !ac.a[1].done && !!ac.a[2].done, true, 'الأنشطة المنجزة تُعلَّم');
+    const rp = JSON.parse(run(`Db.get('WorkOrders', '${r.id}').report`)); eq(rp[rp.length - 1].pct, '67%', 'النسبة من الأنشطة بالتساوي'); }
+  throws(`apiEngProject('${engTok}', { hotel_id: '${HID}', title: 'وزن', name: 'مؤسسة الأوزان', start: '${yesterday}', end: '${nextYear}', amount: 100, acts: { a: [{ n: 'أ', c: 'ب', w: 3 }, { n: 'ج', c: 'د' }] } })`, 'وزن كل نشاط');
   eq(run(`Db.get('WorkOrders', '${r.id}').status`), 'in_progress');
   throws(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'fix' })`, 'صور التسليم');
   run(`apiConAct('${tk}', 'submit', '${r.id}', { outcome: 'fix', photos: ['data:image/jpeg;base64,AAAA'], note: 'سُلّم' })`);

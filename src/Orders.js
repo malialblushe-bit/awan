@@ -184,7 +184,10 @@ var Orders = (function () {
     // المصاعد: التقرير الفني للمتعهد (على كليشته) إلزامي مع كل تسليم نهائي — شرط الإدارة القانونية
     if (o.type === 'el' && ['fix', 'ok', 'diag', 'pm'].indexOf(oc) !== -1 && !(d.att || []).length) throw new Error('أرفق التقرير الفني للمتعهد (صورة أو PDF).');
     if (o.type === 'pj' && !(d.photos || []).length) throw new Error(oc === 'fix' ? 'أرفق صور التسليم (قبل وبعد).' : 'أرفق صورة لما أُنجز.');
-    if (o.type === 'pj' && oc === 'visit' && !d.pct) throw new Error('حدّد نسبة الإنجاز التقريبية.');
+    // المشروع: نسبة الإنجاز من الأنشطة المنجزة بأوزانها (فارغة = بالتساوي)، والتسليم يُتم كل الأنشطة
+    var pjActs = o.type === 'pj' ? parse_(o.acts, null) : null;
+    if (pjActs && pjActs.a && pjActs.a.length) d.pct = projDone_(pjActs, oc === 'fix' ? null : (d.done || []), dayStr_(now_()));
+    else if (o.type === 'pj' && oc === 'visit' && !d.pct) throw new Error('حدّد نسبة الإنجاز التقريبية.');
     if (oc === 'comp' && !(d.photos || []).length) throw new Error('صورة قراءة التيار إلزامية.');
     if (oc === 'comp' && !(Number(d.quote) > 0)) throw new Error('اكتب سعر العرض بالريال.');
     if (o.type === 'el' && oc !== 'report' && oc !== 'pm' && !d.working) throw new Error('حدّد: هل المصعد يعمل الآن؟');
@@ -201,6 +204,7 @@ var Orders = (function () {
       leave: d.leave || '', ret: d.ret || '', title: d.title || '', body: d.body || '', at: t.getTime(),
       att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : '', pct: d.pct || ''
     };
+    if (pjActs && pjActs.a) report.done = pjActs.a.filter(function (r) { return r.done; }).map(function (r) { return r.n; });
     if (oc === 'comp') report.rep = replKind_(d.rep);
     if (pm) {
       report.units = pm.units; report.grid = pm.grid; report.working = pm.working;
@@ -220,6 +224,7 @@ var Orders = (function () {
 
     var hadCA = !!o.reject_reason;   // قبل التحديث (السجل نفسه يتغير بالتحديث)
     var patch = { report: all, reject_reason: '', equip: d.equip || o.equip };
+    if (pjActs && pjActs.a) patch.acts = JSON.stringify(pjActs);
     if (d.photos && d.photos.length) patch.photos = csv(o.photos).concat(d.photos).join(',');
     stopWork_(o, patch, t);
 
@@ -439,6 +444,18 @@ var Orders = (function () {
   }
 
   /** أنشطة أمر عمل المشروع: [{p: الحزمة, n: النشاط, c: معيار القبول, d: موعد التسليم}] + معايير الحزم {pk} */
+  /** يعلّم الأنشطة المنجزة (done: أسماء مسبوقة برقمها «1. …»، أو null = كلها) بتاريخ اليوم، ويعيد النسبة الموزونة «n%» */
+  function projDone_(acts, done, day) {
+    var idx = done === null ? null : done.map(function (x) { return parseInt(String(x), 10) - 1; });
+    acts.a.forEach(function (r, i) {
+      var on = idx === null || idx.indexOf(i) !== -1;
+      if (on && !r.done) r.done = day; else if (!on) delete r.done;
+    });
+    var ws = acts.a.map(function (r) { return Number(r.w) > 0 ? Number(r.w) : 1; }), tot = ws.reduce(function (s, x) { return s + x; }, 0), got = 0;
+    acts.a.forEach(function (r, i) { if (r.done) got += ws[i]; });
+    return Math.round(got / tot * 100) + '%';
+  }
+
   function projActs_(x, start, end) {
     x = x || {};
     var pk = {}, a = [], day = /^\d{4}-\d{2}-\d{2}$/;
@@ -449,9 +466,14 @@ var Orders = (function () {
       if (!c && !(p && pk[p])) throw new Error('النشاط «' + n + '»: اكتب معيار قبوله، أو معياراً لحزمته.');
       if (dd && !day.test(dd)) throw new Error('النشاط «' + n + '»: موعد التسليم غير صحيح.');
       if (dd && (dd < start || dd > end)) throw new Error('النشاط «' + n + '»: موعد التسليم خارج مدة المشروع.');
-      a.push({ p: p, n: n, c: c, d: dd });
+      var w = String(r.w == null ? '' : r.w).trim();
+      if (w !== '' && !(Number(w) > 0)) throw new Error('النشاط «' + n + '»: الوزن رقم أكبر من صفر.');
+      a.push({ p: p, n: n, c: c, d: dd, w: w === '' ? '' : Number(w) });
     });
     if (!a.length) throw new Error('عرّف نطاق المشروع: نشاط واحد على الأقل بمعيار قبوله.');
+    // الأوزان: كلها أو لا شيء (فارغة = بالتساوي)
+    var nw = a.filter(function (r) { return r.w !== ''; }).length;
+    if (nw && nw < a.length) throw new Error('اكتب وزن كل نشاط، أو اترك الأوزان كلها فارغة لتكون بالتساوي.');
     return { pk: pk, a: a };
   }
 
