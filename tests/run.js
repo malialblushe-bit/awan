@@ -743,6 +743,13 @@ t('مدير الفندق: يطّلع على عمليات فندقه وأدائه
   const tok = run(`apiStaffLogin('gm.warif', 'Gm2026xxx')`).token;
   const b = run(`apiEngBoot('${tok}')`);
   eq(b.me.role, 'gm'); eq(b.hotels.length, 1); eq(b.hotels[0].id, HID);
+  { const uid = run(`Db.find('Users', function (u) { return u.username === 'gm.warif'; }).user_id`);
+    run(`apiAdmEditUser('${adminTok}', '${uid}', { role: 'fo', hotel_ids: ['${HID}'] })`);
+    eq(run(`apiEngBoot(apiStaffLogin('gm.warif', 'Gm2026xxx').token)`).me.role, 'fo', 'تعديل الدور يسري ويبقى الدخول');
+    throws(`apiAdmEditUser('${adminTok}', '${uid}', { role: 'sup', hotel_ids: ['${HID}'] })`, 'الإشراف');
+    throws(`apiAdmEditUser('${adminTok}', '${uid}', { role: 'fo', hotel_ids: [] })`, 'فندقاً');
+    eq(JSON.parse(run(`Db.get('Users', '${uid}').edit_log`)).length, 1, 'سجل التعديل');
+    run(`apiAdmEditUser('${adminTok}', '${uid}', { role: 'gm', hotel_ids: ['${HID}'] })`); }
   eq(b.orders.every(o => o.hotel_id === HID), true);
   eq(run(`apiKpiBoot('${tok}')`).rows.every(r => r.hotel === HID), true);
   const any = b.orders[0].id;

@@ -773,7 +773,7 @@ function admBoot_(part) {
       };
     }),
     users: part ? undefined : Db.all('Users').map(function (u) {
-      return { id: u.user_id, name: u.name, role: u.role, title: u.title || '', username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
+      return { id: u.user_id, name: u.name, role: u.role, title: u.title || '', edits: (function () { try { return JSON.parse(u.edit_log || '[]').length; } catch (e) { return 0; } })(), username: u.username, email: u.email || '', hotels: Orders.csv(u.hotel_ids), active: String(u.active).toUpperCase() !== 'FALSE',
         pinSet: Auth.isSup(u.role) ? (!!u.secret_hash && !Orders.truthy(u.must_change)) : null,
         pending: credPending_(u), sentAt: u.sent_at ? new Date(u.sent_at).getTime() : null };
     }),
@@ -1423,6 +1423,27 @@ function apiAdmSaveUserTitle(token, userId, title) {
   return adm_(token, function () {
     if (!Db.get('Users', userId)) throw new Error('المستخدم غير موجود.');
     Db.update('Users', userId, { title: String(title || '').trim() });
+    return {};
+  });
+}
+
+/** تعديل دور المستخدم وفنادقه (قرار صاحب المشروع 24 نوفمبر: لم يكن له زر، فالحساب الناقص لا يُصحَّح إلا من الملف).
+ *  الدور يتغير داخل عائلته فقط: الفريق بكلمة مرور ↔ الفريق، والإشراف بالرقم ↔ الإشراف، حتى لا تنكسر طريقة دخوله. ويُسجَّل كل تعديل في edit_log. */
+function apiAdmEditUser(token, userId, d) {
+  return adm_(token, function () {
+    var u = Db.get('Users', userId); if (!u) throw new Error('المستخدم غير موجود.');
+    d = d || {};
+    var role = d.role || u.role, hs = (d.hotel_ids || []).filter(function (h) { return Db.get('Hotels', h); });
+    if (['admin', 'engineer', 'management', 'gm', 'om', 'duty', 'fo', 'supmgr', 'sup', 'fin'].indexOf(role) === -1) throw new Error('دور غير معروف.');
+    if (Auth.isSup(role) !== Auth.isSup(u.role)) throw new Error('لا يتحول حساب الإشراف (يدخل برقم) إلى حساب بكلمة مرور أو العكس: أنشئ حساباً جديداً.');
+    if (!hs.length && ['admin', 'management', 'fin'].indexOf(role) === -1) throw new Error('اختر فندقاً واحداً على الأقل.');
+    var s = Auth.need(token), me = Db.get('Users', s.id) || {};
+    if (u.user_id === s.id && role !== u.role) throw new Error('لا تغيّر دورك أنت.');
+    var before = { role: u.role, hotels: String(u.hotel_ids || '') }, after = { role: role, hotels: hs.join(',') };
+    if (before.role === after.role && before.hotels === after.hotels) return {};
+    var log = []; try { log = JSON.parse(u.edit_log || '[]'); } catch (e) { }
+    log.push({ at: Date.now(), by: me.name || s.id, before: before, after: after }); log = log.slice(-20);
+    Db.update('Users', userId, { role: role, hotel_ids: after.hotels, edit_log: JSON.stringify(log) });
     return {};
   });
 }

@@ -4,7 +4,7 @@
  * كل عمود: [الاسم، الوصف].
  */
 
-var SCHEMA_VERSION = 42;
+var SCHEMA_VERSION = 43;
 
 /** رابط تطبيق الويب الثابت (يُملأ بعد أول نشر) */
 var WEB_URL = 'https://script.google.com/macros/s/AKfycby6A1m7aPlKq-uEogP5nm42tBLkohPMWvv7dJjunFZ7kIuvGQWExF-ylflk0JsN7YCtZA/exec';
@@ -42,7 +42,7 @@ var SCHEMA = [
     ['username', 'اسم الدخول'], ['email', 'البريد'], ['hotel_ids', 'الفنادق'],
     ['secret_hash', 'السر مشفّراً'], ['salt', 'الملح'], ['must_change', 'يغيّر السر عند الدخول'],
     ['failed', 'محاولات خاطئة'], ['locked_until', 'مقفل حتى'], ['lang', 'ar · en'], ['active', 'نشط'],
-    ['temp_until', 'صلاحية كلمة المرور المؤقتة (72 ساعة)'], ['sent_at', 'آخر إرسال لبيانات الدخول بالبريد'], ['title', 'المسمى الوظيفي (اختياري؛ فارغ = وظيفة الدور) يظهر على أوامر العمل المطبوعة']] },
+    ['temp_until', 'صلاحية كلمة المرور المؤقتة (72 ساعة)'], ['sent_at', 'آخر إرسال لبيانات الدخول بالبريد'], ['title', 'المسمى الوظيفي (اختياري؛ فارغ = وظيفة الدور) يظهر على أوامر العمل المطبوعة'], ['edit_log', 'سجل تعديل الدور والفنادق (JSON: [{at, by, before, after}])']] },
 
   { name: 'Contractors', cols: [
     ['con_id', 'المعرّف'], ['name', 'الاسم'], ['type', 'ac = تكييف · el = مصاعد · sf = سلامة · wa = نفايات · pc = مكافحة الآفات'],
