@@ -206,6 +206,11 @@ var Orders = (function () {
       att: d.att || [], by: s.lead_name ? s.lead_name + ' (قائد الفريق)' : '', pct: d.pct || ''
     };
     if (pjActs && pjActs.a) report.done = pjActs.a.filter(function (r) { return r.done; }).map(function (r) { return r.n; });
+    // المصاعد: القطعة المعتمدة (المتعهد يوفّر أو فريقنا) تُثبَّت في تقرير الإصلاح فتُسجَّل قطعةً مستبدلة فعلاً (سجل المعدات)
+    if (o.type === 'el' && oc === 'fix' && (o.decision === 'con' || o.decision === 'own')) {
+      var prevR = parse_(o.report, []); prevR = Array.isArray(prevR) ? prevR : (prevR ? [prevR] : []);
+      var rp = Records.partsOf(prevR); if (rp.length) report.rparts = rp;
+    }
     if (oc === 'comp') report.rep = replKind_(d.rep);
     if (pm) {
       report.units = pm.units; report.grid = pm.grid; report.working = pm.working;
@@ -591,6 +596,30 @@ var Orders = (function () {
     return { id: r.order.wo_id, contract_id: ctr.contract_id, con_id: conId, pin: pin, isNew: !!pin };
   }
 
+  /** طلب مفتوح على المصعد نفسه (تقاطع الأسماء) أو الموقع نفسه (الدور والغرفة) بالنوع نفسه — لمنع التكرار */
+  function dupOpen(hotelId, type, floorId, room, equip) {
+    if (type !== 'ac' && type !== 'el') return null;
+    var nr = function (x) { return String(x || '').replace(/[\s-]/g, '').toUpperCase(); }, eq = String(equip || '').split('، ').filter(String);
+    if (type === 'el' && !eq.length) return null;
+    if (type === 'ac' && (!floorId || !nr(room))) return null;
+    return Db.all('WorkOrders', function (o) {
+      if (o.hotel_id !== hotelId || o.type !== type || OPEN.indexOf(o.status) === -1 || o.kind === 'periodic' || o.kind === 'project') return false;
+      if (type === 'el') return String(o.equip || '').split('، ').some(function (e) { return eq.indexOf(e) !== -1; });
+      return o.floor_id === floorId && nr(o.room) === nr(room);
+    }).sort(function (a, b) { return ms(a.created_at) - ms(b.created_at); })[0] || null;
+  }
+  /** يضيف التوصيف الجديد إلى الطلب السابق باسم الرافع ووقته (والاحتجاز يرفعه طارئاً)، ولا يُنشئ طلباً */
+  function addToDup(o, who, symptom, desc, trapped, photos) {
+    var txt = [String(symptom || '').trim(), String(desc || '').trim()].filter(function (x, i, a) { return x && a.indexOf(x) === i; }).join(' · ');
+    var patch = {}, t = now_();
+    if (txt && String(o.symptom || '') !== txt && String(o.description || '').indexOf(txt) === -1)
+      patch.description = (String(o.description || '').trim() ? String(o.description).trim() + '\n' : '') + '➕ ' + Utilities.formatDate(t, 'Asia/Riyadh', 'dd/MM HH:mm') + ' · ' + who + ': ' + txt;
+    if (trapped && !truthy(o.trapped)) { patch.trapped = true; patch.priority = 'urgent'; }
+    if (photos && photos.length) patch.photos = csv(o.photos).concat(photos).join(',');
+    if (Object.keys(patch).length) { Db.update('WorkOrders', o.wo_id, patch); log_(o.wo_id, who, 'dup', o.status, o.status, txt); }
+    return { id: o.wo_id, dup: { id: o.wo_id, status: o.status, added: !!patch.description, trapped: !!patch.trapped } };
+  }
+
   function engCreate(s, d) {
     var me = Db.get('Users', s.id);
     if (s.role !== 'admin' && csv(me.hotel_ids).indexOf(d.hotel_id) === -1) throw new Error('الفندق ليس ضمن فنادقك.');
@@ -689,6 +718,6 @@ var Orders = (function () {
   return {
     OPEN: OPEN, ms: ms, csv: csv, truthy: truthy, hotelByCode: hotelByCode, activeContract: activeContract,
     create: create, arrive: arrive, leave: leave, visitToday: visitToday, conSubmit: conSubmit, conNew: conNew, techReport: techReport, rescue: rescue,
-    engAct: engAct, engCreate: engCreate, projCreate: projCreate, pjAccept: pjAccept, pjModReq: pjModReq, projEdit: projEdit, userTitle: userTitle_, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
+    engAct: engAct, engCreate: engCreate, dupOpen: dupOpen, addToDup: addToDup, projCreate: projCreate, pjAccept: pjAccept, pjModReq: pjModReq, projEdit: projEdit, userTitle: userTitle_, refs: refs, contractOf: contractOf_, view: view, normRoom: normRoom
   };
 })();

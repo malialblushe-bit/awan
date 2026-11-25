@@ -10,7 +10,7 @@
 function doGet(e) {
   var p = (e && e.parameter) || {};
   var t = HtmlService.createTemplateFromFile('App');
-  t.boot = JSON.stringify({ hotel: String(p.h || '').toUpperCase(), mode: String(p.m || '') });
+  t.boot = JSON.stringify({ hotel: String(p.h || '').toUpperCase(), mode: String(p.m || ''), elev: String(p.e || '').slice(0, 60) });
   return t.evaluate()
     .setTitle('أعوان')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
@@ -208,6 +208,9 @@ function apiReqSubmit(code, d) {
     if (!String(d.name || '').trim()) throw new Error('اكتب اسمك.');
     if (!d.symptom && !String(d.description || '').trim()) throw new Error('اختر المشكلة أو اكتب وصفها.');
     var photos = savePhotos_(d.photos, 'REQ');
+    // لا طلب مكرر (قرار صاحب المشروع 26 نوفمبر): طلب مفتوح على المصعد نفسه أو الموقع نفسه ← يُضاف التوصيف إليه ولا يُنشأ جديد
+    var dup = Orders.dupOpen(h.hotel_id, d.type, d.floor_id, d.room, d.equip);
+    if (dup) { var dr = Orders.addToDup(dup, String(d.name).trim(), d.symptom, d.description, d.trapped === 'yes', photos); Kpi.touch([dup.wo_id]); Tg.refresh([dup.wo_id]); return dr; }
     var r = Orders.create({
       hotel_id: h.hotel_id, type: d.type, kind: 'corrective', source: 'requester',
       floor_id: d.floor_id, room: d.room, equip: d.equip, symptom: d.symptom, trapped: d.trapped === 'yes',
@@ -558,6 +561,10 @@ function apiEngCreate(token, d) {
   var s = Auth.need(token, ['admin', 'engineer']);
   d.photos = savePhotos_(d.photos, 'ENG');
   return act_(function () {
+    if (d.type === 'ac' || d.type === 'el') {
+      var dup = Orders.dupOpen(d.hotel_id, d.type, d.floor_id, d.room, d.equip);
+      if (dup) { var me = Db.get('Users', s.id) || {}; var dr = Orders.addToDup(dup, me.name || s.id, d.symptom, d.description, d.trapped === 'yes', d.photos || []); Kpi.touch([dup.wo_id]); Tg.refresh([dup.wo_id]); return { id: dup.wo_id, dup: dr.dup }; }
+    }
     var id = Orders.engCreate(s, d);
     Kpi.touch([id]);
     Tg.post(id);
@@ -652,6 +659,12 @@ function apiKpiBoot(token) {
 }
 
 /** كشف الخدمات المنفذة للطباعة: خدمات العمليات المغلقة بعد المطابقة لمتعهد خلال فترة يختارها المستخدم */
+/** سجلات المعدات (المصاعد): ملخص وخط زمني وقطع مستبدلة لفندق وفترة — للفريق، يُقرأ عند الطلب فقط */
+function apiRecElev(token, hotelId, from, to) {
+  var s = Auth.need(token, STAFF_ROLES);
+  return Records.elevators(scopeHotels_(s, Orders.refs()), hotelId, from, to, false);
+}
+
 function apiStatement(token, conId, hotelId, from, to) {
   // الفترة بتاريخ الإغلاق (المطابقة): من–إلى شاملة؛ أو شهر كامل إن جاء «YYYY-MM» وحده
   if (/^\d{4}-\d{2}$/.test(String(from)) && !to) {

@@ -916,6 +916,7 @@ t('التقييم الدوري: يصدره المختص لفترة يختاره�
 });
 
 t('سليم: يسجّل المتعهد ما فحصه، ويُحسب داخلياً في موثوقية البلاغات لا على المتعهد', () => {
+  run(`(function () { var d; while ((d = Orders.dupOpen(Orders.hotelByCode('WARIF2').hotel_id, 'el', '', '', 'مصعد النزلاء 1'))) Db.update('WorkOrders', d.wo_id, { status: 'rejected', decision: 'stop', reject_reason: 'أُوقف: تنظيف الاختبار' }); })()`);
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت أو اهتزاز', name: 'نورة' })`).id;
   throws(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok', working: 'نعم' })`, 'ما فحصته');
   run(`apiConAct('${elTok}', 'submit', '${id}', { att: ['data:image/jpeg;base64,AAAA'], outcome: 'ok', working: 'نعم', checked: ['الماكينة', 'الحبال'], note: 'لا صوت عند التشغيل' })`);
@@ -987,6 +988,7 @@ t('تيليجرام: المجموعة المرقّاة يُصحَّح رقمها
   const fl = run(`floorsOf_('${HID}')`).find(f => f.name === 'الدور 7').id;
   // الإرسال يفشل (البوت خارج المجموعة): يُسجَّل السبب، والطلب يبقى غير منشور
   tgReply.sendMessage = () => ({ ok: false, description: 'Forbidden: bot was kicked from the supergroup chat' });
+  run(`(function () { var d; while ((d = Orders.dupOpen(Orders.hotelByCode('WARIF2').hotel_id, 'ac', '${fl}', '712', ''))) Db.update('WorkOrders', d.wo_id, { status: 'rejected', decision: 'stop', reject_reason: 'أُوقف: تنظيف الاختبار' }); })()`);
   const id = run(`apiReqSubmit('WARIF2', { type: 'ac', floor_id: '${fl}', room: '712', symptom: 'لا يبرد', name: 'سالم' })`).id;
   const ho = run(`apiAdmBoot('${adminTok}')`).hotels.find(h => h.id === HID);
   if (!ho.tgErr || !ho.tgErr.desc.includes('kicked')) throw new Error('err ' + JSON.stringify(ho.tgErr));
@@ -1200,6 +1202,7 @@ t('قائد فريق المصاعد: الفني ينهي ويرسل للقائد
   eq(run(`Auth.pinTaken('${lp}')`), true);
   run(`CacheService.getScriptCache().remove('F_con_${HID}')`);
   const tk = run(`apiConLogin('WARIF2', '${elPin}')`).token;
+  run(`(function () { var d; while ((d = Orders.dupOpen(Orders.hotelByCode('WARIF2').hotel_id, 'el', '', '', 'مصعد النزلاء 1'))) Db.update('WorkOrders', d.wo_id, { status: 'rejected', decision: 'stop', reject_reason: 'أُوقف: تنظيف الاختبار' }); })()`);
   const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'خالد' })`).id;
   throws(`apiConAct('${tk}', 'submit', '${id}', { outcome: 'lead' })`, 'يعمل');
   eq(run(`apiConAct('${tk}', 'submit', '${id}', { outcome: 'lead', working: 'نعم', note: 'ضبط القفل' })`).result.status, 'lead');
@@ -1362,7 +1365,7 @@ t('فتح متابعة من التقرير: المهندس يفتح عملية �
 });
 
 t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صحيح بتعليق إلزامي، ولا يُحسب على المتعهد', () => {
-  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت غريب', name: 'تجربة' })`).id;
+  const id = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد اختبار الإيقاف', symptom: 'صوت غريب', name: 'تجربة' })`).id;
   throws(`apiEngAct('${engTok}', '${id}', 'stop', { note: ' ' })`, 'تعليقاً');
   run(`apiEngAct('${engTok}', '${id}', 'stop', { note: 'طلب غير صحيح: لا يوجد صوت' })`);
   const o = run(`Db.get('WorkOrders', '${id}')`);
@@ -1379,13 +1382,30 @@ t('إيقاف الطلب: مالك الخدمة يوقف طلباً غير صح�
   throws(`apiEngAct('${engTok}', '${id}', 'unstop', {})`, 'ليس موقوفاً');
 });
 
+t('لا طلب مكرر: الطلب على مصعد أو موقع له طلب مفتوح يُضاف إليه التوصيف ولا يُنشأ جديد، والاحتجاز يرفعه طارئاً؛ وسجلات المصاعد', () => {
+  const H = run(`Orders.hotelByCode('WARIF2').hotel_id`);
+  run(`(function () { var d; while ((d = Orders.dupOpen('${H}', 'el', '', '', 'مصعد التكرار'))) Db.update('WorkOrders', d.wo_id, { status: 'closed', closed_at: new Date() }); })()`);
+  const a = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد التكرار', symptom: 'صوت مرتفع', name: 'أحمد' })`);
+  const b = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد التكرار', symptom: 'الباب لا يُغلق', name: 'سارة', trapped: 'yes' })`);
+  eq(b.id, a.id, 'لا طلب جديد'); eq(!!b.dup, true);
+  const o = run(`Db.get('WorkOrders', '${a.id}')`); eq(String(o.description).indexOf('سارة') !== -1, true, 'التوصيف أُضيف');
+  eq(run(`Orders.truthy(Db.get('WorkOrders', '${a.id}').trapped)`), true, 'الاحتجاز يرفعه طارئاً');
+  const c = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد التكرار', symptom: 'صوت مرتفع', name: 'أحمد' })`); eq(c.id, a.id);
+  eq(String(run(`Db.get('WorkOrders', '${a.id}').description`)).split('➕').length - 1, 1, 'التوصيف المكرر لا يُضاف مرتين');
+  const r = run(`apiRecElev('${engTok}', '${H}', '${yesterday}', '${nextYear}')`);
+  if (!Array.isArray(r.elevators) || !r.elevators.length) throw new Error('elevators');
+  if (!Array.isArray(r.parts)) throw new Error('parts');
+  throws(`apiRecElev('${engTok}', '${H}', '${nextYear}', '${yesterday}')`, 'الفترة');
+});
+
 t('تسجيل الوصول بزر: مرة للزيارة، يبقى بعد إغلاق الصفحة، لعمليات مختارة أو للكل، وآخر طلب يُتم = المغادرة، والدورية تشترطه', () => {
   run('AUTO_ARRIVE = false');
   try {
     run(`Db.all('Arrivals').forEach(function(a){ Db.update('Arrivals', a.arrival_id, { at: new Date(Date.now() - 3 * 864e5) }); })`);
     const n0 = run("Db.all('Arrivals').length");
+    run(`(function () { var d; while ((d = Orders.dupOpen(Orders.hotelByCode('WARIF2').hotel_id, 'el', '', '', 'مصعد النزلاء 1'))) Db.update('WorkOrders', d.wo_id, { status: 'rejected', decision: 'stop', reject_reason: 'أُوقف: تنظيف الاختبار' }); })()`);
     const a = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'الباب لا يُغلق', name: 'خالد' })`).id;
-    const b = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد النزلاء 1', symptom: 'صوت مرتفع', name: 'خالد' })`).id;
+    const b = run(`apiReqSubmit('WARIF2', { type: 'el', equip: 'مصعد الخدمة', symptom: 'صوت مرتفع', name: 'خالد' })`).id;
     const tk = run(`apiConLogin('WARIF2', '${elPin}')`).token;
     eq(run(`Db.get('WorkOrders', '${a}').arrived_at`) ? 1 : 0, 0, 'لا وصول آلي');
     throws(`apiConAct('${tk}', 'submit', '${a}', { outcome: 'visit', working: 'نعم' })`, 'سجّل وصولك');
